@@ -951,6 +951,9 @@ tr:hover td{background:var(--bg)}
         <button onclick="gaSetAction('move')" class="ga-action-btn" style="text-align:left;padding:12px 14px;border:2px solid var(--border);border-radius:8px;background:var(--white);cursor:pointer;font-family:inherit;font-size:14px">
           🌾 <strong>Move to Pasture</strong><div style="font-size:12px;color:var(--gray);margin-top:2px">Move all selected animals to a new pasture</div>
         </button>
+        <button onclick="gaSetAction('category')" class="ga-action-btn" style="text-align:left;padding:12px 14px;border:2px solid var(--border);border-radius:8px;background:var(--white);cursor:pointer;font-family:inherit;font-size:14px">
+          🏷️ <strong>Set Category</strong><div style="font-size:12px;color:var(--gray);margin-top:2px">Assign a category to all selected animals at once</div>
+        </button>
       </div>
     </div>
 
@@ -2883,7 +2886,7 @@ function gaSetAction(action) {
 
   document.getElementById('ga-summary').innerHTML = `<strong>${count} animals selected:</strong> ${tags}`;
 
-  const titles = {health:'💉 Health / Vaccination', natural:'🐂 Natural Service', weight:'⚖️ Weight Record', pregcheck:'🔍 Pregnancy Check', move:'🌾 Move to Pasture'};
+  const titles = {health:'💉 Health / Vaccination', natural:'🐂 Natural Service', weight:'⚖️ Weight Record', pregcheck:'🔍 Pregnancy Check', move:'🌾 Move to Pasture', category:'🏷️ Set Category'};
   document.getElementById('ga-form-title').textContent = titles[action];
 
   const forms = {
@@ -2961,9 +2964,45 @@ function gaSetAction(action) {
         <div class="form-group"><label>Moved By</label><input type="text" id="gaf-by" placeholder="Name"></div>
       </div>
       <div class="form-group"><label>Reason</label><input type="text" id="gaf-notes" placeholder="e.g. Rotation, Weaning, Sorting"></div>`,
+
+    category: `
+      <div class="form-group"><label>Category</label>
+        <select id="gaf-category-select" onchange="gaCategorySelectChange()" style="margin-bottom:6px">
+          <option value="">— Pick a common category —</option>
+          <option value="AI/ET Cows">AI/ET Cows</option>
+          <option value="ET Donors">ET Donors</option>
+          <option value="Replacement Heifers">Replacement Heifers</option>
+          <option value="Show Heifers">Show Heifers</option>
+          <option value="Commercial Cows">Commercial Cows</option>
+          <option value="Cull Cows">Cull Cows</option>
+          <option value="Sale Bulls">Sale Bulls</option>
+          <option value="Yearling Bulls">Yearling Bulls</option>
+          <option value="custom">+ Type custom category...</option>
+        </select>
+        <input type="text" id="gaf-category" placeholder="Or type category name here">
+      </div>
+      <div class="form-group"><label>Status (optional — leave blank to keep current)</label>
+        <select id="gaf-status-update">
+          <option value="">— No change —</option>
+          <option value="active">Active</option>
+          <option value="donor">ET Donor</option>
+          <option value="sold">Sold</option>
+          <option value="dead">Dead</option>
+        </select>
+      </div>`,
   };
 
   document.getElementById('ga-form').innerHTML = forms[action] || '';
+}
+
+function gaCategorySelectChange() {
+  const sel = document.getElementById('gaf-category-select');
+  if(sel.value && sel.value !== 'custom') {
+    document.getElementById('gaf-category').value = sel.value;
+  } else if(sel.value === 'custom') {
+    document.getElementById('gaf-category').value = '';
+    document.getElementById('gaf-category').focus();
+  }
 }
 
 function gaAutofillDrug() {
@@ -3057,8 +3096,17 @@ async function applyGroupAction() {
           moved_by: by,
           reason,
         });
-        // Also update animal location field
         await sb.from('animals').update({location: toPasture}).eq('id', animal.id);
+      }
+      else if(gaCurrentAction === 'category') {
+        const category = document.getElementById('gaf-category')?.value?.trim();
+        const statusUpdate = document.getElementById('gaf-status-update')?.value;
+        const updates = {};
+        if(category) updates.category = category;
+        if(statusUpdate) updates.status = statusUpdate;
+        if(Object.keys(updates).length > 0) {
+          await sb.from('animals').update(updates).eq('id', animal.id);
+        }
       }
       saved++;
     } catch(e) { errors++; }
@@ -3068,7 +3116,7 @@ async function applyGroupAction() {
   btn.textContent = 'Apply to All Selected Animals';
   closeGroupAction();
 
-  const actionLabels = {health:'health records', natural:'natural service turn-out', weight:'weight records', pregcheck:'preg checks', move:'animals moved'};
+  const actionLabels = {health:'health records', natural:'natural service turn-out', weight:'weight records', pregcheck:'preg checks', move:'animals moved', category:'animals updated'};
   alert(`✅ Done! ${saved} ${actionLabels[gaCurrentAction] || 'records'} saved.${errors?`\n⚠ ${errors} error(s) — check and retry those individually.`:''}`);
 
   // Refresh the animals list
