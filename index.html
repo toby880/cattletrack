@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CattleTrack Analytics — Professional Ranch Management Software</title>
+<meta name="description" content="Complete ranch management software for cow-calf operations. Track calving, health, breeding, EPDs, weights, and sales. Works offline in the pasture.">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --orange:#E8751A;--gold:#F5A623;--dark:#2C2C2C;
+  --gray:#6B6B6B;--border:#E0DDD8;--bg:#F8F7F4;--white:#fff;
+  --green:#27AE60;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:var(--dark);background:var(--white)}
+a{color:inherit;text-decoration:none}
+
+/* NAV */
+nav{background:var(--dark);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:64px;position:sticky;top:0;z-index:100}
+.nav-logo{display:flex;align-items:center;gap:12px}
+.nav-logo img{height:36px}
+.nav-logo-text{color:white;font-size:18px;font-weight:700;letter-spacing:-0.3px}
+.nav-logo-text span{color:var(--orange)}
+.nav-links{display:flex;align-items:center;gap:24px}
+.nav-links a{color:rgba(255,255,255,0.7);font-size:14px;font-weight:500;transition:color 0.15s}
+.nav-links a:hover{color:white}
+.nav-cta{background:var(--orange);color:white;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:600;transition:background 0.15s}
+.nav-cta:hover{background:#C8621A;color:white}
+
+/* HERO */
+.hero{background:var(--dark);padding:80px 24px 100px;text-align:center;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 0%, rgba(232,117,26,0.15) 0%, transparent 70%)}
+.hero-badge{display:inline-block;background:rgba(232,117,26,0.2);color:var(--gold);border:1px solid rgba(232,117,26,0.3);padding:6px 16px;border-radius:20px;font-size:13px;font-weight:600;margin-bottom:24px;letter-spacing:0.5px}
+.hero h1{font-size:clamp(32px,6vw,64px);font-weight:800;color:white;line-height:1.1;margin-bottom:20px;letter-spacing:-1px}
+.hero h1 span{color:var(--orange)}
+.hero p{font-size:clamp(16px,2.5vw,20px);color:rgba(255,255,255,0.7);max-width:600px;margin:0 auto 40px;line-height:1.6}
+.hero-buttons{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.btn-primary{background:var(--orange);color:white;padding:16px 32px;border-radius:10px;font-size:16px;font-weight:700;transition:all 0.15s;display:inline-block}
+.btn-primary:hover{background:#C8621A;transform:translateY(-2px);box-shadow:0 8px 24px rgba(232,117,26,0.4)}
+.btn-secondary{background:rgba(255,255,255,0.1);color:white;padding:16px 32px;border-radius:10px;font-size:16px;font-weight:600;border:1px solid rgba(255,255,255,0.2);transition:all 0.15s;display:inline-block}
+.btn-secondary:hover{background:rgba(255,255,255,0.15)}
+
+/* SOCIAL PROOF */
+.proof{background:var(--bg);padding:24px;text-align:center;border-bottom:1px solid var(--border)}
+.proof p{font-size:14px;color:var(--gray);font-weight:500}
+.proof strong{color:var(--dark)}
+
+/* FEATURES */
+.features{padding:80px 24px;max-width:1100px;margin:0 auto}
+.section-label{font-size:13px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
+.section-title{font-size:clamp(28px,4vw,42px);font-weight:800;color:var(--dark);margin-bottom:16px;line-height:1.2}
+.section-sub{font-size:18px;color:var(--gray);max-width:560px;line-height:1.6;margin-bottom:48px}
+.feature-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px}
+.feature-card{background:var(--bg);border:1px solid var(--border);border-radius:16px;padding:28px}
+.feature-icon{font-size:32px;margin-bottom:16px}
+.feature-card h3{font-size:18px;font-weight:700;margin-bottom:8px}
+.feature-card p{font-size:14px;color:var(--gray);line-height:1.6}
+.feature-card ul{list-style:none;margin-top:12px}
+.feature-card ul li{font-size:13px;color:var(--gray);padding:4px 0;padding-left:20px;position:relative}
+.feature-card ul li::before{content:'✓';position:absolute;left:0;color:var(--green);font-weight:700}
+
+/* OFFLINE HIGHLIGHT */
+.offline-section{background:var(--dark);padding:80px 24px;text-align:center}
+.offline-section h2{font-size:clamp(28px,4vw,42px);font-weight:800;color:white;margin-bottom:16px}
+.offline-section h2 span{color:var(--orange)}
+.offline-section p{font-size:18px;color:rgba(255,255,255,0.7);max-width:560px;margin:0 auto 40px;line-height:1.6}
+.offline-badges{display:flex;gap:16px;justify-content:center;flex-wrap:wrap}
+.badge{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:white;padding:12px 20px;border-radius:10px;font-size:14px;font-weight:600}
+.badge span{color:var(--gold)}
+
+/* PRICING */
+.pricing{padding:80px 24px;max-width:1000px;margin:0 auto;text-align:center}
+.pricing-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;margin-top:48px;text-align:left}
+.plan{background:var(--white);border:2px solid var(--border);border-radius:16px;padding:28px;position:relative}
+.plan.featured{border-color:var(--orange);box-shadow:0 8px 32px rgba(232,117,26,0.15)}
+.plan-badge{position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--orange);color:white;padding:4px 16px;border-radius:20px;font-size:12px;font-weight:700;white-space:nowrap}
+.plan-name{font-size:14px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px}
+.plan-price{font-size:42px;font-weight:800;color:var(--dark);line-height:1}
+.plan-price span{font-size:16px;color:var(--gray);font-weight:400}
+.plan-desc{font-size:13px;color:var(--gray);margin:12px 0 20px;line-height:1.5}
+.plan-features{list-style:none}
+.plan-features li{font-size:13px;color:var(--dark);padding:6px 0;border-bottom:1px solid var(--border);padding-left:20px;position:relative}
+.plan-features li::before{content:'✓';position:absolute;left:0;color:var(--green);font-weight:700}
+.plan-features li.no::before{content:'✕';color:var(--border)}
+.plan-features li.no{color:var(--gray)}
+.plan-cta{display:block;text-align:center;margin-top:24px;padding:13px;border-radius:8px;font-size:15px;font-weight:700;transition:all 0.15s}
+.plan-cta.primary{background:var(--orange);color:white}
+.plan-cta.primary:hover{background:#C8621A}
+.plan-cta.outline{border:2px solid var(--border);color:var(--dark)}
+.plan-cta.outline:hover{border-color:var(--orange);color:var(--orange)}
+
+/* TESTIMONIAL */
+.testimonial{background:var(--bg);padding:80px 24px;text-align:center}
+.testimonial blockquote{font-size:clamp(20px,3vw,28px);font-weight:600;color:var(--dark);max-width:700px;margin:0 auto 24px;line-height:1.5;font-style:italic}
+.testimonial cite{font-size:14px;color:var(--gray);font-weight:600}
+
+/* CTA SECTION */
+.cta-section{background:var(--orange);padding:80px 24px;text-align:center}
+.cta-section h2{font-size:clamp(28px,4vw,42px);font-weight:800;color:white;margin-bottom:16px}
+.cta-section p{font-size:18px;color:rgba(255,255,255,0.85);margin-bottom:32px}
+.btn-white{background:white;color:var(--orange);padding:16px 36px;border-radius:10px;font-size:16px;font-weight:700;display:inline-block;transition:all 0.15s}
+.btn-white:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,0.2)}
+
+/* FOOTER */
+footer{background:var(--dark);padding:40px 24px;text-align:center}
+footer .logo{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:16px}
+footer .logo-text{color:white;font-size:18px;font-weight:700}
+footer .logo-text span{color:var(--orange)}
+footer p{font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:8px}
+footer .footer-links{display:flex;gap:20px;justify-content:center;margin-top:16px}
+footer .footer-links a{font-size:13px;color:rgba(255,255,255,0.4);transition:color 0.15s}
+footer .footer-links a:hover{color:white}
+
+/* MOBILE */
+@media(max-width:640px){
+  .nav-links{display:none}
+  .hero{padding:60px 20px 80px}
+  .features,.pricing{padding:60px 20px}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">
+    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADwAAAAoCAIAAAAt2Q6oAAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAAAKPklEQVR42r1Za3BcZRl+3+/7ztmzt2ySzW4a24TQpLXSpi29IM4AnYLjDKNMQRkrw4z+0GF0dFRUhsEZR5nqH6j8kBFUdGQGqAIVvKCDVIFSaGkqvaWFlCapbdP7Ntk9e99zvu/1x7nk7DZpNkjZH8nZ3XO+87zPPu/lew6WSwVEBAD0XgDgvAUAAnDfOx8CEgACASK5nwA5p4P/QeB0IPd7YN5Syv/a+YSIApfUvfWPnQMicg6ED9SHGzhGBHK+DOBAAEWAHlw3XmdN9wQkJABnETdKQOe+iEhAwXiQIShw6ajDD8CmbuLdiYhEkOZ6xIAIRNiwjI/SDR5wKkLvQnIREwCCH7RzHwBAQjd4IiAgcMAFOXOXcP57WKeA1aplF2iQauc8N/S62zfS8f++XFERkSewGeXhHwuf2kaepxSM7p8PH3HDbT1iPegOwXUJRgAIIijoBq4B6qKZG3lTaYlzDIE52nDk4+eFq1QEBBSXJF8AYvNwiQAIkANrvMaR/hSFJAHZzGsieMr3xK18uZMvj3qsDVAcgczGKxFyQQCobChlqGYq21IokIeAG0yPojAAhfPzItcIAJSaE/leYrtSEZfSTMCC1e9yCyoJQgMAyh5TZ/YUzcmaaKFwkoXbeSjGNeKyKkhxWQFuMC1MZFdHnuKtS7Xkp4gkAGsaN7kpRgAAolEYiNikCpWNQpf5czT0TK5YKLSt0udfH2vrNMIhjbk1VgHkLl4IcSPENMZEfvi58p4fJm7+HSCCoqbu4+oUgZSPWgThziHhlASh2yOvVvdtOdNxE19yV1dXV1gQANhWpVqxzOxErKW1Winbli2tCnZ0lwYft87vjt22D8LtpBQgn1N5cfh26gkLFEYnDGwGMQqt9s6zhe2Pj/R8Ob7yzoXdXQazbdsu5s3JC+dyExmrWrNtOxZPVM6NhkP8zCsPl0u1eZ978qk//v3557YyxtQcZA0NTVFMlWBCulxWepEpyYRWGnq5/Nqvjt24qad/WSrO8pMXiEgpqWu8pSUuCTkTktTQzlfMI29PDO+et2JdW5TssW0XL16UdvyD9qCp5uKkJyIybKK0Mcat3LncCz/J3PD9VPeizmRLqVjUQgYXAgBHx0ZNM9/X118wMyePvtvdPX/luk3W+df1RDj70mNhMFFbraRswNGUSNCp2goRBRISErpzxGwVgxRyLfPXhwqdKyqdA4sTOoCKROMAQCQ3//yRPzy7NRaNrl+/7ltf/9oNn9lg/vbu3P4uo+90mWrS7pK2yuVyiXlJAAJSAHyOuiAgBCDhIg4275lpRiEqE+PZE0cePbVg8MmvdqVTfX0Luxd8rK+3d8fOXf/45zbbVpqm3X7brUOH3sX3R5eePaZaUevVEHnZLFnlyeXLB15+6c83DR1aPjBg2xZjvGGCa6b6iUDrwxkDdNYihcArw2+OFcW/Bw9bk+dz2eyBQ4c1IcKGUSiWdF2r1arpdFoRDg7ubk11LYKwVFyvVACkLCsNjfHTpxWP9cwzVHEMjR5nTLx0Krq8sBldFm7dqAUEAJkjey1mJNtahRCMsVgkEjbCNcs2QjoAdi+Yv+nHD3R3d2ezZrVaNctUKEsmq7pVzHSu3XJx4eoVA1seuz989nlr9PfIRXBP0HwFFFOD+jRymCb0TCYjEwtWLmOvHB+Z15E8enRMKYrGIoYRymVzG++8fe/e/U89vcU0C6gZUmGlJsfl8kMjeTvVc+Md61bUdmR3bOGaxZPLxAcZGt3m4syE0/fBerIRAEwbor2LIhMnOjqSd2z47OpVqw4ePNTb2/PoY7/pTKc+fcv6UrF48tSpSLzVMIyR1IZJWxilhallrQYr7xnckw7ti7cz4BFBGgNQSiHnc6GZAECQN8bibGQ7x6dz5au5fXVvbyKid3Z2rlp97fKBa86dv3D9dWuIFJEaGFjaHg8xZWko44k2pmq5iczxY8NjEwUeabVkpJwvRTXITebL+WJ7PKqUbI5xf7sJaNuWtxOa5UopbcH5rm0vDo+MHRg7f/b06XyxFDEMXddt247H43pID+laqiOZiEdbW+IhweJh3SrnoxqlWoyEZmtWjll5Ho5pkdDFil5Krk2muxKJVsMwmhAFEbi7G4Hepvjy4RKRpunnzp4aL8DStes2fmUJF4wUVSqVaDRiWbJcLh0/ceLalSsYD01OZg4MHY5EIpVKdc2aNYYRtmw7JAQA2JWsMEIAIXPsCObNdKoDkdGsVKPT/xiQ9AcmRYDoNpdpLldEnLH33z/yzW/fu2L5Up3zsBHOZidSHckfPfizu7/0xRf+8rdPXrdmcPCdX/5i85tvvZpOdzy/9YU33ti54bZbI4ZORImW+IkT4x2pjpUrV+96e1e+UN639x3LsjZG2jWN9/T0EilEdvne4sMX4HQZt2DiDAOSEpxv/dOLyfb2zQ89DACbH3lk279e/cSSxeVyxTTNM2fOKikjkfC99z2QNwvJZPt93/vO6Mixn27adOfGu0K69oXPb3ht+46jR0dvXr/u7d2D37jnHiOkvb59+/j4iU0PPuh5D82+mLdxdeyX6cs7Y0hEN69fd3J8/NdPPPH0M0/v3bc/Ho/put6aSHR2ptrb2oTghUKhVqnGYpElH1+UyWSKpVKtViqWSvf/4LumWchOTIZC+smT44yxaCxqFoq2LWtVq1azEJssdsrd8Eq7GtiZzdgaiYhzPjx8+K2du5cPLK1Wq1LKq3q6x0+f5ZqupGVJSne0p9Pp117fvrD3qsWLFx88cGDtmtV79x/sX9Sfz2WHDr+XbE8uu2bxgYOHLly40LdwYTKZzGQysVi8v3+RollHTGdccaqHVUMMukfBOaRhWFLcSSarbNu2tG1bQRSrE8O7w+mrcv99N967tHD2WOv8fi3Weu69/7Qt6Js4OdrWu8Q8czwUS3C7zITGu1eQXQtHIkoqQKaHwgCgpITZEJPrGxE5ieiaN76t4Lk6jZnAmGVZUlpEQAoVMF3XynlThVst1DDRaUklWlI50wxJiC1YDLG2tr6YJNATHcBFhZATJIRWk6pasxljDKBWq3HOm+DYMd6mmK4GzbuAWYEz9n7EgJ/CpqxE33IkyZATSUDu7em9DbWSyJhnKDbZuf08dWw0QtuqOpD9phiw52ZZyjHbyHMV0R3JMeg/YN18RsEg5zJxkBejD7rBRXAzEptK6A/dJ5uhHTqlgwiIiE0zylHTWyH8COBOAfKRsqBlXX8mzW0Xd6VQOzjqoIjp6KOPkMzL6tj136nhYQCb9nGBb/a5ziI1xEpXSAf1meeZl5fAY43a8I4oQDS5lvyVkws2KgKDD3TqtnxEJPynL1MFxN9sOoG6pSu4u8Erol5sYJoBOROo86gAfJkwIvIdqiDf3lkUrDieWi4pMTR31QQX8D1sUi7VREDSLQUOrQRKESkAINEgDxcxY0GLz6NXuU0DiKj+F0Xm1/4p2hoe07m/G0JQqeQMD+SSiUCeA08ALkans7j4QRH8DzhelYuNogrPAAAAAElFTkSuQmCC" alt="CattleTrack Analytics">
+    <div class="nav-logo-text">CattleTrack <span>Analytics</span></div>
+  </div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#pricing">Pricing</a>
+    <a href="#contact">Contact</a>
+    <a href="cattletrack.html" class="nav-cta">Sign In</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-badge">Built by ranchers, for ranchers</div>
+  <h1>Ranch management that works <span>in the pasture</span></h1>
+  <p>Complete cattle record keeping — calving, health, breeding, EPDs, weights, and sales. Works offline when you have no signal.</p>
+  <div class="hero-buttons">
+    <a href="cattletrack.html" class="btn-primary">Start Free Trial →</a>
+    <a href="#features" class="btn-secondary">See Features</a>
+  </div>
+</section>
+
+<!-- SOCIAL PROOF -->
+<div class="proof">
+  <p>Trusted by <strong>cow-calf operations</strong> across the country · Works on any phone, tablet, or computer · No app store required</p>
+</div>
+
+<!-- FEATURES -->
+<section class="features" id="features">
+  <div class="section-label">Everything you need</div>
+  <div class="section-title">One app for your whole operation</div>
+  <div class="section-sub">Stop juggling spreadsheets, notebooks, and multiple apps. CattleTrack brings everything together in one place.</div>
+
+  <div class="feature-grid">
+    <div class="feature-card">
+      <div class="feature-icon">🐄</div>
+      <h3>Animal Records</h3>
+      <p>Complete individual animal profiles with full history — every calving, breeding, health event, weight, and sale tied to each animal.</p>
+      <ul>
+        <li>Registered & commercial animals</li>
+        <li>Pedigree up to 3 generations</li>
+        <li>Raised vs. purchased tracking</li>
+        <li>RAAA Pro Extract EPD import</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📅</div>
+      <h3>Calving Records</h3>
+      <p>Log every calf with dam, sire, birth weight, calving ease, udder and teat scores. Auto-calculates weaning dates based on your calving window.</p>
+      <ul>
+        <li>Birth weight & calving ease</li>
+        <li>Udder & teat scoring</li>
+        <li>Auto weaning date reminders</li>
+        <li>Twin & graft tracking</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">💉</div>
+      <h3>Health & Treatments</h3>
+      <p>Built-in drug database with withdrawal periods pre-loaded. Log treatments, vaccinations, and vet visits — get automatic withdrawal alerts.</p>
+      <ul>
+        <li>50+ drugs with withdrawal days</li>
+        <li>Auto-fill from drug dropdown</li>
+        <li>Withdrawal period alerts</li>
+        <li>Treatment cost tracking</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🐂</div>
+      <h3>Breeding Program</h3>
+      <p>Full breeding management including AI, natural service, conventional ET, and IVF. Sync group planner with step-by-step protocol tracking.</p>
+      <ul>
+        <li>Semen inventory by tank & cane</li>
+        <li>AI sync group management</li>
+        <li>Conventional ET & IVF records</li>
+        <li>Embryo inventory tracking</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">⚖️</div>
+      <h3>Weights & Performance</h3>
+      <p>Track birth, weaning, and yearling weights. Automatically calculates average daily gain between any two weights.</p>
+      <ul>
+        <li>Birth, weaning & yearling weights</li>
+        <li>Auto ADG calculation</li>
+        <li>Weight history per animal</li>
+        <li>Performance reports</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🌾</div>
+      <h3>Pasture Management</h3>
+      <p>Track which animals are in which pasture. Move individuals or whole groups. Log owned and leased pastures with acreage and stocking rates.</p>
+      <ul>
+        <li>Individual & group moves</li>
+        <li>Stocking rate calculation</li>
+        <li>Owned & leased pastures</li>
+        <li>Virtual fence collar ready</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📊</div>
+      <h3>EPDs & Pedigree</h3>
+      <p>Full RAAA EPD set for registered cattle. Import directly from your RAAA Pro Extract file — one upload updates your whole herd instantly.</p>
+      <ul>
+        <li>Full RAAA EPD set</li>
+        <li>HerdBuilder, GridMaster, PROs</li>
+        <li>3-generation pedigree</li>
+        <li>One-click RAAA import</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">💰</div>
+      <h3>Sales & Financials</h3>
+      <p>Record private treaty and sale barn sales. Auto-calculates net from weight and price per CWT. Track buyers and sale history.</p>
+      <ul>
+        <li>Private treaty & sale barn</li>
+        <li>Auto price calculation</li>
+        <li>Buyer contact tracking</li>
+        <li>Sales reports & CSV export</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📋</div>
+      <h3>Custom Reports</h3>
+      <p>Build any report you want. Pick your columns, add filters, sort by any field, and export to Excel. Save report templates for one-tap re-runs.</p>
+      <ul>
+        <li>Fully customizable columns</li>
+        <li>Stack multiple filters</li>
+        <li>Export to CSV / Excel</li>
+        <li>Save report templates</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- OFFLINE -->
+<section class="offline-section">
+  <h2>Works when you have <span>no signal</span></h2>
+  <p>Log a calving, record a treatment, or move cattle between pastures — even when you're miles from cell service. Everything syncs automatically when you're back in range.</p>
+  <div class="offline-badges">
+    <div class="badge"><span>📱</span> Works on any phone</div>
+    <div class="badge"><span>📶</span> Full offline mode</div>
+    <div class="badge"><span>☁️</span> Auto cloud sync</div>
+    <div class="badge"><span>💻</span> Any browser</div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section class="pricing" id="pricing">
+  <div class="section-label">Simple pricing</div>
+  <div class="section-title">Pick the plan that fits your operation</div>
+  <div class="section-sub" style="margin:0 auto 0">Start with a 30-day free trial. No credit card required.</div>
+
+  <div class="pricing-grid">
+    <div class="plan">
+      <div class="plan-name">Basic</div>
+      <div class="plan-price">$20<span>/month</span></div>
+      <div class="plan-desc">For commercial cow-calf operations tracking the essentials.</div>
+      <ul class="plan-features">
+        <li>Animal records & profiles</li>
+        <li>Calving records</li>
+        <li>Health & vaccinations</li>
+        <li>Weight tracking & ADG</li>
+        <li>Pasture management</li>
+        <li>Sales recording</li>
+        <li>Custom reports</li>
+        <li>Offline / cloud sync</li>
+        <li class="no">AI & semen inventory</li>
+        <li class="no">EPDs & pedigree</li>
+        <li class="no">ET & IVF program</li>
+      </ul>
+      <a href="cattletrack.html" class="plan-cta outline">Start Free Trial</a>
+    </div>
+
+    <div class="plan featured">
+      <div class="plan-badge">Most Popular</div>
+      <div class="plan-name">Pro</div>
+      <div class="plan-price">$45<span>/month</span></div>
+      <div class="plan-desc">For operations running AI breeding programs and tracking performance data.</div>
+      <ul class="plan-features">
+        <li>Everything in Basic</li>
+        <li>AI breeding records</li>
+        <li>Semen inventory (Tank/Cane)</li>
+        <li>Sync group management</li>
+        <li>Natural service tracking</li>
+        <li>Pregnancy checking</li>
+        <li>Calendar & reminders</li>
+        <li class="no">EPDs & pedigree import</li>
+        <li class="no">Conventional ET program</li>
+        <li class="no">IVF program</li>
+      </ul>
+      <a href="cattletrack.html" class="plan-cta primary">Start Free Trial</a>
+    </div>
+
+    <div class="plan">
+      <div class="plan-name">Elite</div>
+      <div class="plan-price">$80<span>/month</span></div>
+      <div class="plan-desc">For seedstock producers and operations with registered cattle and ET programs.</div>
+      <ul class="plan-features">
+        <li>Everything in Pro</li>
+        <li>Full RAAA EPD set</li>
+        <li>RAAA Pro Extract import</li>
+        <li>3-generation pedigree</li>
+        <li>Conventional ET program</li>
+        <li>IVF program tracking</li>
+        <li>Embryo inventory</li>
+        <li>HerdBuilder / GridMaster</li>
+        <li>Multi-user access</li>
+        <li>Priority support</li>
+      </ul>
+      <a href="cattletrack.html" class="plan-cta outline">Start Free Trial</a>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section" id="contact">
+  <h2>Ready to get organized?</h2>
+  <p>30-day free trial. No credit card. Cancel anytime.</p>
+  <a href="cattletrack.html" class="btn-white">Start Your Free Trial →</a>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="logo">
+    <img src="data:image/png;base64,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" alt="CattleTrack Analytics" style="height:32px">
+    <div class="logo-text">CattleTrack <span>Analytics</span></div>
+  </div>
+  <p>Professional ranch management software</p>
+  <p style="margin-top:4px">Built for cow-calf operations of all sizes</p>
+  <div class="footer-links">
+    <a href="#features">Features</a>
+    <a href="#pricing">Pricing</a>
+    <a href="cattletrack.html">Sign In</a>
+    <a href="mailto:info@cattletrackanalytics.com">Contact</a>
+  </div>
+  <p style="margin-top:24px">© 2026 CattleTrack Analytics. All rights reserved.</p>
+</footer>
+
+</body>
+</html>
