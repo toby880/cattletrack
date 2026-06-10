@@ -311,7 +311,10 @@ tr:hover td{background:var(--bg)}
     <div class="page" id="page-animals">
       <div class="section-header">
         <div class="section-title">Animals</div>
-        <button class="btn btn-primary btn-sm" onclick="openAddAnimal()">+ Add</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" onclick="openGroupAction()">Group Action</button>
+          <button class="btn btn-primary btn-sm" onclick="openAddAnimal()">+ Add</button>
+        </div>
       </div>
       <div style="display:flex;gap:8px;margin-bottom:12px">
         <input type="text" id="animal-search" placeholder="Search tag, name, breed..." oninput="renderAnimals()" style="flex:1;font-size:14px">
@@ -869,6 +872,99 @@ tr:hover td{background:var(--bg)}
       <button class="btn btn-secondary" onclick="closeAddAnimal()" style="flex:1">Cancel</button>
       <button class="btn btn-primary" onclick="saveNewAnimal()" style="flex:2">Add Animal</button>
     </div>
+  </div>
+</div>
+
+<!-- GROUP ACTION MODAL -->
+<div class="modal-overlay" id="group-action-modal">
+  <div class="modal" style="max-height:95vh">
+    <div class="modal-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="modal-title" style="margin-bottom:0">Group Action</div>
+      <button onclick="closeGroupAction()" style="background:var(--bg2);border:none;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer;font-family:inherit">Cancel</button>
+    </div>
+
+    <!-- Step 1: Filter -->
+    <div id="ga-step1">
+      <div class="card-title">Step 1 — Filter Animals</div>
+      <div class="form-row" style="margin-bottom:8px">
+        <div class="form-group">
+          <label>Sex</label>
+          <select id="ga-filter-sex">
+            <option value="">All</option>
+            <option value="Cow">Cows</option>
+            <option value="Heifer">Heifers</option>
+            <option value="Bull">Bulls</option>
+            <option value="Steer">Steers</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Type</label>
+          <select id="ga-filter-type">
+            <option value="">All</option>
+            <option value="Registered">Registered</option>
+            <option value="Commercial">Commercial</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row" style="margin-bottom:8px">
+        <div class="form-group">
+          <label>Pasture / Location</label>
+          <input type="text" id="ga-filter-pasture" placeholder="e.g. River, North">
+        </div>
+        <div class="form-group">
+          <label>Category</label>
+          <input type="text" id="ga-filter-category" placeholder="e.g. AI/ET Cows">
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="loadGroupAnimals()">Find Animals →</button>
+    </div>
+
+    <!-- Step 2: Select animals -->
+    <div id="ga-step2" style="display:none">
+      <div class="card-title" style="margin-bottom:8px">Step 2 — Select Animals</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+        <button class="btn btn-secondary btn-sm" onclick="gaSelectAll()">Select All</button>
+        <button class="btn btn-secondary btn-sm" onclick="gaClearAll()">Clear</button>
+        <span id="ga-count" style="font-size:13px;color:var(--gray)">0 selected</span>
+      </div>
+      <div id="ga-animal-list" style="max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:12px"></div>
+      <button class="btn btn-primary" onclick="gaChooseAction()" id="ga-next-btn" disabled>Choose Action →</button>
+    </div>
+
+    <!-- Step 3: Choose action -->
+    <div id="ga-step3" style="display:none">
+      <div class="card-title" style="margin-bottom:8px">Step 3 — Choose Action</div>
+      <div style="display:grid;gap:8px;margin-bottom:12px">
+        <button onclick="gaSetAction('health')" class="ga-action-btn" style="text-align:left;padding:12px 14px;border:2px solid var(--border);border-radius:8px;background:var(--white);cursor:pointer;font-family:inherit;font-size:14px">
+          💉 <strong>Health / Vaccination</strong><div style="font-size:12px;color:var(--gray);margin-top:2px">Log a treatment or vaccination for all selected animals</div>
+        </button>
+        <button onclick="gaSetAction('natural')" class="ga-action-btn" style="text-align:left;padding:12px 14px;border:2px solid var(--border);border-radius:8px;background:var(--white);cursor:pointer;font-family:inherit;font-size:14px">
+          🐂 <strong>Natural Service</strong><div style="font-size:12px;color:var(--gray);margin-top:2px">Record a bull turn-out for all selected cows</div>
+        </button>
+        <button onclick="gaSetAction('weight')" class="ga-action-btn" style="text-align:left;padding:12px 14px;border:2px solid var(--border);border-radius:8px;background:var(--white);cursor:pointer;font-family:inherit;font-size:14px">
+          ⚖️ <strong>Weight Record</strong><div style="font-size:12px;color:var(--gray);margin-top:2px">Log a weight for all selected animals</div>
+        </button>
+        <button onclick="gaSetAction('pregcheck')" class="ga-action-btn" style="text-align:left;padding:12px 14px;border:2px solid var(--border);border-radius:8px;background:var(--white);cursor:pointer;font-family:inherit;font-size:14px">
+          🔍 <strong>Pregnancy Check</strong><div style="font-size:12px;color:var(--gray);margin-top:2px">Record a preg check result for all selected animals</div>
+        </button>
+        <button onclick="gaSetAction('move')" class="ga-action-btn" style="text-align:left;padding:12px 14px;border:2px solid var(--border);border-radius:8px;background:var(--white);cursor:pointer;font-family:inherit;font-size:14px">
+          🌾 <strong>Move to Pasture</strong><div style="font-size:12px;color:var(--gray);margin-top:2px">Move all selected animals to a new pasture</div>
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 4: Fill form & apply -->
+    <div id="ga-step4" style="display:none">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <button onclick="gaBackToStep3()" style="background:var(--bg2);border:none;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer;font-family:inherit">← Back</button>
+        <div class="card-title" style="margin-bottom:0" id="ga-form-title">Action</div>
+      </div>
+      <div id="ga-summary" style="background:var(--bg2);border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:12px;color:var(--gray)"></div>
+      <div id="ga-form"></div>
+      <button class="btn btn-primary" onclick="applyGroupAction()" style="margin-top:8px" id="ga-apply-btn">Apply to All Selected Animals</button>
+    </div>
+
   </div>
 </div>
 
@@ -2689,7 +2785,297 @@ async function runQuickReport(type) {
 
 async function runReport(type) { runQuickReport(type); }
 
-// ── EDIT ANIMAL ────────────────────────────────────────────────────────────
+// ── GROUP ACTIONS ──────────────────────────────────────────────────────────
+let gaSelectedAnimals = [];
+let gaCurrentAction = '';
+
+function openGroupAction() {
+  // Reset all steps
+  ['ga-step1','ga-step2','ga-step3','ga-step4'].forEach((id,i) => {
+    document.getElementById(id).style.display = i===0 ? 'block' : 'none';
+  });
+  document.getElementById('ga-filter-sex').value = '';
+  document.getElementById('ga-filter-type').value = '';
+  document.getElementById('ga-filter-pasture').value = '';
+  document.getElementById('ga-filter-category').value = '';
+  gaSelectedAnimals = [];
+  document.getElementById('group-action-modal').classList.add('open');
+}
+
+function closeGroupAction() {
+  document.getElementById('group-action-modal').classList.remove('open');
+}
+
+async function loadGroupAnimals() {
+  const sex = document.getElementById('ga-filter-sex').value;
+  const type = document.getElementById('ga-filter-type').value;
+  const pasture = document.getElementById('ga-filter-pasture').value.toLowerCase().trim();
+  const category = document.getElementById('ga-filter-category').value.toLowerCase().trim();
+
+  // Load animals from Supabase
+  let query = sb.from('animals').select('*').eq('ranch_id', currentRanch.id).neq('status','dead');
+  if(sex) query = query.eq('sex', sex);
+  if(type) query = query.eq('animal_type', type);
+  if(category) query = query.ilike('category', `%${category}%`);
+
+  const {data} = await query.order('tag');
+  let animals = data || [];
+
+  // Filter by pasture (from location field)
+  if(pasture) animals = animals.filter(a => (a.location||'').toLowerCase().includes(pasture));
+
+  if(!animals.length) {
+    alert('No animals found matching those filters. Try different criteria.');
+    return;
+  }
+
+  // Show step 2
+  document.getElementById('ga-step1').style.display = 'none';
+  document.getElementById('ga-step2').style.display = 'block';
+
+  const list = document.getElementById('ga-animal-list');
+  list.innerHTML = animals.map(a => `
+    <label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border);cursor:pointer;font-size:13px">
+      <input type="checkbox" class="ga-check" value="${a.id}|${a.tag}" onchange="gaUpdateCount()" style="width:18px;height:18px;accent-color:var(--orange);flex-shrink:0">
+      <div><strong>${a.tag}</strong> <span style="color:var(--gray)">· ${a.sex||'—'} · ${a.animal_type==='Registered'?'Reg':'Comm'}${a.location?' · '+a.location:''}</span></div>
+    </label>`).join('');
+
+  gaUpdateCount();
+  // Auto-select all
+  document.querySelectorAll('.ga-check').forEach(c=>c.checked=true);
+  gaUpdateCount();
+}
+
+function gaUpdateCount() {
+  const count = document.querySelectorAll('.ga-check:checked').length;
+  document.getElementById('ga-count').textContent = `${count} selected`;
+  document.getElementById('ga-next-btn').disabled = count === 0;
+}
+
+function gaSelectAll() {
+  document.querySelectorAll('.ga-check').forEach(c=>c.checked=true);
+  gaUpdateCount();
+}
+
+function gaClearAll() {
+  document.querySelectorAll('.ga-check').forEach(c=>c.checked=false);
+  gaUpdateCount();
+}
+
+function gaChooseAction() {
+  gaSelectedAnimals = [...document.querySelectorAll('.ga-check:checked')].map(c => {
+    const [id, tag] = c.value.split('|');
+    return {id, tag};
+  });
+  if(!gaSelectedAnimals.length) return;
+  document.getElementById('ga-step2').style.display = 'none';
+  document.getElementById('ga-step3').style.display = 'block';
+}
+
+function gaSetAction(action) {
+  gaCurrentAction = action;
+  document.getElementById('ga-step3').style.display = 'none';
+  document.getElementById('ga-step4').style.display = 'block';
+
+  const today = new Date().toISOString().split('T')[0];
+  const count = gaSelectedAnimals.length;
+  const tags = gaSelectedAnimals.slice(0,5).map(a=>a.tag).join(', ') + (count>5?` +${count-5} more`:'');
+
+  document.getElementById('ga-summary').innerHTML = `<strong>${count} animals selected:</strong> ${tags}`;
+
+  const titles = {health:'💉 Health / Vaccination', natural:'🐂 Natural Service', weight:'⚖️ Weight Record', pregcheck:'🔍 Pregnancy Check', move:'🌾 Move to Pasture'};
+  document.getElementById('ga-form-title').textContent = titles[action];
+
+  const forms = {
+    health: `
+      <div class="form-group"><label>Product / Vaccine</label>
+        <select id="gaf-product-select" onchange="gaAutofillDrug()" style="margin-bottom:6px">
+          <option value="">— Select from drug list —</option>
+          <optgroup label="Antibiotics"><option value="Draxxin|28|IM">Draxxin — 28d</option><option value="Excenel|4|SQ">Excenel — 4d</option><option value="Nuflor|36|SQ">Nuflor — 36d</option><option value="LA-200|28|SQ">LA-200 — 28d</option><option value="Baytril 100|28|SQ">Baytril 100 — 28d</option><option value="Micotil|42|SQ">Micotil — 42d</option></optgroup>
+          <optgroup label="Dewormers"><option value="Ivermectin Pour-On|48|topical">Ivermectin Pour-On — 48d</option><option value="Dectomax Pour-On|45|topical">Dectomax Pour-On — 45d</option><option value="Cydectin Pour-On|0|topical">Cydectin Pour-On — 0d</option><option value="Safe-Guard|8|oral">Safe-Guard — 8d</option><option value="Valbazen|27|oral">Valbazen — 27d</option></optgroup>
+          <optgroup label="Vaccines"><option value="Bovishield Gold 5|0|SQ">Bovishield Gold 5 — 0d</option><option value="Vista Once SQ|0|SQ">Vista Once SQ — 0d</option><option value="Pyramid 5|0|SQ">Pyramid 5 — 0d</option><option value="Vision 7|0|SQ">Vision 7 — 0d</option><option value="Lepto Shield|0|SQ">Lepto Shield — 0d</option></optgroup>
+          <optgroup label="Reproductive"><option value="CIDR|0|intravaginal">CIDR — 0d</option><option value="Lutalyse|0|IM">Lutalyse — 0d</option><option value="Estrumate|0|IM">Estrumate — 0d</option><option value="Factrel|0|IM">Factrel — 0d</option></optgroup>
+          <option value="custom||">+ Enter custom...</option>
+        </select>
+        <input type="text" id="gaf-product" placeholder="Or type product name">
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Date</label><input type="date" id="gaf-date" value="${today}"></div>
+        <div class="form-group"><label>Event Type</label>
+          <select id="gaf-type"><option value="vaccination">Vaccination</option><option value="treatment">Treatment</option><option value="pour-on">Pour-On</option><option value="other">Other</option></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Dosage</label><input type="text" id="gaf-dosage" placeholder="e.g. 5ml"></div>
+        <div class="form-group"><label>Route</label>
+          <select id="gaf-route"><option value="">—</option><option value="SQ">SQ</option><option value="IM">IM</option><option value="oral">Oral</option><option value="topical">Topical</option></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Cost per Animal ($)</label><input type="number" id="gaf-cost" placeholder="0.00" inputmode="decimal"></div>
+        <div class="form-group"><label>Withdrawal Days</label><input type="number" id="gaf-withdrawal" placeholder="0" inputmode="numeric"></div>
+      </div>
+      <div class="form-group"><label>Treated By</label><input type="text" id="gaf-by" placeholder="Name"></div>
+      <div class="form-group"><label>Notes</label><input type="text" id="gaf-notes" placeholder="Observations..."></div>`,
+
+    natural: `
+      <div class="form-group"><label>Bull Tag / Name</label><input type="text" id="gaf-bull" placeholder="Bull ID or name"></div>
+      <div class="form-group"><label>Pasture</label><input type="text" id="gaf-pasture" placeholder="e.g. River, North"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Turn-Out Date</label><input type="date" id="gaf-turnout" value="${today}"></div>
+        <div class="form-group"><label>Pull Date</label><input type="date" id="gaf-pull"></div>
+      </div>
+      <div class="form-group"><label>Expected Calving Start</label><input type="date" id="gaf-calving-start"></div>
+      <div class="form-group"><label>Notes</label><input type="text" id="gaf-notes" placeholder="BSE result, observations..."></div>`,
+
+    weight: `
+      <div class="form-group"><label>Weight Type</label>
+        <select id="gaf-weight-type"><option value="weaning">Weaning Weight</option><option value="yearling">Yearling Weight</option><option value="birth">Birth Weight</option><option value="custom">Custom</option></select>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Date</label><input type="date" id="gaf-date" value="${today}"></div>
+        <div class="form-group"><label>Weight (lbs) — applies to all</label><input type="number" id="gaf-weight" placeholder="0" inputmode="decimal"></div>
+      </div>
+      <div class="alert alert-warning" style="font-size:12px">⚠️ This logs the same weight for every selected animal. Use individual weight recording if animals have different weights.</div>
+      <div class="form-group"><label>Notes</label><input type="text" id="gaf-notes" placeholder="Optional"></div>`,
+
+    pregcheck: `
+      <div class="form-row">
+        <div class="form-group"><label>Check Date</label><input type="date" id="gaf-date" value="${today}"></div>
+        <div class="form-group"><label>Result</label>
+          <select id="gaf-preg-result"><option value="pregnant">Pregnant ✓</option><option value="open">Open ✗</option><option value="recheck">Recheck</option></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Breeding Type</label>
+          <select id="gaf-breed-type"><option value="natural">Natural Service</option><option value="ai">AI</option><option value="et">ET</option><option value="unknown">Unknown</option></select>
+        </div>
+        <div class="form-group"><label>Checked By</label><input type="text" id="gaf-by" placeholder="Vet or tech"></div>
+      </div>
+      <div class="form-group"><label>Notes</label><input type="text" id="gaf-notes" placeholder="Observations..."></div>`,
+
+    move: `
+      <div class="form-group"><label>Move to Pasture</label><input type="text" id="gaf-to-pasture" placeholder="e.g. River, North, Home"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Move Date</label><input type="date" id="gaf-date" value="${today}"></div>
+        <div class="form-group"><label>Moved By</label><input type="text" id="gaf-by" placeholder="Name"></div>
+      </div>
+      <div class="form-group"><label>Reason</label><input type="text" id="gaf-notes" placeholder="e.g. Rotation, Weaning, Sorting"></div>`,
+  };
+
+  document.getElementById('ga-form').innerHTML = forms[action] || '';
+}
+
+function gaAutofillDrug() {
+  const sel = document.getElementById('gaf-product-select');
+  const val = sel.value;
+  if(!val || val === 'custom||') { document.getElementById('gaf-product').value=''; return; }
+  const [name, days, route] = val.split('|');
+  document.getElementById('gaf-product').value = name;
+  if(document.getElementById('gaf-withdrawal')) document.getElementById('gaf-withdrawal').value = days||'0';
+  if(document.getElementById('gaf-route')) document.getElementById('gaf-route').value = route||'';
+}
+
+function gaBackToStep3() {
+  document.getElementById('ga-step4').style.display = 'none';
+  document.getElementById('ga-step3').style.display = 'block';
+}
+
+async function applyGroupAction() {
+  const count = gaSelectedAnimals.length;
+  if(!count) return;
+
+  const btn = document.getElementById('ga-apply-btn');
+  btn.disabled = true;
+  btn.textContent = `Saving 0 of ${count}...`;
+
+  let saved = 0;
+  let errors = 0;
+  const today = new Date().toISOString().split('T')[0];
+
+  for(const animal of gaSelectedAnimals) {
+    btn.textContent = `Saving ${saved+1} of ${count}...`;
+    try {
+      if(gaCurrentAction === 'health') {
+        const product = document.getElementById('gaf-product')?.value?.trim() ||
+                       document.getElementById('gaf-product-select')?.value?.split('|')[0] || '';
+        await dbInsert('health_events', {
+          animal_tag: animal.tag,
+          event_date: document.getElementById('gaf-date')?.value || today,
+          event_type: document.getElementById('gaf-type')?.value || 'vaccination',
+          product,
+          dosage: document.getElementById('gaf-dosage')?.value?.trim()||null,
+          route: document.getElementById('gaf-route')?.value||null,
+          cost: parseFloat(document.getElementById('gaf-cost')?.value)||null,
+          withdrawal_days: parseInt(document.getElementById('gaf-withdrawal')?.value)||0,
+          treated_by: document.getElementById('gaf-by')?.value?.trim()||null,
+          notes: document.getElementById('gaf-notes')?.value?.trim()||null,
+        });
+      }
+      else if(gaCurrentAction === 'natural') {
+        await dbInsert('natural_service', {
+          bull_tag: document.getElementById('gaf-bull')?.value?.trim(),
+          pasture: document.getElementById('gaf-pasture')?.value?.trim()||null,
+          turnout_date: document.getElementById('gaf-turnout')?.value || today,
+          pull_date: document.getElementById('gaf-pull')?.value||null,
+          cows_exposed: count,
+          expected_calving_start: document.getElementById('gaf-calving-start')?.value||null,
+          notes: `Group action: ${count} cows. ` + (document.getElementById('gaf-notes')?.value?.trim()||''),
+        });
+        // Only insert once for natural service (it's one turn-out record for the group)
+        saved = count;
+        break;
+      }
+      else if(gaCurrentAction === 'weight') {
+        await dbInsert('weights', {
+          animal_tag: animal.tag,
+          weight_date: document.getElementById('gaf-date')?.value || today,
+          weight_lbs: parseFloat(document.getElementById('gaf-weight')?.value)||0,
+          weight_type: document.getElementById('gaf-weight-type')?.value || 'weaning',
+          notes: document.getElementById('gaf-notes')?.value?.trim()||null,
+        });
+      }
+      else if(gaCurrentAction === 'pregcheck') {
+        await dbInsert('preg_checks', {
+          animal_tag: animal.tag,
+          check_date: document.getElementById('gaf-date')?.value || today,
+          result: document.getElementById('gaf-preg-result')?.value || 'open',
+          breed_type: document.getElementById('gaf-breed-type')?.value || 'natural',
+          checked_by: document.getElementById('gaf-by')?.value?.trim()||null,
+          notes: document.getElementById('gaf-notes')?.value?.trim()||null,
+        });
+      }
+      else if(gaCurrentAction === 'move') {
+        const toPasture = document.getElementById('gaf-to-pasture')?.value?.trim();
+        const moveDate = document.getElementById('gaf-date')?.value || today;
+        const by = document.getElementById('gaf-by')?.value?.trim()||null;
+        const reason = document.getElementById('gaf-notes')?.value?.trim()||null;
+        await dbInsert('animal_locations', {
+          animal_tag: animal.tag,
+          pasture: toPasture,
+          move_date: moveDate,
+          moved_by: by,
+          reason,
+        });
+        // Also update animal location field
+        await sb.from('animals').update({location: toPasture}).eq('id', animal.id);
+      }
+      saved++;
+    } catch(e) { errors++; }
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Apply to All Selected Animals';
+  closeGroupAction();
+
+  const actionLabels = {health:'health records', natural:'natural service turn-out', weight:'weight records', pregcheck:'preg checks', move:'animals moved'};
+  alert(`✅ Done! ${saved} ${actionLabels[gaCurrentAction] || 'records'} saved.${errors?`\n⚠ ${errors} error(s) — check and retry those individually.`:''}`);
+
+  // Refresh the animals list
+  loadAnimals();
+}
+
+
 function openEditAnimal() {
   if(!currentAnimal) return;
   const a = currentAnimal;
