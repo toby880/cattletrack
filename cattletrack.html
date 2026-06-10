@@ -991,16 +991,27 @@ async function signUp() {
   if(password.length < 8) { showAuthError('Password must be at least 8 characters.'); return; }
   const btn = document.getElementById('signup-btn');
   btn.disabled=true; btn.textContent='Creating account...';
-  const {data, error} = await sb.auth.signUp({email, password});
+
+  const {data, error} = await sb.auth.signUp({
+    email, password,
+    options: {
+      data: { ranch_name: ranch, full_name: name, plan: plan }
+    }
+  });
+
   btn.disabled=false; btn.textContent='Create Account';
   if(error) { showAuthError(error.message); return; }
+
   if(data.user) {
-    // Create ranch
-    const {data: ranchData} = await sb.from('ranches').insert({name: ranch, owner_name: name, email, plan}).select().single();
-    if(ranchData) {
-      await sb.from('profiles').insert({id: data.user.id, ranch_id: ranchData.id, full_name: name, role: 'owner'});
+    if(data.user.identities && data.user.identities.length === 0) {
+      showAuthError('An account with this email already exists. Please sign in.');
+      return;
     }
-    showAuthSuccess('Account created! Check your email to confirm, then sign in.');
+    if(data.session) {
+      await loadUserSession(data.user);
+      return;
+    }
+    showAuthSuccess('Account created! Check your email to confirm your account, then sign in.');
     showAuthTab('signin');
   }
 }
