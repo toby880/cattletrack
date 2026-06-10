@@ -577,47 +577,101 @@ tr:hover td{background:var(--bg)}
 
     <!-- REPORTS -->
     <div class="page" id="page-reports">
-      <div class="section-title" style="margin-bottom:16px">Reports & Analytics</div>
-      <div style="display:grid;gap:10px">
-        <div class="card" onclick="runReport('weaning')" style="cursor:pointer">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <div><div style="font-weight:600;font-size:15px">🌾 Weaning Weight Report</div><div style="font-size:12px;color:var(--gray);margin-top:3px">Average weights, ADG, top performers by sire</div></div>
-            <span style="color:var(--gray-lt);font-size:20px">›</span>
+      <div class="tab-bar">
+        <button class="tab active" onclick="showReportsTab('builder')">Custom Report</button>
+        <button class="tab" onclick="showReportsTab('saved')">Saved Reports</button>
+        <button class="tab" onclick="showReportsTab('quick')">Quick Reports</button>
+      </div>
+
+      <!-- CUSTOM REPORT BUILDER -->
+      <div id="reports-builder">
+        <div class="card" style="margin-bottom:10px">
+          <div class="card-title">Step 1 — Data Source</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <label style="display:flex;align-items:center;gap:8px;padding:10px;border:2px solid var(--border);border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--dark)" id="src-animals-label">
+              <input type="radio" name="report-source" value="animals" onchange="updateReportColumns()" checked style="width:16px;height:16px;accent-color:var(--orange)"> 🐄 Animals
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;padding:10px;border:2px solid var(--border);border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--dark)">
+              <input type="radio" name="report-source" value="calving" onchange="updateReportColumns()" style="width:16px;height:16px;accent-color:var(--orange)"> 🐮 Calving
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;padding:10px;border:2px solid var(--border);border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--dark)">
+              <input type="radio" name="report-source" value="weights" onchange="updateReportColumns()" style="width:16px;height:16px;accent-color:var(--orange)"> ⚖️ Weights
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;padding:10px;border:2px solid var(--border);border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--dark)">
+              <input type="radio" name="report-source" value="health" onchange="updateReportColumns()" style="width:16px;height:16px;accent-color:var(--orange)"> 💉 Health
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;padding:10px;border:2px solid var(--border);border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--dark)">
+              <input type="radio" name="report-source" value="sales" onchange="updateReportColumns()" style="width:16px;height:16px;accent-color:var(--orange)"> 💰 Sales
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;padding:10px;border:2px solid var(--border);border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--dark)">
+              <input type="radio" name="report-source" value="epds" onchange="updateReportColumns()" style="width:16px;height:16px;accent-color:var(--orange)"> 📊 EPDs
+            </label>
           </div>
         </div>
-        <div class="card" onclick="runReport('conception')" style="cursor:pointer">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <div><div style="font-weight:600;font-size:15px">🐂 Conception Rate Report</div><div style="font-size:12px;color:var(--gray);margin-top:3px">AI vs natural service, by sync group and sire</div></div>
-            <span style="color:var(--gray-lt);font-size:20px">›</span>
+
+        <div class="card" style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <div class="card-title" style="margin-bottom:0">Step 2 — Columns</div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-secondary btn-sm" onclick="selectAllColumns()">All</button>
+              <button class="btn btn-secondary btn-sm" onclick="clearAllColumns()">None</button>
+            </div>
+          </div>
+          <div id="column-picker" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+        </div>
+
+        <div class="card" style="margin-bottom:10px">
+          <div class="card-title">Step 3 — Filters <span style="font-size:11px;font-weight:400;color:var(--gray)">(optional)</span></div>
+          <div id="filter-list"></div>
+          <button class="btn btn-secondary btn-sm" onclick="addFilter()" style="margin-top:8px">+ Add Filter</button>
+        </div>
+
+        <div class="card" style="margin-bottom:10px">
+          <div class="card-title">Step 4 — Sort</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Sort By</label>
+              <select id="report-sort-col"><option value="">— None —</option></select>
+            </div>
+            <div class="form-group">
+              <label>Order</label>
+              <select id="report-sort-dir">
+                <option value="asc">A → Z / Low → High</option>
+                <option value="desc">Z → A / High → Low</option>
+              </select>
+            </div>
           </div>
         </div>
-        <div class="card" onclick="runReport('health-cost')" style="cursor:pointer">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <div><div style="font-weight:600;font-size:15px">💉 Health Cost Report</div><div style="font-size:12px;color:var(--gray);margin-top:3px">Total treatment costs per animal and per category</div></div>
-            <span style="color:var(--gray-lt);font-size:20px">›</span>
-          </div>
-        </div>
-        <div class="card" onclick="runReport('calving')" style="cursor:pointer">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <div><div style="font-weight:600;font-size:15px">🐄 Calving Performance</div><div style="font-size:12px;color:var(--gray);margin-top:3px">Ease scores, calf losses, average birth weight</div></div>
-            <span style="color:var(--gray-lt);font-size:20px">›</span>
-          </div>
-        </div>
-        <div class="card" onclick="runReport('et')" style="cursor:pointer">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <div><div style="font-weight:600;font-size:15px">🧬 ET / IVF Summary</div><div style="font-size:12px;color:var(--gray);margin-top:3px">Flush results, transfer rates, embryo inventory</div></div>
-            <span style="color:var(--gray-lt);font-size:20px">›</span>
-          </div>
-        </div>
-        <div class="card" onclick="runReport('sales')" style="cursor:pointer">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <div><div style="font-weight:600;font-size:15px">💰 Sales Report</div><div style="font-size:12px;color:var(--gray);margin-top:3px">Revenue by animal type, buyer, and sale method</div></div>
-            <span style="color:var(--gray-lt);font-size:20px">›</span>
-          </div>
+
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <button class="btn btn-primary" onclick="runCustomReport()" style="flex:2">▶ Run Report</button>
+          <button class="btn btn-secondary" onclick="saveReportTemplate()" style="flex:1">💾 Save</button>
         </div>
       </div>
-      <div id="report-output" style="margin-top:16px"></div>
+
+      <!-- SAVED REPORTS -->
+      <div id="reports-saved" style="display:none">
+        <div class="section-header">
+          <div class="section-title">Saved Reports</div>
+        </div>
+        <div id="saved-reports-list"><div class="empty"><div class="empty-icon">📋</div><p>No saved reports yet.<br>Build a report and tap Save.</p></div></div>
+      </div>
+
+      <!-- QUICK REPORTS -->
+      <div id="reports-quick" style="display:none">
+        <div style="display:grid;gap:10px">
+          <div class="card" onclick="runQuickReport('calving-performance')" style="cursor:pointer"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:600;font-size:15px">🐄 Calving Performance</div><div style="font-size:12px;color:var(--gray);margin-top:3px">Ease scores, birth weights, calf losses</div></div><span style="color:var(--gray-lt);font-size:20px">›</span></div></div>
+          <div class="card" onclick="runQuickReport('health-cost')" style="cursor:pointer"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:600;font-size:15px">💉 Health Costs</div><div style="font-size:12px;color:var(--gray);margin-top:3px">Total treatment costs by animal and type</div></div><span style="color:var(--gray-lt);font-size:20px">›</span></div></div>
+          <div class="card" onclick="runQuickReport('sales-summary')" style="cursor:pointer"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:600;font-size:15px">💰 Sales Summary</div><div style="font-size:12px;color:var(--gray);margin-top:3px">Revenue by type, buyer, and date</div></div><span style="color:var(--gray-lt);font-size:20px">›</span></div></div>
+          <div class="card" onclick="runQuickReport('epd-rankings')" style="cursor:pointer"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:600;font-size:15px">📊 EPD Rankings</div><div style="font-size:12px;color:var(--gray);margin-top:3px">All registered animals ranked by any EPD</div></div><span style="color:var(--gray-lt);font-size:20px">›</span></div></div>
+          <div class="card" onclick="runQuickReport('weaning-weights')" style="cursor:pointer"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:600;font-size:15px">🌾 Weaning Weights</div><div style="font-size:12px;color:var(--gray);margin-top:3px">Weaning weights and ADG by sex and sire</div></div><span style="color:var(--gray-lt);font-size:20px">›</span></div></div>
+        </div>
+      </div>
+
+      <!-- REPORT OUTPUT -->
+      <div id="report-output" style="margin-top:4px"></div>
     </div>
+
 
     <!-- SETTINGS -->
     <div class="page" id="page-settings">
@@ -914,7 +968,7 @@ function showPage(name) {
   if(name==='pastures') loadPastures();
   if(name==='sales') { showSalesTab('record'); }
   if(name==='calendar') loadCalendar();
-  if(name==='reports') {}
+  if(name==='reports') { setTimeout(()=>{ showReportsTab('builder'); updateReportColumns(); }, 50); }
   if(name==='settings') loadSettings();
 }
 
@@ -1074,8 +1128,8 @@ async function showProfileTab(tab) {
 
   if(tab==='epds') {
     const {data: epds} = await sb.from('epds').select('*').eq('ranch_id', currentRanch.id).eq('animal_tag', tag).single();
-    const groups = {Calving:['ced','bw','cem'],Growth:['ww','yw','radg','dmi'],Maternal:['milk','mw','mh'],Carcass:['rea','fat','marbling'],Indexes:['w_index','f_index','g_index','b_index','c_index'],Other:['sc','hp','doc','hb']};
-    const labels = {ced:'CED',bw:'BW',ww:'WW',yw:'YW',radg:'RADG',dmi:'DMI',milk:'Milk',mw:'MW',mh:'MH',cem:'CEM',rea:'REA',fat:'FAT',marbling:'Marbling',w_index:'$W',f_index:'$F',g_index:'$G',b_index:'$B',c_index:'$C',sc:'SC',hp:'HP',doc:'Doc',hb:'HB'};
+    const groups = {Calving:['ced','cem','hp'],Growth:['ww','yw','radg','dmi'],Maternal:['milk','mw','mh'],Carcass:['rea','fat','marbling'],Indexes:['hb','gm','pro'],Other:['sc','hp','doc','hb']};
+    const labels = {ced:'CED',bw:'BW',ww:'WW',yw:'YW',radg:'RADG',dmi:'DMI',milk:'Milk',mw:'MW',mh:'MH',cem:'CEM',rea:'REA',fat:'FAT',marbling:'Marbling',hb:'HerdBuilder',gm:'GridMaster',pro:'PROs',hp:'HP (Heifer Preg)',ced:'CED',ww:'WW',yw:'YW',radg:'RADG',dmi:'DMI',milk:'Milk',mw:'MW',mh:'MH',cem:'CEM',rea:'REA',fat:'FAT'};
     let display = '';
     if(epds) {
       Object.entries(groups).forEach(([g,fields])=>{
@@ -1087,9 +1141,9 @@ async function showProfileTab(tab) {
       <div class="card" style="margin-bottom:10px"><div class="card-title">RAAA EPDs</div>${display||'<div style="color:var(--gray-lt);font-size:13px">No EPDs recorded yet.</div>'}</div>
       <div class="card">
         <div class="card-title">Update EPDs</div>
-        <div class="form-group"><label>Import RAAA Pro Extract (.sen) or CSV</label><input type="file" id="epd-import" accept="*" onchange="importEPDs(event)" style="font-size:13px"></div>
+        <div class="form-group"><label>Import RAAA Pro Extract (.sen) or CSV</label><input type="file" id="epd-import" onchange="importEPDs(event)" style="font-size:13px"></div>
         <div style="font-size:12px;color:var(--gray);margin-bottom:12px">Upload your RAAA Pro Extract (.sen) to import EPDs, pedigree and names for your whole herd at once. Or enter manually below:</div>
-        <div class="form-row">${['ced','bw','ww','yw','radg','dmi','milk','mw','mh','cem','rea','fat','marbling'].map(f=>`<div class="form-group"><label>${labels[f]}</label><input type="number" id="epd-${f}" value="${epds?.[f]??''}" step="0.01" placeholder="0.0"></div>`).join('')}</div>
+        <div class="form-row">${['ced','ww','yw','radg','dmi','milk','mw','mh','cem','hp','rea','fat','marbling','hb','gm','pro'].map(f=>`<div class="form-group"><label>${labels[f]}</label><input type="number" id="epd-${f}" value="${epds?.[f]??''}" step="0.01" placeholder="0.0"></div>`).join('')}</div>
         <button class="btn btn-primary" onclick="saveEPDs('${tag}')">Save EPDs</button>
       </div>`;
   }
@@ -1487,31 +1541,326 @@ async function completeTask(id) {
 }
 
 // ── REPORTS ────────────────────────────────────────────────────────────────
-async function runReport(type) {
-  const box=document.getElementById('report-output');
-  box.innerHTML='<div class="loading"><div class="spinner"></div>Generating report...</div>';
-  if(type==='calving') {
+// ── REPORTS ────────────────────────────────────────────────────────────────
+const REPORT_COLUMNS = {
+  animals: [
+    {key:'tag',label:'Tag',type:'text'},{key:'name',label:'Name',type:'text'},
+    {key:'sex',label:'Sex',type:'text'},{key:'animal_type',label:'Type',type:'text'},
+    {key:'breed',label:'Breed',type:'text'},{key:'dob',label:'DOB',type:'date'},
+    {key:'color',label:'Color',type:'text'},{key:'horn_status',label:'Horns',type:'text'},
+    {key:'sire',label:'Sire',type:'text'},{key:'dam',label:'Dam',type:'text'},
+    {key:'status',label:'Status',type:'text'},{key:'acquisition',label:'Raised/Purchased',type:'text'},
+    {key:'purchase_price',label:'Purchase Price',type:'number'},{key:'purchased_from',label:'Purchased From',type:'text'},
+    {key:'reg_number',label:'Reg Number',type:'text'},{key:'category',label:'Category',type:'text'},
+  ],
+  calving: [
+    {key:'calf_tag',label:'Calf Tag',type:'text'},{key:'dam_tag',label:'Dam',type:'text'},
+    {key:'sire_tag',label:'Sire',type:'text'},{key:'birth_date',label:'Birth Date',type:'date'},
+    {key:'sex',label:'Sex',type:'text'},{key:'calving_type',label:'Type',type:'text'},
+    {key:'birth_weight',label:'Birth Weight',type:'number'},{key:'calving_ease',label:'Ease',type:'text'},
+    {key:'udder_score',label:'Udder Score',type:'number'},{key:'teat_score',label:'Teat Score',type:'number'},
+    {key:'location',label:'Location',type:'text'},{key:'notes',label:'Notes',type:'text'},
+  ],
+  weights: [
+    {key:'animal_tag',label:'Animal',type:'text'},{key:'weight_date',label:'Date',type:'date'},
+    {key:'weight_lbs',label:'Weight (lb)',type:'number'},{key:'weight_type',label:'Type',type:'text'},
+    {key:'notes',label:'Notes',type:'text'},
+  ],
+  health: [
+    {key:'animal_tag',label:'Animal',type:'text'},{key:'event_date',label:'Date',type:'date'},
+    {key:'event_type',label:'Event Type',type:'text'},{key:'product',label:'Product',type:'text'},
+    {key:'dosage',label:'Dosage',type:'text'},{key:'route',label:'Route',type:'text'},
+    {key:'cost',label:'Cost ($)',type:'number'},{key:'withdrawal_days',label:'Withdrawal Days',type:'number'},
+    {key:'treated_by',label:'Treated By',type:'text'},{key:'notes',label:'Notes',type:'text'},
+  ],
+  sales: [
+    {key:'animal_tag',label:'Animal',type:'text'},{key:'sale_date',label:'Date',type:'date'},
+    {key:'sale_type',label:'Sale Type',type:'text'},{key:'buyer',label:'Buyer',type:'text'},
+    {key:'sale_weight',label:'Weight (lb)',type:'number'},{key:'price_per_cwt',label:'$/CWT',type:'number'},
+    {key:'total_price',label:'Gross ($)',type:'number'},{key:'fees',label:'Fees ($)',type:'number'},
+    {key:'net_price',label:'Net ($)',type:'number'},{key:'notes',label:'Notes',type:'text'},
+  ],
+  epds: [
+    {key:'animal_tag',label:'Animal',type:'text'},
+    {key:'ced',label:'CED',type:'number'},{key:'ww',label:'WW',type:'number'},
+    {key:'yw',label:'YW',type:'number'},{key:'radg',label:'RADG',type:'number'},
+    {key:'dmi',label:'DMI',type:'number'},{key:'milk',label:'Milk',type:'number'},
+    {key:'mw',label:'MW',type:'number'},{key:'mh',label:'MH',type:'number'},
+    {key:'cem',label:'CEM',type:'number'},{key:'hp',label:'HP',type:'number'},
+    {key:'rea',label:'REA',type:'number'},{key:'fat',label:'FAT',type:'number'},
+    {key:'marbling',label:'Marbling',type:'number'},
+    {key:'hb',label:'HerdBuilder',type:'number'},{key:'gm',label:'GridMaster',type:'number'},
+    {key:'pro',label:'PROs',type:'number'},
+  ],
+};
+
+const DB_TABLE_MAP = {
+  animals:'animals', calving:'calving_records', weights:'weights',
+  health:'health_events', sales:'sales', epds:'epds'
+};
+
+let reportFilters = [];
+let savedReports = JSON.parse(localStorage.getItem('ct_saved_reports')||'[]');
+
+function showReportsTab(tab) {
+  ['builder','saved','quick'].forEach(t => {
+    const el = document.getElementById('reports-'+t);
+    if(el) el.style.display = t===tab?'block':'none';
+  });
+  document.querySelectorAll('#page-reports .tab').forEach((b,i)=>b.classList.toggle('active',['builder','saved','quick'][i]===tab));
+  if(tab==='builder') updateReportColumns();
+  if(tab==='saved') renderSavedReports();
+  document.getElementById('report-output').innerHTML='';
+}
+
+function getSelectedSource() {
+  const r = document.querySelector('input[name="report-source"]:checked');
+  return r ? r.value : 'animals';
+}
+
+function updateReportColumns() {
+  const source = getSelectedSource();
+  const cols = REPORT_COLUMNS[source] || [];
+  const picker = document.getElementById('column-picker');
+  picker.innerHTML = cols.map(c => `
+    <label style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--bg2);border-radius:6px;cursor:pointer;font-size:12px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--dark)">
+      <input type="checkbox" class="col-check" value="${c.key}" checked style="width:14px;height:14px;accent-color:var(--orange)"> ${c.label}
+    </label>`).join('');
+  // Update sort dropdown
+  const sortCol = document.getElementById('report-sort-col');
+  sortCol.innerHTML = '<option value="">— None —</option>' + cols.map(c=>`<option value="${c.key}">${c.label}</option>`).join('');
+  // Reset filters
+  reportFilters = [];
+  renderFilters();
+}
+
+function selectAllColumns() {
+  document.querySelectorAll('.col-check').forEach(c=>c.checked=true);
+}
+function clearAllColumns() {
+  document.querySelectorAll('.col-check').forEach(c=>c.checked=false);
+}
+
+function addFilter() {
+  const source = getSelectedSource();
+  const cols = REPORT_COLUMNS[source] || [];
+  reportFilters.push({col: cols[0]?.key||'', op:'contains', val:''});
+  renderFilters();
+}
+
+function removeFilter(i) {
+  reportFilters.splice(i,1);
+  renderFilters();
+}
+
+function renderFilters() {
+  const source = getSelectedSource();
+  const cols = REPORT_COLUMNS[source] || [];
+  const colOpts = cols.map(c=>`<option value="${c.key}">${c.label}</option>`).join('');
+  const box = document.getElementById('filter-list');
+  box.innerHTML = reportFilters.map((f,i) => `
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+      <select onchange="reportFilters[${i}].col=this.value" style="flex:1;min-width:100px;font-size:13px;padding:8px">
+        ${cols.map(c=>`<option value="${c.key}" ${c.key===f.col?'selected':''}>${c.label}</option>`).join('')}
+      </select>
+      <select onchange="reportFilters[${i}].op=this.value" style="width:130px;font-size:13px;padding:8px">
+        <option value="contains" ${f.op==='contains'?'selected':''}>contains</option>
+        <option value="equals" ${f.op==='equals'?'selected':''}>equals</option>
+        <option value="not-equals" ${f.op==='not-equals'?'selected':''}>not equals</option>
+        <option value="gt" ${f.op==='gt'?'selected':''}>greater than</option>
+        <option value="lt" ${f.op==='lt'?'selected':''}>less than</option>
+        <option value="starts-with" ${f.op==='starts-with'?'selected':''}>starts with</option>
+        <option value="not-empty" ${f.op==='not-empty'?'selected':''}>is not empty</option>
+        <option value="empty" ${f.op==='empty'?'selected':''}>is empty</option>
+      </select>
+      <input type="text" value="${f.val}" onchange="reportFilters[${i}].val=this.value" placeholder="Value" style="flex:1;min-width:80px;font-size:13px;padding:8px">
+      <button onclick="removeFilter(${i})" style="background:var(--red);color:white;border:none;border-radius:6px;padding:8px 12px;cursor:pointer;font-size:13px">✕</button>
+    </div>`).join('');
+}
+
+function applyFilter(row, filter) {
+  const val = String(row[filter.col]||'').toLowerCase();
+  const fval = String(filter.val||'').toLowerCase();
+  switch(filter.op) {
+    case 'contains': return val.includes(fval);
+    case 'equals': return val === fval;
+    case 'not-equals': return val !== fval;
+    case 'gt': return parseFloat(row[filter.col]||0) > parseFloat(fval||0);
+    case 'lt': return parseFloat(row[filter.col]||0) < parseFloat(fval||0);
+    case 'starts-with': return val.startsWith(fval);
+    case 'not-empty': return val !== '' && val !== 'null' && val !== 'undefined';
+    case 'empty': return val === '' || val === 'null' || val === 'undefined';
+    default: return true;
+  }
+}
+
+async function runCustomReport() {
+  const source = getSelectedSource();
+  const table = DB_TABLE_MAP[source];
+  const selectedCols = [...document.querySelectorAll('.col-check:checked')].map(c=>c.value);
+  const sortCol = document.getElementById('report-sort-col').value;
+  const sortDir = document.getElementById('report-sort-dir').value;
+  const box = document.getElementById('report-output');
+
+  if(!selectedCols.length) { alert('Please select at least one column.'); return; }
+
+  box.innerHTML='<div class="loading"><div class="spinner"></div>Running report...</div>';
+
+  const {data, error} = await sb.from(table).select('*').eq('ranch_id', currentRanch.id);
+  if(error) { box.innerHTML=`<div class="alert alert-danger">Error: ${error.message}</div>`; return; }
+
+  let rows = data || [];
+
+  // Apply filters
+  for(const f of reportFilters) {
+    if(f.op !== 'not-empty' && f.op !== 'empty' && !f.val) continue;
+    rows = rows.filter(r => applyFilter(r, f));
+  }
+
+  // Sort
+  if(sortCol) {
+    rows.sort((a,b) => {
+      const av = a[sortCol]||'', bv = b[sortCol]||'';
+      const an = parseFloat(av), bn = parseFloat(bv);
+      if(!isNaN(an)&&!isNaN(bn)) return sortDir==='asc'?an-bn:bn-an;
+      return sortDir==='asc'?String(av).localeCompare(String(bv)):String(bv).localeCompare(String(av));
+    });
+  }
+
+  if(!rows.length) { box.innerHTML='<div class="empty"><div class="empty-icon">🔍</div><p>No records match your filters.</p></div>'; return; }
+
+  const allCols = REPORT_COLUMNS[source] || [];
+  const displayCols = allCols.filter(c => selectedCols.includes(c.key));
+
+  // Build table HTML
+  const tableHTML = `
+    <div class="card" style="padding:0">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border)">
+        <div style="font-weight:600">${rows.length} records</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" onclick="exportReportCSV()">⬇ CSV</button>
+          <button class="btn btn-secondary btn-sm" onclick="printReport()">🖨 Print</button>
+        </div>
+      </div>
+      <div class="table-wrap" id="report-table-wrap">
+        <table id="report-table">
+          <thead><tr>${displayCols.map(c=>`<th>${c.label}</th>`).join('')}</tr></thead>
+          <tbody>${rows.map(r=>`<tr>${displayCols.map(c=>`<td>${r[c.key]!=null?r[c.key]:''}</td>`).join('')}</tr>`).join('')}</tbody>
+        </table>
+      </div>
+    </div>`;
+
+  box.innerHTML = tableHTML;
+  // Store for export
+  box.dataset.rows = JSON.stringify(rows);
+  box.dataset.cols = JSON.stringify(displayCols);
+}
+
+function exportReportCSV() {
+  const box = document.getElementById('report-output');
+  const rows = JSON.parse(box.dataset.rows||'[]');
+  const cols = JSON.parse(box.dataset.cols||'[]');
+  if(!rows.length) return;
+  const header = cols.map(c=>c.label).join(',');
+  const csvRows = rows.map(r => cols.map(c => {
+    const v = r[c.key] != null ? String(r[c.key]) : '';
+    return v.includes(',') ? `"${v}"` : v;
+  }).join(','));
+  const csv = [header, ...csvRows].join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download='cattletrack_report.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function printReport() {
+  const wrap = document.getElementById('report-table-wrap');
+  if(!wrap) return;
+  const win = window.open('','_blank');
+  win.document.write(`<html><head><title>CattleTrack Report</title>
+    <style>body{font-family:sans-serif;font-size:12px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:4px 8px;text-align:left}th{background:#f0f0f0;font-weight:600}</style>
+    </head><body><h2>CattleTrack Analytics — ${currentRanch?.name||'Ranch'}</h2><p>Generated: ${new Date().toLocaleDateString()}</p>${wrap.innerHTML}</body></html>`);
+  win.document.close();
+  win.print();
+}
+
+function saveReportTemplate() {
+  const name = prompt('Report name:');
+  if(!name) return;
+  const source = getSelectedSource();
+  const selectedCols = [...document.querySelectorAll('.col-check:checked')].map(c=>c.value);
+  const sortCol = document.getElementById('report-sort-col').value;
+  const sortDir = document.getElementById('report-sort-dir').value;
+  savedReports.push({id:Date.now(), name, source, cols:selectedCols, filters:reportFilters, sortCol, sortDir});
+  localStorage.setItem('ct_saved_reports', JSON.stringify(savedReports));
+  alert(`✅ Report "${name}" saved`);
+  renderSavedReports();
+}
+
+function renderSavedReports() {
+  const box = document.getElementById('saved-reports-list');
+  if(!savedReports.length) { box.innerHTML='<div class="empty"><div class="empty-icon">📋</div><p>No saved reports yet.</p></div>'; return; }
+  box.innerHTML = savedReports.map(r=>`
+    <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-weight:600;font-size:14px">${r.name}</div>
+        <div style="font-size:12px;color:var(--gray);margin-top:3px">${r.source} · ${r.cols.length} columns${r.filters?.length?' · '+r.filters.length+' filter(s)':''}</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary btn-sm" onclick="loadSavedReport(${r.id})">▶ Run</button>
+        <button class="btn btn-secondary btn-sm" onclick="deleteSavedReport(${r.id})">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+function loadSavedReport(id) {
+  const r = savedReports.find(x=>x.id===id);
+  if(!r) return;
+  // Set source
+  const radio = document.querySelector(`input[name="report-source"][value="${r.source}"]`);
+  if(radio) { radio.checked=true; updateReportColumns(); }
+  // Set columns
+  setTimeout(()=>{
+    document.querySelectorAll('.col-check').forEach(c => { c.checked = r.cols.includes(c.value); });
+    reportFilters = r.filters || [];
+    renderFilters();
+    if(r.sortCol) document.getElementById('report-sort-col').value = r.sortCol;
+    document.getElementById('report-sort-dir').value = r.sortDir || 'asc';
+    showReportsTab('builder');
+    runCustomReport();
+  }, 100);
+}
+
+function deleteSavedReport(id) {
+  savedReports = savedReports.filter(r=>r.id!==id);
+  localStorage.setItem('ct_saved_reports', JSON.stringify(savedReports));
+  renderSavedReports();
+}
+
+async function runQuickReport(type) {
+  const box = document.getElementById('report-output');
+  box.innerHTML='<div class="loading"><div class="spinner"></div>Generating...</div>';
+  if(type==='calving-performance') {
     const {data}=await dbSelect('calving_records');
     const total=(data||[]).length;
     const ease1=(data||[]).filter(r=>r.calving_ease==='1').length;
     const losses=(data||[]).filter(r=>r.notes?.toLowerCase().includes('dead')).length;
     const withWeight=(data||[]).filter(r=>r.birth_weight).map(r=>r.birth_weight);
     const avgWt=withWeight.length?Math.round(withWeight.reduce((a,b)=>a+b)/withWeight.length):0;
-    const maxWt=withWeight.length?Math.max(...withWeight):0;
     const bulls=(data||[]).filter(r=>r.sex==='Bull').length;
     const heifers=(data||[]).filter(r=>r.sex==='Heifer').length;
-    box.innerHTML=`<div class="card"><div class="card-title">Calving Performance Report</div>
+    box.innerHTML=`<div class="card"><div class="card-title">Calving Performance</div>
       <div class="stat-grid">
         <div class="stat-card orange"><div class="stat-num">${total}</div><div class="stat-label">Total Calves</div></div>
         <div class="stat-card green"><div class="stat-num">${total?Math.round(ease1/total*100):0}%</div><div class="stat-label">Unassisted</div></div>
         <div class="stat-card blue"><div class="stat-num">${avgWt} lb</div><div class="stat-label">Avg Birth Wt</div></div>
-        <div class="stat-card gold"><div class="stat-num">${losses}</div><div class="stat-label">Calf Losses</div></div>
+        <div class="stat-card gold"><div class="stat-num">${losses}</div><div class="stat-label">Losses</div></div>
       </div>
       <table style="width:100%;font-size:13px;border-collapse:collapse">
-        <tr><td style="padding:8px 0;border-bottom:1px solid var(--border);color:var(--gray)">Bulls born</td><td style="text-align:right;font-weight:600">${bulls}</td></tr>
-        <tr><td style="padding:8px 0;border-bottom:1px solid var(--border);color:var(--gray)">Heifers born</td><td style="text-align:right;font-weight:600">${heifers}</td></tr>
-        <tr><td style="padding:8px 0;border-bottom:1px solid var(--border);color:var(--gray)">Heaviest calf</td><td style="text-align:right;font-weight:600">${maxWt} lb</td></tr>
-        <tr><td style="padding:8px 0;color:var(--gray)">Calving loss rate</td><td style="text-align:right;font-weight:600">${total?((losses/total)*100).toFixed(1):0}%</td></tr>
+        <tr><td style="padding:7px 0;border-bottom:1px solid var(--border);color:var(--gray)">Bulls born</td><td style="text-align:right;font-weight:600;border-bottom:1px solid var(--border)">${bulls}</td></tr>
+        <tr><td style="padding:7px 0;border-bottom:1px solid var(--border);color:var(--gray)">Heifers born</td><td style="text-align:right;font-weight:600;border-bottom:1px solid var(--border)">${heifers}</td></tr>
+        <tr><td style="padding:7px 0;color:var(--gray)">Loss rate</td><td style="text-align:right;font-weight:600">${total?((losses/total)*100).toFixed(1):0}%</td></tr>
       </table></div>`;
   }
   if(type==='health-cost') {
@@ -1519,226 +1868,48 @@ async function runReport(type) {
     const total=(data||[]).reduce((s,r)=>s+(r.cost||0),0);
     const byCat={};
     (data||[]).forEach(r=>{if(!byCat[r.event_type])byCat[r.event_type]={count:0,cost:0};byCat[r.event_type].count++;byCat[r.event_type].cost+=(r.cost||0);});
-    box.innerHTML=`<div class="card"><div class="card-title">Health Cost Report</div>
+    box.innerHTML=`<div class="card"><div class="card-title">Health Cost Summary</div>
       <div style="font-size:24px;font-weight:700;color:var(--orange);margin-bottom:12px">$${total.toLocaleString(undefined,{minimumFractionDigits:2})} total</div>
-      <table style="width:100%;font-size:13px;border-collapse:collapse">
-        <thead><tr><th style="text-align:left;padding:6px 0;color:var(--gray);font-size:11px">Type</th><th style="text-align:right;color:var(--gray);font-size:11px">Events</th><th style="text-align:right;color:var(--gray);font-size:11px">Cost</th></tr></thead>
-        <tbody>${Object.entries(byCat).map(([k,v])=>`<tr><td style="padding:8px 0;border-bottom:1px solid var(--border)">${k}</td><td style="text-align:right;border-bottom:1px solid var(--border)">${v.count}</td><td style="text-align:right;border-bottom:1px solid var(--border);font-weight:600">$${v.cost.toFixed(2)}</td></tr>`).join('')}</tbody>
-      </table></div>`;
+      <div class="table-wrap"><table><thead><tr><th>Type</th><th>Events</th><th>Cost</th></tr></thead>
+      <tbody>${Object.entries(byCat).map(([k,v])=>`<tr><td>${k}</td><td>${v.count}</td><td><strong>$${v.cost.toFixed(2)}</strong></td></tr>`).join('')}</tbody></table></div></div>`;
   }
-  if(type==='sales') {
+  if(type==='sales-summary') {
     const {data}=await dbSelect('sales');
     const total=(data||[]).reduce((s,r)=>s+(r.net_price||0),0);
     const byType={};
     (data||[]).forEach(r=>{if(!byType[r.sale_type])byType[r.sale_type]={count:0,net:0};byType[r.sale_type].count++;byType[r.sale_type].net+=(r.net_price||0);});
-    box.innerHTML=`<div class="card"><div class="card-title">Sales Report</div>
-      <div style="font-size:24px;font-weight:700;color:var(--green);margin-bottom:12px">$${total.toLocaleString(undefined,{minimumFractionDigits:2})} net revenue</div>
-      <table style="width:100%;font-size:13px;border-collapse:collapse">
-        <thead><tr><th style="text-align:left;padding:6px 0;color:var(--gray);font-size:11px">Type</th><th style="text-align:right;color:var(--gray);font-size:11px">Head</th><th style="text-align:right;color:var(--gray);font-size:11px">Net</th></tr></thead>
-        <tbody>${Object.entries(byType).map(([k,v])=>`<tr><td style="padding:8px 0;border-bottom:1px solid var(--border)">${k}</td><td style="text-align:right;border-bottom:1px solid var(--border)">${v.count}</td><td style="text-align:right;border-bottom:1px solid var(--border);font-weight:600">$${v.net.toFixed(2)}</td></tr>`).join('')}</tbody>
-      </table></div>`;
+    box.innerHTML=`<div class="card"><div class="card-title">Sales Summary</div>
+      <div style="font-size:24px;font-weight:700;color:var(--green);margin-bottom:12px">$${total.toLocaleString(undefined,{minimumFractionDigits:2})} net</div>
+      <div class="table-wrap"><table><thead><tr><th>Type</th><th>Head</th><th>Net</th></tr></thead>
+      <tbody>${Object.entries(byType).map(([k,v])=>`<tr><td>${k}</td><td>${v.count}</td><td><strong>$${v.net.toFixed(2)}</strong></td></tr>`).join('')}</tbody></table></div></div>`;
   }
-  if(type==='weaning'||type==='conception'||type==='et') {
-    box.innerHTML='<div class="alert alert-info">📊 This report requires breeding and weight data. Log weaning weights and breeding records to generate this report.</div>';
+  if(type==='epd-rankings') {
+    const {data}=await sb.from('epds').select('*').eq('ranch_id',currentRanch.id);
+    const epd = prompt('Sort by which EPD? (ww, yw, milk, ced, rea, marbling, hb, gm, pro)','ww');
+    if(!epd) return;
+    const sorted = (data||[]).filter(r=>r[epd]!=null).sort((a,b)=>b[epd]-a[epd]);
+    box.innerHTML=`<div class="card"><div class="card-title">EPD Rankings — ${epd.toUpperCase()}</div>
+      <div class="table-wrap"><table><thead><tr><th>Animal</th><th>${epd.toUpperCase()}</th><th>WW</th><th>YW</th><th>Milk</th><th>HB</th><th>GM</th></tr></thead>
+      <tbody>${sorted.map((r,i)=>`<tr><td><strong>${r.animal_tag}</strong></td><td style="font-weight:700;color:var(--orange)">${r[epd]??'—'}</td><td>${r.ww??'—'}</td><td>${r.yw??'—'}</td><td>${r.milk??'—'}</td><td>${r.hb??'—'}</td><td>${r.gm??'—'}</td></tr>`).join('')}</tbody></table></div></div>`;
   }
-}
-
-// ── ANIMALS — ADD ──────────────────────────────────────────────────────────
-function openAddAnimal() { document.getElementById('add-animal-modal').classList.add('open'); }
-function closeAddAnimal() { document.getElementById('add-animal-modal').classList.remove('open'); }
-function togglePurchaseFields() {
-  const isPurchased=document.getElementById('aa-acquisition').value==='purchased';
-  document.getElementById('aa-price-wrap').style.display=isPurchased?'block':'none';
-  document.getElementById('aa-breeder-wrap').style.display=isPurchased?'block':'none';
-}
-async function saveNewAnimal() {
-  const tag=document.getElementById('aa-tag').value.trim();
-  if(!tag){alert('Ear tag is required.');return;}
-  const {error}=await dbInsert('animals',{
-    tag,name:document.getElementById('aa-name').value.trim()||null,
-    reg_number:document.getElementById('aa-reg').value.trim()||null,
-    tattoo:document.getElementById('aa-tattoo').value.trim()||null,
-    sex:document.getElementById('aa-sex').value,
-    animal_type:document.getElementById('aa-type').value,
-    dob:document.getElementById('aa-dob').value||null,
-    breed:document.getElementById('aa-breed').value,
-    color:document.getElementById('aa-color').value.trim()||null,
-    horn_status:document.getElementById('aa-horns').value,
-    sire:document.getElementById('aa-sire').value.trim()||null,
-    dam:document.getElementById('aa-dam').value.trim()||null,
-    acquisition:document.getElementById('aa-acquisition').value,
-    purchase_price:parseFloat(document.getElementById('aa-price').value)||null,
-    purchased_from:document.getElementById('aa-breeder').value.trim()||null,
-    category:document.getElementById('aa-category').value.trim()||null,
-    status:document.getElementById('aa-status').value,
-  });
-  if(error){alert('Error: '+error.message);return;}
-  closeAddAnimal();
-  alert('✅ '+tag+' added');
-  loadAnimals();
-}
-
-// ── EPDs & PEDIGREE ────────────────────────────────────────────────────────
-async function saveEPDs(tag) {
-  const fields=['ced','bw','ww','yw','radg','dmi','milk','mw','mh','cem','rea','fat','marbling'];
-  const data={animal_tag:tag,ranch_id:currentRanch.id};
-  fields.forEach(f=>{const v=document.getElementById('epd-'+f)?.value;if(v!==''&&v!==undefined)data[f]=parseFloat(v);});
-  await sb.from('epds').upsert(data,{onConflict:'animal_tag,ranch_id'});
-  alert('✅ EPDs saved for '+tag);
-  showProfileTab('epds');
-}
-
-async function importEPDs(event) {
-  const file = event.target.files[0];
-  if(!file) { alert('No file selected'); return; }
-  const text = await file.text();
-  if(!text || !text.trim()) { alert('File appears to be empty'); return; }
-  // Detect SEN format by line length - SEN lines are >500 chars
-  const firstLine = text.split(/\r?\n/).find(l => l.trim());
-  const isSEN = firstLine && firstLine.length > 300;
-  if(isSEN) {
-    await importSENFile(text);
-  } else {
-    await importEPDCSV(text);
+  if(type==='weaning-weights') {
+    const {data}=await dbSelect('weights');
+    const weaning=(data||[]).filter(r=>r.weight_type==='weaning');
+    const bulls=weaning.filter(r=>r.sex==='Bull');
+    const heifers=weaning.filter(r=>r.sex==='Heifer');
+    const avg=arr=>arr.length?Math.round(arr.reduce((s,r)=>s+r.weight_lbs,0)/arr.length):0;
+    box.innerHTML=`<div class="card"><div class="card-title">Weaning Weights</div>
+      <div class="stat-grid">
+        <div class="stat-card orange"><div class="stat-num">${weaning.length}</div><div class="stat-label">Weaning Records</div></div>
+        <div class="stat-card blue"><div class="stat-num">${avg(weaning)} lb</div><div class="stat-label">Overall Avg</div></div>
+        <div class="stat-card gold"><div class="stat-num">${avg(bulls)} lb</div><div class="stat-label">Bull Avg</div></div>
+        <div class="stat-card green"><div class="stat-num">${avg(heifers)} lb</div><div class="stat-label">Heifer Avg</div></div>
+      </div></div>`;
   }
 }
 
-async function importSENFile(text) {
-  const lines = text.split(/\r?\n/).filter(l => l.trim());
-  if(!lines.length) { alert('No data found in file'); return; }
-  // Make sure animal cache is fresh
-  const {data: freshAnimals} = await dbSelect('animals');
-  if(freshAnimals) cache.set('animals', freshAnimals);
-  let imported = 0;
-  let skipped = 0;
-  let debugInfo = [];
-  for(const line of lines) {
-    try {
-      const a = parseSENLine(line);
-      if(!a || !a.reg_number) { skipped++; continue; }
-      const animals = cache.get('animals') || [];
-      debugInfo.push(`Trying: tag=${a.tag} herd=${a.herd_prefix} herd_tag=${a.herd_tag} reg=${a.reg_number}`);
-      // Try multiple tag formats to find a match
-      const match = animals.find(x =>
-        x.tag === a.herd_tag ||          // H2R-K253
-        x.tag === a.tag ||               // K253
-        x.tag === a.alt_tag ||           // H2RK253
-        x.reg_number === a.reg_number || // by reg #
-        x.tag === (a.herd_prefix + a.tag) // H2RK253
-      );
-      const matchTag = match?.tag || a.herd_tag || a.tag;
-      if(!matchTag) continue;
-      if(Object.keys(a.epds).length > 0) {
-        await sb.from('epds').upsert({...a.epds, animal_tag:matchTag, ranch_id:currentRanch.id},{onConflict:'animal_tag,ranch_id'});
-      }
-      if(a.pedigree.sire || a.pedigree.dam) {
-        await sb.from('pedigrees').upsert({
-          animal_tag:matchTag, ranch_id:currentRanch.id,
-          sire: a.pedigree.sire_name||a.pedigree.sire||null,
-          dam: a.pedigree.dam_name||a.pedigree.dam||null,
-          paternal_grandsire: a.pedigree.pgs_name||a.pedigree.pgs||null,
-          paternal_granddam: a.pedigree.pgd_name||a.pedigree.pgd||null,
-          maternal_grandsire: a.pedigree.mgs_name||a.pedigree.mgs||null,
-          maternal_granddam: a.pedigree.mgd_name||a.pedigree.mgd||null,
-        },{onConflict:'animal_tag,ranch_id'});
-      }
-      if(a.name && match) {
-        await sb.from('animals').update({name:a.name, reg_number:a.reg_number}).eq('id',match.id);
-      }
-      imported++;
-    } catch(e) { console.error(e); skipped++; }
-  }
-  const {data} = await dbSelect('animals');
-  if(data) cache.set('animals', data);
-  let msg = `Processed ${lines.length} lines from file.\nImported: ${imported} animals\nSkipped: ${skipped}\n`;
-  if(imported === 0 && debugInfo.length > 0) {
-    msg += `\nDebug — first 3 animals found in file:\n${debugInfo.slice(0,3).join('\n')}\n\nYour DB animals (first 5):\n${(cache.get('animals')||[]).slice(0,5).map(a=>a.tag).join(', ')}`;
-  }
-  alert(msg);
-  if(currentAnimal) showProfileTab('epds');
-}
+async function runReport(type) { runQuickReport(type); }
 
-function parseSENLine(line) {
-  if(!line || line.length < 100) return null;
-  const a = { epds:{}, pedigree:{} };
-  a.assoc = line.substring(0,3).trim();
-  a.reg_number = line.substring(3,10).trim();
-  // Tag at 80-84, herd prefix at 86-88 (fixed width)
-  a.tag = line.substring(80,84).trim();
-  a.herd_prefix = line.substring(86,89).trim();
-  // Build herd_tag e.g. H2R-K253
-  a.herd_tag = (a.herd_prefix && a.tag) ? a.herd_prefix + '-' + a.tag : a.tag;
-  // Also try plain tag and herd_tag without dash
-  a.alt_tag = a.herd_prefix + a.tag;
-  // Animal name after RAX0 + spaces, before P12
-  const nameM = line.match(/RA[A-Z]\d\s+([\w][\w\s]+?)\s{2,}P12/);
-  if(nameM) a.name = nameM[1].trim();
-  // DOB after P12
-  const dobM = line.match(/P12(\d{4})(\d{2})(\d{2})/);
-  if(dobM) {
-    const y=parseInt(dobM[1]), mo=parseInt(dobM[2]), d=parseInt(dobM[3]);
-    if(y>1980 && y<2030 && mo>=1 && mo<=12 && d>=1 && d<=31) {
-      a.dob = dobM[1]+'-'+dobM[2]+'-'+dobM[3];
-    }
-  }
-  // EPDs - find block of decimal numbers
-  const epdM = line.match(/\s(-?\d+\.\d{3})\s+(-?\d+\.\d{3})\s+(-?\d+\.\d{3})\s+(-?\d+\.\d{3})\s+(-?\d+\.\d{3})\s+(-?\d+\.\d{3})\s+(-?\d+\.\d{3})\s+(-?\d+\.\d{3})\s+(-?\d+\.\d{1})\s+(-?\d+\.\d{3})\s+(-?\d+\.\d{4})\s+(-?\d+\.\d{4})\s+(-?\d+\.\d{4})\s+(-?\d+\.\d{3})\s+(-?\d+\.\d{3})\s+(-?\d+\.\d{4})/);
-  if(epdM) {
-    const names=['ced','bw','ww','yw','radg','dmi','milk','mw','mh','cem','rea','fat','marbling','w_index','f_index','g_index'];
-    for(let i=0;i<names.length;i++) { a.epds[names[i]] = parseFloat(epdM[i+1]); }
-  }
-  // Pedigree section after EPDs
-  const epdPos = epdM ? line.indexOf(epdM[0]) + epdM[0].length : Math.floor(line.length * 0.65);
-  const pedSection = line.substring(epdPos);
-  const pedRoles = ['sire','dam','pgs','pgd','mgs','mgd'];
-  const pedRe = /([A-Z0-9]{2,8})\s{1,4}([\w][\w\s\.]+?)\s{3,}UAR\s+(\d{7})/g;
-  let pm; let pi = 0;
-  while((pm = pedRe.exec(pedSection)) !== null && pi < pedRoles.length) {
-    const ptag = pm[1].trim();
-    const pname = pm[2].trim().replace(/\s+/g,' ');
-    const preg = pm[3].trim();
-    if(ptag.length >= 2 && !/^\d+$/.test(ptag) && ptag !== 'UAR') {
-      a.pedigree[pedRoles[pi]] = ptag;
-      a.pedigree[pedRoles[pi]+'_name'] = pname;
-      a.pedigree[pedRoles[pi]+'_reg'] = preg;
-      pi++;
-    }
-  }
-  return a;
-}
-
-async function importEPDCSV(text) {
-  const lines=text.split('\n');
-  const headers=lines[0].split(',').map(h=>h.trim().toLowerCase().replace(/[^a-z0-9$_]/g,''));
-  let imported=0;
-  for(let i=1;i<lines.length;i++){
-    if(!lines[i].trim())continue;
-    const vals=lines[i].split(',');
-    const row={};headers.forEach((h,j)=>row[h]=vals[j]?.trim());
-    const matchTag=row['regnumber']||row['reg']||row['tag']||row['eartag'];
-    if(!matchTag)continue;
-    const epds={animal_tag:matchTag,ranch_id:currentRanch.id};
-    ['ced','bw','ww','yw','radg','dmi','milk','mw','mh','cem','rea','fat','marbling','w_index','f_index','g_index','b_index'].forEach(f=>{const v=row[f];if(v&&!isNaN(parseFloat(v)))epds[f]=parseFloat(v);});
-    if(Object.keys(epds).length>2){await sb.from('epds').upsert(epds,{onConflict:'animal_tag,ranch_id'});imported++;}
-  }
-  alert(`✅ Imported EPDs for ${imported} animal(s) from CSV`);
-  if(currentAnimal) showProfileTab('epds');
-}
-
-async function savePedigree(tag) {
-  const data={
-    animal_tag:tag,ranch_id:currentRanch.id,
-    sire:document.getElementById('ped-sire')?.value?.trim()||null,
-    dam:document.getElementById('ped-dam')?.value?.trim()||null,
-    paternal_grandsire:document.getElementById('ped-pgs')?.value?.trim()||null,
-    paternal_granddam:document.getElementById('ped-pgd')?.value?.trim()||null,
-    maternal_grandsire:document.getElementById('ped-mgs')?.value?.trim()||null,
-    maternal_granddam:document.getElementById('ped-mgd')?.value?.trim()||null,
-  };
-  await sb.from('pedigrees').upsert(data,{onConflict:'animal_tag,ranch_id'});
-  alert('✅ Pedigree saved');
-  showProfileTab('pedigree');
-}
 
 // ── SETTINGS ───────────────────────────────────────────────────────────────
 function loadSettings() {
