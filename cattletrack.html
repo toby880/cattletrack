@@ -287,6 +287,7 @@ tr:hover td{background:var(--bg)}
     <button class="nav-btn" onclick="showPage('pastures')">Pastures</button>
     <button class="nav-btn" onclick="showPage('sales')">Sales</button>
     <button class="nav-btn" onclick="showPage('calendar')">Calendar</button>
+    <button class="nav-btn" onclick="showPage('inventory')">Inventory</button>
     <button class="nav-btn" onclick="showPage('reports')">Reports</button>
   </nav>
 
@@ -687,6 +688,17 @@ tr:hover td{background:var(--bg)}
     </div>
 
     <!-- REPORTS -->
+    <!-- INVENTORY -->
+    <div class="page" id="page-inventory">
+      <div class="tab-bar">
+        <button class="tab active" onclick="showInventoryTab('medications')">Medications</button>
+        <button class="tab" onclick="showInventoryTab('supplies')">Supplies</button>
+        <button class="tab" onclick="showInventoryTab('equipment')">Equipment</button>
+        <button class="tab" onclick="showInventoryTab('add')">+ Add Item</button>
+      </div>
+      <div id="inventory-content"><div class="loading"><div class="spinner"></div>Loading...</div></div>
+    </div>
+
     <div class="page" id="page-reports">
       <div class="tab-bar">
         <button class="tab active" onclick="showReportsTab('builder')">Custom Report</button>
@@ -1269,6 +1281,7 @@ function showPage(name) {
   if(name==='pastures') loadPastures();
   if(name==='sales') { showSalesTab('record'); }
   if(name==='calendar') loadCalendar();
+  if(name==='inventory') showInventoryTab('medications');
   if(name==='reports') { setTimeout(()=>{ showReportsTab('builder'); updateReportColumns(); }, 50); }
   if(name==='settings') loadSettings();
 }
@@ -3227,7 +3240,338 @@ async function confirmDeleteAnimal() {
   alert('Animal deleted.');
 }
 
-// ── SETTINGS ────────────────────────────────────────────────────────────────
+// ── INVENTORY ──────────────────────────────────────────────────────────────
+async function showInventoryTab(tab) {
+  document.querySelectorAll('#page-inventory .tab-bar .tab').forEach((b,i) => {
+    b.classList.toggle('active', ['medications','supplies','equipment','add'][i]===tab);
+  });
+  const content = document.getElementById('inventory-content');
+  if(tab==='add') { renderInventoryAddForm(content); return; }
+  content.innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
+
+  const {data} = await sb.from('inventory').select('*')
+    .eq('ranch_id', currentRanch.id)
+    .eq('category', tab==='medications'?'medications':tab==='supplies'?'supplies':'equipment')
+    .order('name');
+
+  if(tab==='medications') renderMedications(content, data||[]);
+  else if(tab==='supplies') renderSupplies(content, data||[]);
+  else if(tab==='equipment') renderEquipment(content, data||[]);
+}
+
+function renderMedications(content, items) {
+  const today = new Date();
+  const soon = new Date(); soon.setDate(soon.getDate()+90);
+
+  // Alerts
+  const expired = items.filter(i => i.expiration_date && new Date(i.expiration_date) < today);
+  const expiringSoon = items.filter(i => i.expiration_date && new Date(i.expiration_date) >= today && new Date(i.expiration_date) <= soon);
+  const lowStock = items.filter(i => i.reorder_level && i.quantity <= i.reorder_level);
+
+  let html = '';
+  if(expired.length) html += `<div class="alert alert-danger">⚠️ <strong>${expired.length} expired:</strong> ${expired.map(i=>i.name).join(', ')}</div>`;
+  if(expiringSoon.length) html += `<div class="alert alert-warning">🕐 <strong>${expiringSoon.length} expiring within 90 days:</strong> ${expiringSoon.map(i=>i.name+' ('+i.expiration_date+')').join(', ')}</div>`;
+  if(lowStock.length) html += `<div class="alert alert-warning">📦 <strong>Low stock:</strong> ${lowStock.map(i=>i.name).join(', ')}</div>`;
+
+  if(!items.length) {
+    content.innerHTML = html + '<div class="empty"><div class="empty-icon">💊</div><p>No medications in inventory.<br>Tap "+ Add Item" to get started.</p></div>';
+    return;
+  }
+
+  const totalValue = items.reduce((s,i) => s + (i.total_value || (i.quantity||0)*(i.cost_per_unit||0)), 0);
+
+  html += `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-size:13px;color:var(--gray)">${items.length} medications · <strong style="color:var(--dark)">$${totalValue.toFixed(2)} total value</strong></div>
+    </div>
+    ${items.map(item => {
+      const isExpired = item.expiration_date && new Date(item.expiration_date) < today;
+      const isExpiringSoon = item.expiration_date && new Date(item.expiration_date) >= today && new Date(item.expiration_date) <= soon;
+      const isLow = item.reorder_level && item.quantity <= item.reorder_level;
+      const qtyColor = isLow ? 'color:var(--red);font-weight:700' : 'color:var(--dark)';
+      return `
+        <div style="background:var(--white);border:1px solid ${isExpired?'var(--red)':isExpiringSoon?'var(--amber)':isLow?'var(--amber)':'var(--border)'};border-radius:10px;padding:12px 14px;margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+            <div style="flex:1">
+              <div style="font-weight:600;font-size:15px">${item.name}${item.brand?' <span style="font-size:12px;color:var(--gray);font-weight:400">· '+item.brand+'</span>':''}</div>
+              <div style="font-size:12px;color:var(--gray);margin-top:3px">
+                ${item.withdrawal_days?`WD: ${item.withdrawal_days}d · `:''}
+                ${item.expiration_date?`Exp: <span style="color:${isExpired?'var(--red)':isExpiringSoon?'var(--amber)':'inherit'}">${item.expiration_date}</span> · `:''}
+                ${item.lot_number?`Lot: ${item.lot_number} · `:''}
+                ${item.cost_per_unit?`$${item.cost_per_unit}/${item.unit||'unit'}  `:''}
+              </div>
+              ${item.notes?`<div style="font-size:12px;color:var(--gray-lt);margin-top:2px">${item.notes}</div>`:''}
+            </div>
+            <div style="text-align:right;flex-shrink:0">
+              <div style="font-size:20px;font-weight:700;${qtyColor}">${item.quantity}</div>
+              <div style="font-size:11px;color:var(--gray)">${item.unit||'units'}</div>
+              ${isLow?`<div style="font-size:10px;color:var(--red);font-weight:600">REORDER</div>`:''}
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button onclick="adjustQuantity('${item.id}','${item.name}',${item.quantity},'${item.unit||'units'}')" style="flex:1;background:var(--orange);color:white;border:none;border-radius:6px;padding:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">Adjust Qty</button>
+            <button onclick="editInventoryItem('${item.id}')" style="flex:1;background:var(--bg2);border:none;border-radius:6px;padding:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">Edit</button>
+            <button onclick="deleteInventoryItem('${item.id}','${item.name}')" style="background:var(--bg2);border:none;border-radius:6px;padding:7px 10px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--red)">✕</button>
+          </div>
+        </div>`;
+    }).join('')}`;
+  content.innerHTML = html;
+}
+
+function renderSupplies(content, items) {
+  if(!items.length) {
+    content.innerHTML = '<div class="empty"><div class="empty-icon">📦</div><p>No supplies in inventory.<br>Tap "+ Add Item" to get started.</p></div>';
+    return;
+  }
+  const lowStock = items.filter(i => i.reorder_level && i.quantity <= i.reorder_level);
+  let html = '';
+  if(lowStock.length) html += `<div class="alert alert-warning">📦 <strong>Low stock:</strong> ${lowStock.map(i=>i.name).join(', ')}</div>`;
+
+  html += items.map(item => {
+    const isLow = item.reorder_level && item.quantity <= item.reorder_level;
+    return `
+      <div style="background:var(--white);border:1px solid ${isLow?'var(--amber)':'var(--border)'};border-radius:10px;padding:12px 14px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:15px">${item.name}${item.brand?' <span style="font-size:12px;color:var(--gray);font-weight:400">· '+item.brand+'</span>':''}</div>
+            <div style="font-size:12px;color:var(--gray);margin-top:2px">${item.location||''}${item.cost_per_unit?' · $'+item.cost_per_unit+'/'+( item.unit||'unit'):''}${item.notes?' · '+item.notes:''}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-size:20px;font-weight:700;color:${isLow?'var(--red)':'var(--dark)'}">${item.quantity}</div>
+            <div style="font-size:11px;color:var(--gray)">${item.unit||'units'}</div>
+            ${isLow?`<div style="font-size:10px;color:var(--red);font-weight:600">REORDER</div>`:''}
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button onclick="adjustQuantity('${item.id}','${item.name}',${item.quantity},'${item.unit||'units'}')" style="flex:1;background:var(--orange);color:white;border:none;border-radius:6px;padding:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">Adjust Qty</button>
+          <button onclick="editInventoryItem('${item.id}')" style="flex:1;background:var(--bg2);border:none;border-radius:6px;padding:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">Edit</button>
+          <button onclick="deleteInventoryItem('${item.id}','${item.name}')" style="background:var(--bg2);border:none;border-radius:6px;padding:7px 10px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--red)">✕</button>
+        </div>
+      </div>`;
+  }).join('');
+  content.innerHTML = html;
+}
+
+function renderEquipment(content, items) {
+  if(!items.length) {
+    content.innerHTML = '<div class="empty"><div class="empty-icon">🚜</div><p>No equipment recorded.<br>Tap "+ Add Item" to get started.</p></div>';
+    return;
+  }
+  const condColor = {excellent:'badge-green', good:'badge-blue', fair:'badge-orange', poor:'badge-red'};
+  content.innerHTML = items.map(item => `
+    <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+            <strong style="font-size:15px">${item.name}</strong>
+            ${item.condition?`<span class="badge ${condColor[item.condition]||'badge-gray'}" style="font-size:10px">${item.condition}</span>`:''}
+          </div>
+          ${item.brand?`<div style="font-size:12px;color:var(--gray)">${item.brand}</div>`:''}
+          <div style="font-size:12px;color:var(--gray);margin-top:3px">
+            ${item.serial_number?`S/N: ${item.serial_number} · `:''}
+            ${item.purchase_date?`Purchased: ${item.purchase_date} · `:''}
+            ${item.purchase_price?`$${parseFloat(item.purchase_price).toLocaleString()} · `:''}
+            ${item.location?`📍 ${item.location}`:''}
+          </div>
+          ${item.notes?`<div style="font-size:12px;color:var(--gray-lt);margin-top:2px">${item.notes}</div>`:''}
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button onclick="editInventoryItem('${item.id}')" style="flex:1;background:var(--bg2);border:none;border-radius:6px;padding:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">Edit</button>
+        <button onclick="deleteInventoryItem('${item.id}','${item.name}')" style="background:var(--bg2);border:none;border-radius:6px;padding:7px 10px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--red)">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+function renderInventoryAddForm(content) {
+  const today = new Date().toISOString().split('T')[0];
+  content.innerHTML = `
+    <div class="card">
+      <div class="card-title">Add Inventory Item</div>
+      <div class="form-group"><label>Category</label>
+        <select id="inv-category" onchange="toggleInventoryFields()">
+          <option value="medications">Medication / Drug</option>
+          <option value="supplies">Supply / Consumable</option>
+          <option value="equipment">Equipment</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Name</label>
+        <input type="text" id="inv-name" placeholder="e.g. Draxxin, Ear Tags, Cattle Chute">
+      </div>
+      <div class="form-group"><label>Brand / Manufacturer</label>
+        <input type="text" id="inv-brand" placeholder="Optional">
+      </div>
+
+      <!-- Medications & Supplies fields -->
+      <div id="inv-qty-fields">
+        <div class="form-row">
+          <div class="form-group"><label>Quantity on Hand</label>
+            <input type="number" id="inv-quantity" placeholder="0" inputmode="decimal">
+          </div>
+          <div class="form-group"><label>Unit</label>
+            <select id="inv-unit">
+              <option value="ml">ml</option>
+              <option value="doses">doses</option>
+              <option value="boxes">boxes</option>
+              <option value="each">each</option>
+              <option value="bottles">bottles</option>
+              <option value="gallons">gallons</option>
+              <option value="lbs">lbs</option>
+              <option value="bags">bags</option>
+              <option value="rolls">rolls</option>
+              <option value="other">other</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Reorder When Below</label>
+            <input type="number" id="inv-reorder" placeholder="e.g. 10" inputmode="decimal">
+          </div>
+          <div class="form-group"><label>Cost per Unit ($)</label>
+            <input type="number" id="inv-cost" placeholder="0.00" inputmode="decimal">
+          </div>
+        </div>
+      </div>
+
+      <!-- Medication specific -->
+      <div id="inv-med-fields">
+        <div class="form-row">
+          <div class="form-group"><label>Expiration Date</label>
+            <input type="date" id="inv-expiration">
+          </div>
+          <div class="form-group"><label>Withdrawal Days</label>
+            <input type="number" id="inv-withdrawal" placeholder="0" inputmode="numeric">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Lot Number</label>
+            <input type="text" id="inv-lot" placeholder="Lot #">
+          </div>
+          <div class="form-group"><label>Rx Required?</label>
+            <select id="inv-rx">
+              <option value="false">No</option>
+              <option value="true">Yes</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Equipment specific -->
+      <div id="inv-equip-fields" style="display:none">
+        <div class="form-row">
+          <div class="form-group"><label>Serial Number</label>
+            <input type="text" id="inv-serial" placeholder="S/N">
+          </div>
+          <div class="form-group"><label>Condition</label>
+            <select id="inv-condition">
+              <option value="excellent">Excellent</option>
+              <option value="good">Good</option>
+              <option value="fair">Fair</option>
+              <option value="poor">Poor</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Purchase Date</label>
+            <input type="date" id="inv-purchase-date">
+          </div>
+          <div class="form-group"><label>Purchase Price ($)</label>
+            <input type="number" id="inv-purchase-price" placeholder="0.00" inputmode="decimal">
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group"><label>Location / Storage</label>
+        <input type="text" id="inv-location" placeholder="e.g. Medicine cabinet, Shop, Barn">
+      </div>
+      <div class="form-group"><label>Notes</label>
+        <textarea id="inv-notes" placeholder="Supplier, usage instructions, anything else..."></textarea>
+      </div>
+      <button class="btn btn-primary" onclick="saveInventoryItem()">Add to Inventory</button>
+    </div>`;
+}
+
+function toggleInventoryFields() {
+  const cat = document.getElementById('inv-category')?.value;
+  document.getElementById('inv-qty-fields').style.display = cat==='equipment' ? 'none' : 'block';
+  document.getElementById('inv-med-fields').style.display = cat==='medications' ? 'block' : 'none';
+  document.getElementById('inv-equip-fields').style.display = cat==='equipment' ? 'block' : 'none';
+}
+
+async function saveInventoryItem() {
+  const name = document.getElementById('inv-name')?.value?.trim();
+  const category = document.getElementById('inv-category')?.value;
+  if(!name) { alert('Item name is required.'); return; }
+
+  const qty = parseFloat(document.getElementById('inv-quantity')?.value)||0;
+  const costPerUnit = parseFloat(document.getElementById('inv-cost')?.value)||null;
+
+  const {error} = await dbInsert('inventory', {
+    category, name,
+    brand: document.getElementById('inv-brand')?.value?.trim()||null,
+    quantity: qty,
+    unit: document.getElementById('inv-unit')?.value||null,
+    reorder_level: parseFloat(document.getElementById('inv-reorder')?.value)||null,
+    cost_per_unit: costPerUnit,
+    total_value: costPerUnit ? qty * costPerUnit : null,
+    expiration_date: document.getElementById('inv-expiration')?.value||null,
+    withdrawal_days: parseInt(document.getElementById('inv-withdrawal')?.value)||null,
+    lot_number: document.getElementById('inv-lot')?.value?.trim()||null,
+    rx_required: document.getElementById('inv-rx')?.value==='true',
+    serial_number: document.getElementById('inv-serial')?.value?.trim()||null,
+    condition: document.getElementById('inv-condition')?.value||null,
+    purchase_date: document.getElementById('inv-purchase-date')?.value||null,
+    purchase_price: parseFloat(document.getElementById('inv-purchase-price')?.value)||null,
+    location: document.getElementById('inv-location')?.value?.trim()||null,
+    notes: document.getElementById('inv-notes')?.value?.trim()||null,
+  });
+  if(error) { alert('Error: '+error.message); return; }
+  alert(`✅ ${name} added to inventory`);
+  showInventoryTab(category);
+}
+
+async function adjustQuantity(id, name, currentQty, unit) {
+  const input = prompt(`Adjust quantity for ${name}\nCurrent: ${currentQty} ${unit}\n\nEnter new quantity:`);
+  if(input===null) return;
+  const newQty = parseFloat(input);
+  if(isNaN(newQty)) { alert('Please enter a valid number.'); return; }
+  const {data, error} = await sb.from('inventory').select('cost_per_unit').eq('id',id).single();
+  const totalValue = data?.cost_per_unit ? newQty * data.cost_per_unit : null;
+  await sb.from('inventory').update({quantity:newQty, total_value:totalValue, updated_at:new Date().toISOString()}).eq('id',id);
+  // Refresh current tab
+  const {data:item} = await sb.from('inventory').select('category').eq('id',id).single();
+  if(item) showInventoryTab(item.category);
+}
+
+async function editInventoryItem(id) {
+  const {data} = await sb.from('inventory').select('*').eq('id',id).single();
+  if(!data) return;
+  const newName = prompt('Name:', data.name);
+  if(!newName) return;
+  const newQty = prompt('Quantity:', data.quantity);
+  const newExpiry = data.expiration_date ? prompt('Expiration date (YYYY-MM-DD):', data.expiration_date) : null;
+  const newNotes = prompt('Notes:', data.notes||'');
+  const qty = parseFloat(newQty)||0;
+  await sb.from('inventory').update({
+    name:newName, quantity:qty,
+    expiration_date: newExpiry||null,
+    notes: newNotes||null,
+    total_value: data.cost_per_unit ? qty*data.cost_per_unit : null,
+    updated_at: new Date().toISOString()
+  }).eq('id',id);
+  showInventoryTab(data.category);
+}
+
+async function deleteInventoryItem(id, name) {
+  if(!confirm(`Delete ${name} from inventory?`)) return;
+  await sb.from('inventory').delete().eq('id',id);
+  // Refresh — find which tab we're on
+  const {data} = await sb.from('inventory').select('category').eq('id',id);
+  // Just refresh medications as fallback
+  showInventoryTab('medications');
+}
+
+
 function loadSettings() {
   document.getElementById('set-ranch-name').value=currentRanch.name||'';
   document.getElementById('set-owner-name').value=currentRanch.owner_name||'';
