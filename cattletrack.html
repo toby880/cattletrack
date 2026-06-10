@@ -1563,8 +1563,570 @@ async function renderWithdrawal() {
 
 // ── BREEDING (stub — renders message for now) ──────────────────────────────
 function showBreedingTab(tab) {
-  document.getElementById('breeding-content').innerHTML = `<div class="alert alert-info">ℹ️ The Breeding module (Semen Inventory, AI, Sync Groups, ET, IVF, Preg Check) is fully built and will be connected here in the next update once cloud sync is confirmed working. All data from this module is already saving correctly to Supabase.</div>`;
+  const content = document.getElementById('breeding-content');
+  document.querySelectorAll('#page-breeding .tab-bar .tab').forEach((b,i) => {
+    b.classList.toggle('active', ['semen','ai','sync','natural','et','ivf','pregcheck','history'][i]===tab);
+  });
+  if(tab==='semen') renderSemenTab(content);
+  else if(tab==='ai') renderAITab(content);
+  else if(tab==='sync') renderSyncTab(content);
+  else if(tab==='natural') renderNaturalTab(content);
+  else if(tab==='et') renderETTab(content);
+  else if(tab==='ivf') renderIVFTab(content);
+  else if(tab==='pregcheck') renderPregCheckTab(content);
+  else if(tab==='history') renderBreedingHistoryTab(content);
 }
+
+// ── SEMEN INVENTORY ────────────────────────────────────────────────────────
+async function renderSemenTab(content) {
+  const {data} = await sb.from('semen_inventory').select('*').eq('ranch_id', currentRanch.id).order('sire');
+  const {data: aiData} = await sb.from('ai_records').select('sire').eq('ranch_id', currentRanch.id);
+  const used = {};
+  (aiData||[]).forEach(r => { used[r.sire] = (used[r.sire]||0) + 1; });
+  const bySire = {};
+  (data||[]).forEach(r => {
+    if(!bySire[r.sire]) bySire[r.sire] = {straws:0, tanks:new Set(), canes:new Set()};
+    bySire[r.sire].straws += r.straws||0;
+    if(r.tank) bySire[r.sire].tanks.add(r.tank);
+    if(r.cane) bySire[r.sire].canes.add(r.cane);
+  });
+  const sireList = Object.entries(bySire).map(([s,v]) => [s, {...v, available: Math.max(0, v.straws-(used[s]||0))}]);
+  const lowAlert = sireList.filter(([,v])=>v.available<=5).map(([s])=>s);
+  const today = new Date().toISOString().split('T')[0];
+  content.innerHTML = `
+    ${lowAlert.length?`<div class="alert alert-warning">⚠️ Low inventory: ${lowAlert.join(', ')}</div>`:''}
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">Semen Inventory</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Sire</th><th>Tank</th><th>Cane</th><th>Total</th><th>Available</th><th>Status</th></tr></thead>
+        <tbody>${sireList.length?sireList.map(([sire,v])=>{
+          const s=v.available===0?'<span class="badge badge-red">Out</span>':v.available<=5?'<span class="badge badge-orange">Low</span>':'<span class="badge badge-green">OK</span>';
+          return `<tr><td><strong>${sire}</strong></td><td>${[...v.tanks].join(', ')||'—'}</td><td>${[...v.canes].join(', ')||'—'}</td><td>${v.straws}</td><td>${v.available}</td><td>${s}</td></tr>`;
+        }).join(''):'<tr><td colspan="6" style="text-align:center;color:var(--gray-lt);padding:20px">No semen in inventory</td></tr>'}</tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Add Semen</div>
+      <div class="form-group"><label>Sire Name</label><input type="text" id="sem-sire" placeholder="e.g. Ideal, High Security"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Tank #</label><input type="text" id="sem-tank" placeholder="Tank 1"></div>
+        <div class="form-group"><label>Cane #</label><input type="text" id="sem-cane" placeholder="Cane 3"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Straws</label><input type="number" id="sem-straws" placeholder="0" inputmode="numeric"></div>
+        <div class="form-group"><label>Cost/Straw ($)</label><input type="number" id="sem-cost" placeholder="0.00" inputmode="decimal"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Source</label><input type="text" id="sem-source" placeholder="ABS, Select Sires..."></div>
+        <div class="form-group"><label>Date Added</label><input type="date" id="sem-date" value="${today}"></div>
+      </div>
+      <div class="form-group"><label>Notes</label><input type="text" id="sem-notes" placeholder="Lot #..."></div>
+      <button class="btn btn-primary" onclick="saveSemenCloud()">Add to Inventory</button>
+    </div>`;
+  window._sireList = sireList.map(([s])=>s);
+}
+
+async function saveSemenCloud() {
+  const sire = document.getElementById('sem-sire')?.value?.trim();
+  const straws = parseInt(document.getElementById('sem-straws')?.value)||0;
+  if(!sire||!straws){alert('Sire name and straws required.');return;}
+  const {error} = await dbInsert('semen_inventory',{
+    sire, tank:document.getElementById('sem-tank')?.value?.trim()||null,
+    cane:document.getElementById('sem-cane')?.value?.trim()||null, straws,
+    cost_per_straw:parseFloat(document.getElementById('sem-cost')?.value)||null,
+    source:document.getElementById('sem-source')?.value?.trim()||null,
+    date_added:document.getElementById('sem-date')?.value||null,
+    notes:document.getElementById('sem-notes')?.value?.trim()||null,
+  });
+  if(error){alert('Error: '+error.message);return;}
+  alert(`\u2705 Added ${straws} straws of ${sire}`);
+  showBreedingTab('semen');
+}
+
+// ── AI ─────────────────────────────────────────────────────────────────────
+async function renderAITab(content) {
+  const {data:aiData} = await sb.from('ai_records').select('*').eq('ranch_id',currentRanch.id).order('ai_date',{ascending:false});
+  const {data:semData} = await sb.from('semen_inventory').select('sire').eq('ranch_id',currentRanch.id);
+  const sires = [...new Set((semData||[]).map(r=>r.sire))];
+  const today = new Date().toISOString().split('T')[0];
+  content.innerHTML = `
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">Log AI Breeding</div>
+      <div class="form-group"><label>Cow / Heifer Tag</label><input type="text" id="ai-cow" placeholder="Tag #"></div>
+      <div class="form-row">
+        <div class="form-group"><label>AI Date</label><input type="date" id="ai-date" value="${today}"></div>
+        <div class="form-group"><label>Sire</label>
+          <select id="ai-sire"><option value="">— Select —</option>${sires.map(s=>`<option value="${s}">${s}</option>`).join('')}<option value="other">Other...</option></select>
+        </div>
+      </div>
+      <div class="form-group"><label>Sync Protocol</label>
+        <select id="ai-sync"><option value="7&7">7&7</option><option value="7-day-co-synch">7-Day Co-Synch</option><option value="cidr-co-synch">CIDR Co-Synch</option><option value="heat-detection">Heat Detection</option><option value="other">Other</option></select>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Technician</label><input type="text" id="ai-tech" placeholder="Name"></div>
+        <div class="form-group"><label>Tank / Cane</label><input type="text" id="ai-tank" placeholder="Tank 1 / Cane 3"></div>
+      </div>
+      <div class="form-group"><label>Expected Calving</label><input type="date" id="ai-calving"></div>
+      <div class="form-group"><label>Notes</label><input type="text" id="ai-notes" placeholder="Heat score, BCS..."></div>
+      <button class="btn btn-primary" onclick="saveAICloud()">Save AI \u2014 Deduct 1 Straw</button>
+    </div>
+    <div class="card">
+      <div class="card-title">Recent AI Records</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Cow</th><th>Date</th><th>Sire</th><th>Protocol</th><th>Exp. Calving</th></tr></thead>
+        <tbody>${(aiData||[]).slice(0,20).map(r=>`<tr><td><strong>${r.cow_tag}</strong></td><td>${r.ai_date||'—'}</td><td>${r.sire||'—'}</td><td><span class="badge badge-blue" style="font-size:10px">${r.sync_protocol||'—'}</span></td><td>${r.expected_calving||'—'}</td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--gray-lt);padding:20px">No AI records yet</td></tr>'}</tbody>
+      </table></div>
+    </div>`;
+}
+
+async function saveAICloud() {
+  const cow=document.getElementById('ai-cow')?.value?.trim();
+  const date=document.getElementById('ai-date')?.value;
+  const sire=document.getElementById('ai-sire')?.value;
+  if(!cow||!date||!sire){alert('Cow tag, date, and sire required.');return;}
+  const {error}=await dbInsert('ai_records',{
+    cow_tag:cow,ai_date:date,sire,
+    sync_protocol:document.getElementById('ai-sync')?.value,
+    technician:document.getElementById('ai-tech')?.value?.trim()||null,
+    tank_cane:document.getElementById('ai-tank')?.value?.trim()||null,
+    expected_calving:document.getElementById('ai-calving')?.value||null,
+    notes:document.getElementById('ai-notes')?.value?.trim()||null,
+  });
+  if(error){alert('Error: '+error.message);return;}
+  alert(`\u2705 AI saved: ${cow} \xd7 ${sire}\n1 straw deducted from inventory`);
+  showBreedingTab('ai');
+}
+
+// ── NATURAL SERVICE ────────────────────────────────────────────────────────
+async function renderNaturalTab(content) {
+  const {data}=await sb.from('natural_service').select('*').eq('ranch_id',currentRanch.id).order('turnout_date',{ascending:false});
+  const today=new Date().toISOString().split('T')[0];
+  const active=(data||[]).filter(r=>!r.pull_date||r.pull_date>=today);
+  content.innerHTML=`
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">Log Bull Turn-Out</div>
+      <div class="form-group"><label>Bull Tag / Name</label><input type="text" id="ns-bull" placeholder="Bull ID or name"></div>
+      <div class="form-group"><label>Pasture</label><input type="text" id="ns-pasture" placeholder="e.g. River, North"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Turn-Out Date</label><input type="date" id="ns-turnout" value="${today}"></div>
+        <div class="form-group"><label>Pull Date</label><input type="date" id="ns-pull"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Cows Exposed</label><input type="number" id="ns-exposed" placeholder="0" inputmode="numeric"></div>
+        <div class="form-group"><label>Bull BCS / Age</label><input type="text" id="ns-bcs" placeholder="e.g. 4yr / BCS 6"></div>
+      </div>
+      <div class="form-group"><label>Expected Calving Start</label><input type="date" id="ns-calving-start"></div>
+      <div class="form-group"><label>Notes</label><textarea id="ns-notes" placeholder="BSE result, issues..."></textarea></div>
+      <button class="btn btn-primary" onclick="saveNSCloud()">Save Turn-Out</button>
+    </div>
+    ${active.length?`<div class="card" style="margin-bottom:10px"><div class="card-title">Bulls Currently Out (${active.length})</div>${active.map(r=>{
+      const daysOut=Math.floor((new Date()-new Date(r.turnout_date))/86400000);
+      const daysLeft=r.pull_date?Math.ceil((new Date(r.pull_date)-new Date())/86400000):null;
+      return `<div style="padding:10px 0;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between"><strong>${r.bull_tag}</strong><span class="badge badge-orange">${daysOut}d out</span></div><div style="font-size:12px;color:var(--gray);margin-top:3px">${r.pasture||'—'} \xb7 ${r.cows_exposed||0} cows${daysLeft!==null?' \xb7 Pull in '+daysLeft+'d':''}</div></div>`;
+    }).join('')}</div>`:''}
+    <div class="card"><div class="card-title">Turn-Out History</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Bull</th><th>Pasture</th><th>Turn-Out</th><th>Pull</th><th>Cows</th></tr></thead>
+        <tbody>${(data||[]).slice(0,15).map(r=>`<tr><td><strong>${r.bull_tag}</strong></td><td>${r.pasture||'—'}</td><td>${r.turnout_date||'—'}</td><td>${r.pull_date||'—'}</td><td>${r.cows_exposed||'—'}</td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--gray-lt);padding:20px">No records yet</td></tr>'}</tbody>
+      </table></div>
+    </div>`;
+}
+
+async function saveNSCloud() {
+  const bull=document.getElementById('ns-bull')?.value?.trim();
+  const turnout=document.getElementById('ns-turnout')?.value;
+  if(!bull||!turnout){alert('Bull tag and turn-out date required.');return;}
+  const {error}=await dbInsert('natural_service',{
+    bull_tag:bull,pasture:document.getElementById('ns-pasture')?.value?.trim()||null,
+    turnout_date:turnout,pull_date:document.getElementById('ns-pull')?.value||null,
+    cows_exposed:parseInt(document.getElementById('ns-exposed')?.value)||null,
+    bcs:document.getElementById('ns-bcs')?.value?.trim()||null,
+    expected_calving_start:document.getElementById('ns-calving-start')?.value||null,
+    notes:document.getElementById('ns-notes')?.value?.trim()||null,
+  });
+  if(error){alert('Error: '+error.message);return;}
+  alert(`\u2705 Turn-out saved: ${bull}`);
+  showBreedingTab('natural');
+}
+
+// ── CONV ET ────────────────────────────────────────────────────────────────
+async function renderETTab(content) {
+  const {data:embryos}=await sb.from('embryo_inventory').select('*').eq('ranch_id',currentRanch.id).order('flush_date',{ascending:false});
+  const {data:transfers}=await sb.from('et_transfers').select('*').eq('ranch_id',currentRanch.id).order('transfer_date',{ascending:false});
+  const today=new Date().toISOString().split('T')[0];
+  content.innerHTML=`
+    <div class="tab-bar" style="margin-bottom:12px">
+      <button class="tab active" onclick="showETSubTab('flush')">Log Flush</button>
+      <button class="tab" onclick="showETSubTab('transfer')">Log Transfer</button>
+      <button class="tab" onclick="showETSubTab('inventory')">Embryo Inventory</button>
+    </div>
+    <div id="et-sub-flush">
+      <div class="card">
+        <div class="card-title">Conventional ET \u2014 Flush Record</div>
+        <div class="form-group"><label>Donor Tag</label><input type="text" id="cet-donor" placeholder="e.g. H2R-K253"></div>
+        <div class="form-row">
+          <div class="form-group"><label>Flush Date</label><input type="date" id="cet-date" value="${today}"></div>
+          <div class="form-group"><label>Sire Used</label><input type="text" id="cet-sire" placeholder="Bull / AI sire"></div>
+        </div>
+        <div class="form-group"><label>Supero Protocol</label><input type="text" id="cet-supero" placeholder="e.g. FSH 8-day"></div>
+        <div class="form-row">
+          <div class="form-group"><label>Total Collected</label><input type="number" id="cet-collected" placeholder="0" inputmode="numeric"></div>
+          <div class="form-group"><label>Transferable</label><input type="number" id="cet-transferable" placeholder="0" inputmode="numeric"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Grade 1</label><input type="number" id="cet-grade1" placeholder="0" inputmode="numeric"></div>
+          <div class="form-group"><label>Grade 2</label><input type="number" id="cet-grade2" placeholder="0" inputmode="numeric"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Degenerate</label><input type="number" id="cet-degen" placeholder="0" inputmode="numeric"></div>
+          <div class="form-group"><label>Storage</label><select id="cet-storage"><option value="fresh">Fresh</option><option value="frozen">Frozen</option><option value="both">Both</option></select></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Vet / Tech</label><input type="text" id="cet-vet" placeholder="Name"></div>
+          <div class="form-group"><label>Cost ($)</label><input type="number" id="cet-cost" placeholder="0.00" inputmode="decimal"></div>
+        </div>
+        <div class="form-group"><label>Notes</label><textarea id="cet-notes" placeholder="Donor condition..."></textarea></div>
+        <button class="btn btn-primary" onclick="saveFlushCloud()">Save Flush Record</button>
+      </div>
+    </div>
+    <div id="et-sub-transfer" style="display:none">
+      <div class="card">
+        <div class="card-title">Embryo Transfer</div>
+        <div class="form-group"><label>Recipient Tag</label><input type="text" id="tr-recip" placeholder="Recipient tag #"></div>
+        <div class="form-row">
+          <div class="form-group"><label>Transfer Date</label><input type="date" id="tr-date" value="${today}"></div>
+          <div class="form-group"><label>Source</label><select id="tr-source"><option value="own">Own flush</option><option value="purchased">Purchased</option></select></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Donor / Embryo ID</label><input type="text" id="tr-embryo" placeholder="Donor cow or lot #"></div>
+          <div class="form-group"><label>Grade</label><select id="tr-grade"><option value="1">Grade 1</option><option value="2">Grade 2</option><option value="purchased">Purchased</option></select></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Sync Protocol</label><select id="tr-sync"><option value="7&7">7&7</option><option value="7-day-co-synch">7-Day Co-Synch</option><option value="cidr">CIDR</option><option value="other">Other</option></select></div>
+          <div class="form-group"><label>Cost ($)</label><input type="number" id="tr-cost" placeholder="0.00" inputmode="decimal"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Transferred By</label><input type="text" id="tr-by" placeholder="Vet / tech"></div>
+          <div class="form-group"><label>Expected Calving</label><input type="date" id="tr-expected"></div>
+        </div>
+        <div class="form-group"><label>Outcome</label><select id="tr-outcome"><option value="pending">Pending</option><option value="pregnant">Pregnant \u2713</option><option value="open">Open \u2717</option></select></div>
+        <div class="form-group"><label>Notes</label><textarea id="tr-notes" placeholder="Recip condition..."></textarea></div>
+        <button class="btn btn-primary" onclick="saveTransferCloud()">Save Transfer</button>
+      </div>
+    </div>
+    <div id="et-sub-inventory" style="display:none">
+      <div class="card"><div class="card-title">Embryo Inventory (${(embryos||[]).length} lots)</div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Donor</th><th>Sire</th><th>Date</th><th>Type</th><th>Available</th></tr></thead>
+          <tbody>${(embryos||[]).length?(embryos||[]).map(r=>`<tr><td><strong>${r.donor_tag||'—'}</strong></td><td>${r.sire||'—'}</td><td>${r.flush_date||'—'}</td><td><span class="badge badge-gray" style="font-size:10px">${r.embryo_type||'conv'}</span></td><td><span class="badge badge-green">${r.available||0}</span></td></tr>`).join(''):'<tr><td colspan="5" style="text-align:center;color:var(--gray-lt);padding:20px">No embryos in inventory</td></tr>'}</tbody>
+        </table></div>
+      </div>
+    </div>`;
+}
+
+function showETSubTab(tab) {
+  ['flush','transfer','inventory'].forEach(t=>{const el=document.getElementById('et-sub-'+t);if(el)el.style.display=t===tab?'block':'none';});
+  document.querySelectorAll('#breeding-content .tab-bar .tab').forEach((b,i)=>b.classList.toggle('active',['flush','transfer','inventory'][i]===tab));
+}
+
+async function saveFlushCloud() {
+  const donor=document.getElementById('cet-donor')?.value?.trim();
+  const date=document.getElementById('cet-date')?.value;
+  if(!donor||!date){alert('Donor tag and date required.');return;}
+  const transferable=parseInt(document.getElementById('cet-transferable')?.value)||0;
+  const sire=document.getElementById('cet-sire')?.value?.trim()||null;
+  const {data:flushData,error}=await dbInsert('et_flushes',{
+    donor_tag:donor,flush_date:date,flush_type:'conventional',sire,
+    supero_protocol:document.getElementById('cet-supero')?.value?.trim()||null,
+    total_collected:parseInt(document.getElementById('cet-collected')?.value)||0,
+    transferable,grade1:parseInt(document.getElementById('cet-grade1')?.value)||0,
+    grade2:parseInt(document.getElementById('cet-grade2')?.value)||0,
+    degenerate:parseInt(document.getElementById('cet-degen')?.value)||0,
+    storage:document.getElementById('cet-storage')?.value,
+    vet:document.getElementById('cet-vet')?.value?.trim()||null,
+    cost:parseFloat(document.getElementById('cet-cost')?.value)||null,
+    notes:document.getElementById('cet-notes')?.value?.trim()||null,
+  });
+  if(error){alert('Error: '+error.message);return;}
+  if(transferable>0&&flushData?.[0]){
+    await dbInsert('embryo_inventory',{flush_id:flushData[0].id,donor_tag:donor,sire,flush_date:date,grade:'1+2',available:transferable,source:'own-flush',embryo_type:'conventional'});
+  }
+  alert(`\u2705 Flush saved: ${donor} \u2014 ${parseInt(document.getElementById('cet-collected')?.value)||0} collected, ${transferable} transferable`);
+  showBreedingTab('et');
+}
+
+async function saveTransferCloud() {
+  const recip=document.getElementById('tr-recip')?.value?.trim();
+  const date=document.getElementById('tr-date')?.value;
+  if(!recip||!date){alert('Recipient and date required.');return;}
+  const {error}=await dbInsert('et_transfers',{
+    recipient_tag:recip,transfer_date:date,transfer_type:'conventional',
+    embryo_source:document.getElementById('tr-source')?.value,
+    donor_tag:document.getElementById('tr-embryo')?.value?.trim()||null,
+    embryo_grade:document.getElementById('tr-grade')?.value,
+    sync_protocol:document.getElementById('tr-sync')?.value,
+    cost:parseFloat(document.getElementById('tr-cost')?.value)||null,
+    transferred_by:document.getElementById('tr-by')?.value?.trim()||null,
+    expected_calving:document.getElementById('tr-expected')?.value||null,
+    outcome:document.getElementById('tr-outcome')?.value,
+    notes:document.getElementById('tr-notes')?.value?.trim()||null,
+  });
+  if(error){alert('Error: '+error.message);return;}
+  alert(`\u2705 Transfer saved: ${recip}`);
+  showBreedingTab('et');
+}
+
+// ── IVF ────────────────────────────────────────────────────────────────────
+async function renderIVFTab(content) {
+  const {data}=await sb.from('et_flushes').select('*').eq('ranch_id',currentRanch.id).eq('flush_type','ivf').order('flush_date',{ascending:false});
+  const today=new Date().toISOString().split('T')[0];
+  content.innerHTML=`
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">IVF \u2014 OPU Record</div>
+      <div class="form-group"><label>Donor Cow Tag</label><input type="text" id="ivf-donor" placeholder="e.g. H2R-K253"></div>
+      <div class="form-row">
+        <div class="form-group"><label>OPU Date</label><input type="date" id="ivf-date" value="${today}"></div>
+        <div class="form-group"><label>Location / Lab</label><input type="text" id="ivf-location" placeholder="Partner Ranch \u2014 Mobile Lab"></div>
+      </div>
+      <div class="form-group"><label>Sire Used</label><input type="text" id="ivf-sire" placeholder="Bull / AI sire"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Eggs Collected (COCs)</label><input type="number" id="ivf-eggs" placeholder="0" inputmode="numeric"></div>
+        <div class="form-group"><label>Eggs Fertilized</label><input type="number" id="ivf-fert" placeholder="0" inputmode="numeric"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Blastocysts</label><input type="number" id="ivf-blasto" placeholder="0" inputmode="numeric"></div>
+        <div class="form-group"><label>Transferable</label><input type="number" id="ivf-transferable" placeholder="0" inputmode="numeric"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Storage</label><select id="ivf-storage"><option value="fresh">Fresh</option><option value="frozen">Frozen</option><option value="both">Both</option></select></div>
+        <div class="form-group"><label>Cost ($)</label><input type="number" id="ivf-cost" placeholder="0.00" inputmode="decimal"></div>
+      </div>
+      <div class="form-group"><label>Vet / Lab Tech</label><input type="text" id="ivf-vet" placeholder="Name"></div>
+      <div class="form-group"><label>Notes</label><textarea id="ivf-notes" placeholder="Donor condition, follicle count..."></textarea></div>
+      <button class="btn btn-primary" onclick="saveIVFCloud()">Save OPU Record</button>
+    </div>
+    <div class="card"><div class="card-title">IVF History</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Donor</th><th>Date</th><th>COCs</th><th>Fert</th><th>Blasto</th><th>Transfer</th></tr></thead>
+        <tbody>${(data||[]).length?(data||[]).map(r=>`<tr><td><strong>${r.donor_tag}</strong></td><td>${r.flush_date}</td><td>${r.eggs_collected||0}</td><td>${r.eggs_fertilized||0}</td><td>${r.blastocysts||0}</td><td>${r.transferable||0}</td></tr>`).join(''):'<tr><td colspan="6" style="text-align:center;color:var(--gray-lt);padding:20px">No IVF records yet</td></tr>'}</tbody>
+      </table></div>
+    </div>`;
+}
+
+async function saveIVFCloud() {
+  const donor=document.getElementById('ivf-donor')?.value?.trim();
+  const date=document.getElementById('ivf-date')?.value;
+  if(!donor||!date){alert('Donor tag and OPU date required.');return;}
+  const transferable=parseInt(document.getElementById('ivf-transferable')?.value)||0;
+  const sire=document.getElementById('ivf-sire')?.value?.trim()||null;
+  const {data:ivfData,error}=await dbInsert('et_flushes',{
+    donor_tag:donor,flush_date:date,flush_type:'ivf',sire,
+    location:document.getElementById('ivf-location')?.value?.trim()||null,
+    eggs_collected:parseInt(document.getElementById('ivf-eggs')?.value)||0,
+    eggs_fertilized:parseInt(document.getElementById('ivf-fert')?.value)||0,
+    blastocysts:parseInt(document.getElementById('ivf-blasto')?.value)||0,
+    transferable,storage:document.getElementById('ivf-storage')?.value,
+    cost:parseFloat(document.getElementById('ivf-cost')?.value)||null,
+    vet:document.getElementById('ivf-vet')?.value?.trim()||null,
+    notes:document.getElementById('ivf-notes')?.value?.trim()||null,
+  });
+  if(error){alert('Error: '+error.message);return;}
+  if(transferable>0&&ivfData?.[0]){
+    await dbInsert('embryo_inventory',{flush_id:ivfData[0].id,donor_tag:donor,sire,flush_date:date,grade:'IVF',available:transferable,source:'ivf',embryo_type:'ivf'});
+  }
+  alert(`\u2705 OPU saved: ${donor} \u2014 ${parseInt(document.getElementById('ivf-blasto')?.value)||0} blasto, ${transferable} transferable`);
+  showBreedingTab('ivf');
+}
+
+// ── PREG CHECK ─────────────────────────────────────────────────────────────
+async function renderPregCheckTab(content) {
+  const {data}=await sb.from('preg_checks').select('*').eq('ranch_id',currentRanch.id).order('check_date',{ascending:false});
+  const today=new Date().toISOString().split('T')[0];
+  const rc={pregnant:'badge-green',open:'badge-red',recheck:'badge-orange'};
+  content.innerHTML=`
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">Record Pregnancy Check</div>
+      <div class="form-group"><label>Animal Tag</label><input type="text" id="pc-animal" placeholder="Cow / heifer tag #"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Check Date</label><input type="date" id="pc-date" value="${today}"></div>
+        <div class="form-group"><label>Result</label><select id="pc-result"><option value="pregnant">Pregnant \u2713</option><option value="open">Open \u2717</option><option value="recheck">Recheck</option></select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Breeding Type</label><select id="pc-type"><option value="ai">AI</option><option value="natural">Natural Service</option><option value="et">ET (Conv.)</option><option value="ivf">IVF</option><option value="unknown">Unknown</option></select></div>
+        <div class="form-group"><label>Days Bred</label><input type="number" id="pc-days" placeholder="e.g. 35" inputmode="numeric"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Expected Calving</label><input type="date" id="pc-calving"></div>
+        <div class="form-group"><label>Checked By</label><input type="text" id="pc-by" placeholder="Vet or tech"></div>
+      </div>
+      <div class="form-group"><label>Notes</label><input type="text" id="pc-notes" placeholder="Any findings..."></div>
+      <button class="btn btn-primary" onclick="savePregCheckCloud()">Save Preg Check</button>
+    </div>
+    <div class="card"><div class="card-title">Recent Preg Checks</div>
+      ${(data||[]).length?(data||[]).slice(0,15).map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)"><div><strong>${r.animal_tag}</strong> <span style="font-size:11px;color:var(--gray)">${r.check_date}</span><div style="font-size:12px;color:var(--gray)">${r.breed_type||'—'}${r.expected_calving?' \xb7 Calves '+r.expected_calving:''}</div></div><span class="badge ${rc[r.result]||'badge-gray'}">${r.result}</span></div>`).join(''):'<div class="empty"><div class="empty-icon">\ud83d\udd0d</div><p>No preg checks recorded yet.</p></div>'}
+    </div>`;
+}
+
+async function savePregCheckCloud() {
+  const animal=document.getElementById('pc-animal')?.value?.trim();
+  const date=document.getElementById('pc-date')?.value;
+  if(!animal||!date){alert('Animal tag and date required.');return;}
+  const result=document.getElementById('pc-result')?.value;
+  const {error}=await dbInsert('preg_checks',{
+    animal_tag:animal,check_date:date,result,
+    breed_type:document.getElementById('pc-type')?.value,
+    days_bred:parseInt(document.getElementById('pc-days')?.value)||null,
+    expected_calving:document.getElementById('pc-calving')?.value||null,
+    checked_by:document.getElementById('pc-by')?.value?.trim()||null,
+    notes:document.getElementById('pc-notes')?.value?.trim()||null,
+  });
+  if(error){alert('Error: '+error.message);return;}
+  const icon=result==='pregnant'?'\u2705':result==='open'?'\u274c':'\ud83d\udd04';
+  alert(`${icon} Preg check saved: ${animal} \u2014 ${result}`);
+  showBreedingTab('pregcheck');
+}
+
+// ── SYNC GROUPS ────────────────────────────────────────────────────────────
+async function renderSyncTab(content) {
+  const {data}=await sb.from('sync_groups').select('*').eq('ranch_id',currentRanch.id).order('created_at',{ascending:false});
+  const {data:semData}=await sb.from('semen_inventory').select('sire').eq('ranch_id',currentRanch.id);
+  const sires=[...new Set((semData||[]).map(r=>r.sire))];
+  const today=new Date().toISOString().split('T')[0];
+  content.innerHTML=`
+    ${(data||[]).length?`<div class="card" style="margin-bottom:10px"><div class="card-title">Active Sync Groups</div>${(data||[]).map(g=>{
+      const steps=g.steps||[];const done=steps.filter(s=>s.completed).length;
+      const next=steps.find(s=>!s.completed);const prog=steps.length?Math.round(done/steps.length*100):0;
+      return `<div onclick="openSyncDetail_cloud('${g.id}')" style="padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><strong>${g.name}</strong><span class="badge ${g.status==='complete'?'badge-green':'badge-orange'}">${g.status||'active'}</span></div><div style="font-size:12px;color:var(--gray);margin-bottom:6px">${g.season||''} \xb7 ${g.protocol||''} \xb7 ${(g.cows||[]).length} cows \xb7 Sire: ${g.sire||'—'}</div><div style="background:var(--bg2);border-radius:4px;height:5px"><div style="background:var(--orange);border-radius:4px;height:5px;width:${prog}%"></div></div><div style="font-size:11px;color:var(--gray);margin-top:3px">${done}/${steps.length} steps${next?' \xb7 Next: '+next.label+' on '+next.date:' \xb7 Complete'}</div></div>`;
+    }).join('')}</div>`:''}
+    <div class="card"><div class="card-title">Create New Sync Group</div>
+      <div class="form-group"><label>Group Name</label><input type="text" id="sg-name" placeholder="e.g. Spring Group 1"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Season</label><select id="sg-season"><option value="Spring">Spring</option><option value="Fall">Fall</option></select></div>
+        <div class="form-group"><label>Animal Type</label><select id="sg-animaltype"><option value="cows">Mature Cows</option><option value="heifers">Heifers</option></select></div>
+      </div>
+      <div class="form-group"><label>Protocol</label>
+        <select id="sg-protocol" onchange="updateSyncDates()">
+          <option value="7&7-cow">7&7 \u2014 Cows (CIDR+PGF D0 \xb7 Remove+PGF D7 \xb7 GnRH+AI D14)</option>
+          <option value="7&7-heifer">7&7 \u2014 Heifers</option>
+          <option value="7-day-cosynch">7-Day Co-Synch (GnRH D0 \xb7 PGF D7 \xb7 GnRH+AI D9)</option>
+          <option value="cidr-cosynch">CIDR Co-Synch</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Day 0 Start Date</label><input type="date" id="sg-day0" value="${today}" onchange="updateSyncDates()"></div>
+      <div id="sg-dates-preview" style="font-size:13px;color:var(--gray);margin-bottom:10px"></div>
+      <div class="form-group"><label>AI Sire</label><select id="sg-sire"><option value="">— Select —</option>${sires.map(s=>`<option value="${s}">${s}</option>`).join('')}</select></div>
+      <div class="form-group"><label>Cow Tags (comma separated)</label><textarea id="sg-cows" placeholder="H2R-K253, H2R-E728..." style="min-height:60px"></textarea></div>
+      <div class="form-group"><label>Cleanup Bull (optional)</label><input type="text" id="sg-cleanup" placeholder="Bull tag"></div>
+      <div class="form-group"><label>Notes</label><textarea id="sg-notes" placeholder="BCS, handling notes..."></textarea></div>
+      <button class="btn btn-primary" onclick="saveSyncGroupCloud()">Create Sync Group</button>
+    </div>`;
+  updateSyncDates();
+}
+
+function updateSyncDates() {
+  const day0=document.getElementById('sg-day0')?.value;
+  const proto=document.getElementById('sg-protocol')?.value;
+  const preview=document.getElementById('sg-dates-preview');
+  if(!day0||!preview)return;
+  const protos={'7&7-cow':[{day:0,label:'Day 0 \u2014 Insert CIDR + PGF\u2082\u03b1'},{day:7,label:'Day 7 \u2014 Remove CIDR + PGF\u2082\u03b1'},{day:14,label:'Day 14 \u2014 GnRH + AI'}],'7&7-heifer':[{day:0,label:'Day 0 \u2014 Insert CIDR + PGF\u2082\u03b1'},{day:7,label:'Day 7 \u2014 Remove CIDR + PGF\u2082\u03b1'},{day:14,label:'Day 14 \u2014 GnRH + AI'}],'7-day-cosynch':[{day:0,label:'Day 0 \u2014 GnRH'},{day:7,label:'Day 7 \u2014 PGF\u2082\u03b1'},{day:9,label:'Day 9 \u2014 GnRH + AI'}],'cidr-cosynch':[{day:0,label:'Day 0 \u2014 Insert CIDR + GnRH'},{day:7,label:'Day 7 \u2014 Remove CIDR + PGF\u2082\u03b1'},{day:9,label:'Day 9 \u2014 GnRH + AI'}]};
+  const steps=protos[proto]||protos['7&7-cow'];const d0=new Date(day0);
+  preview.innerHTML=steps.map(s=>{const d=new Date(d0);d.setDate(d.getDate()+s.day);return `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border)"><span>${s.label}</span><strong>${d.toISOString().split('T')[0]}</strong></div>`;}).join('');
+}
+
+async function saveSyncGroupCloud() {
+  const name=document.getElementById('sg-name')?.value?.trim();
+  const day0=document.getElementById('sg-day0')?.value;
+  const proto=document.getElementById('sg-protocol')?.value;
+  if(!name||!day0){alert('Group name and Day 0 date required.');return;}
+  const cowText=document.getElementById('sg-cows')?.value||'';
+  const cows=cowText.split(',').map(s=>s.trim()).filter(Boolean);
+  if(!cows.length){alert('Please add at least one cow tag.');return;}
+  const protos={'7&7-cow':[{day:0,label:'Day 0 \u2014 Insert CIDR + PGF\u2082\u03b1',key:'d0'},{day:7,label:'Day 7 \u2014 Remove CIDR + PGF\u2082\u03b1',key:'d7'},{day:14,label:'Day 14 \u2014 GnRH + AI',key:'d14'}],'7&7-heifer':[{day:0,label:'Day 0 \u2014 Insert CIDR + PGF\u2082\u03b1',key:'d0'},{day:7,label:'Day 7 \u2014 Remove CIDR + PGF\u2082\u03b1',key:'d7'},{day:14,label:'Day 14 \u2014 GnRH + AI',key:'d14'}],'7-day-cosynch':[{day:0,label:'Day 0 \u2014 GnRH',key:'d0'},{day:7,label:'Day 7 \u2014 PGF\u2082\u03b1',key:'d7'},{day:9,label:'Day 9 \u2014 GnRH + AI',key:'d9'}],'cidr-cosynch':[{day:0,label:'Day 0 \u2014 Insert CIDR + GnRH',key:'d0'},{day:7,label:'Day 7 \u2014 Remove CIDR + PGF\u2082\u03b1',key:'d7'},{day:9,label:'Day 9 \u2014 GnRH + AI',key:'d9'}]};
+  const protoSteps=protos[proto]||protos['7&7-cow'];const d0=new Date(day0);
+  const steps=protoSteps.map(s=>{const d=new Date(d0);d.setDate(d.getDate()+s.day);return{...s,date:d.toISOString().split('T')[0],completed:false,completedDate:null,completedBy:''};});
+  const aiStep=steps.find(s=>s.label.includes('AI'));
+  const {data:grpData,error}=await dbInsert('sync_groups',{
+    name,season:document.getElementById('sg-season')?.value,
+    animal_type:document.getElementById('sg-animaltype')?.value,
+    protocol:proto,day0,ai_date:aiStep?.date||null,
+    sire:document.getElementById('sg-sire')?.value||null,
+    cleanup_bull:document.getElementById('sg-cleanup')?.value?.trim()||null,
+    cows,steps,status:'active',
+    notes:document.getElementById('sg-notes')?.value?.trim()||null,
+  });
+  if(error){alert('Error: '+error.message);return;}
+  for(const step of steps){
+    await dbInsert('tasks',{title:`${name} \u2014 ${step.label}`,category:'breeding',due_date:step.date,priority:'high',animal_tag:null,notes:`Sync group: ${name} \xb7 Protocol: ${proto} \xb7 ${cows.length} cows`,done:false,auto_generated:true,auto_key:`sync-${grpData?.[0]?.id}-${step.key}`});
+  }
+  alert(`\u2705 Sync group "${name}" created \u2014 ${cows.length} cows \xb7 Steps added to calendar`);
+  showBreedingTab('sync');
+}
+
+async function openSyncDetail_cloud(id) {
+  const {data:groups}=await sb.from('sync_groups').select('*').eq('ranch_id',currentRanch.id).eq('id',id);
+  const g=groups?.[0];if(!g)return;
+  const content=document.getElementById('breeding-content');
+  const today=new Date().toISOString().split('T')[0];
+  const steps=g.steps||[];
+  content.innerHTML=`
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <button onclick="showBreedingTab('sync')" style="background:var(--bg2);border:none;border-radius:8px;padding:8px 14px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">\u2190 Back</button>
+      <div><strong style="font-size:16px">${g.name}</strong><div style="font-size:12px;color:var(--gray)">${g.season} \xb7 ${g.protocol} \xb7 ${(g.cows||[]).length} cows \xb7 Sire: ${g.sire||'—'}</div></div>
+    </div>
+    <div class="card" style="margin-bottom:10px"><div class="card-title">Protocol Steps</div>
+      ${steps.map((s,i)=>{
+        const isToday=s.date===today;const isOverdue=!s.completed&&s.date<today;
+        return `<div style="display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--border)">
+          <div style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;background:${s.completed?'var(--green)':isOverdue?'var(--red)':isToday?'var(--orange)':'var(--bg2)'}">
+            ${s.completed?'\u2713':'\ud83d\udc89'}
+          </div>
+          <div style="flex:1"><div style="font-size:13px;font-weight:600${s.completed?';text-decoration:line-through;color:var(--gray)':''}">${s.label}</div>
+          <div style="font-size:11px;color:${isOverdue?'var(--red)':isToday?'var(--orange)':'var(--gray)'};margin-top:2px">${s.date} ${isToday?'\xb7 TODAY':isOverdue?'\xb7 OVERDUE':''} ${s.completed?'\xb7 Done '+s.completedDate:''}</div></div>
+          ${!s.completed?`<button onclick="completeSyncStep_cloud('${g.id}',${i})" style="background:var(--orange);color:white;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;flex-shrink:0">Mark Done</button>`:''}
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="card"><div class="card-title">Cows in Group (${(g.cows||[]).length})</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;padding:8px 0">${(g.cows||[]).map(tag=>`<span class="badge badge-gray" style="font-size:12px">${tag}</span>`).join('')}</div>
+    </div>`;
+}
+
+async function completeSyncStep_cloud(groupId,stepIndex) {
+  const {data:groups}=await sb.from('sync_groups').select('*').eq('ranch_id',currentRanch.id).eq('id',groupId);
+  const g=groups?.[0];if(!g)return;
+  const by=prompt('Completed by (optional):')||'';
+  const steps=g.steps||[];
+  steps[stepIndex].completed=true;steps[stepIndex].completedDate=new Date().toISOString().split('T')[0];steps[stepIndex].completedBy=by;
+  const allDone=steps.every(s=>s.completed);
+  await sb.from('sync_groups').update({steps,status:allDone?'complete':'active'}).eq('id',groupId);
+  await sb.from('tasks').update({done:true}).eq('ranch_id',currentRanch.id).eq('auto_key',`sync-${groupId}-${steps[stepIndex].key}`);
+  openSyncDetail_cloud(groupId);
+}
+
+// ── BREEDING HISTORY ───────────────────────────────────────────────────────
+async function renderBreedingHistoryTab(content) {
+  const [ai,ns,flushes,transfers,pc]=await Promise.all([
+    sb.from('ai_records').select('*').eq('ranch_id',currentRanch.id).order('ai_date',{ascending:false}).limit(30),
+    sb.from('natural_service').select('*').eq('ranch_id',currentRanch.id).order('turnout_date',{ascending:false}).limit(10),
+    sb.from('et_flushes').select('*').eq('ranch_id',currentRanch.id).order('flush_date',{ascending:false}).limit(15),
+    sb.from('et_transfers').select('*').eq('ranch_id',currentRanch.id).order('transfer_date',{ascending:false}).limit(15),
+    sb.from('preg_checks').select('*').eq('ranch_id',currentRanch.id).order('check_date',{ascending:false}).limit(20),
+  ]);
+  const all=[
+    ...(ai.data||[]).map(r=>({date:r.ai_date,type:'AI',animal:r.cow_tag,detail:`\xd7 ${r.sire||'—'} \xb7 ${r.sync_protocol||''}`,color:'badge-blue'})),
+    ...(ns.data||[]).map(r=>({date:r.turnout_date,type:'Natural',animal:r.bull_tag,detail:`${r.pasture||'—'} \xb7 ${r.cows_exposed||0} cows`,color:'badge-orange'})),
+    ...(flushes.data||[]).map(r=>({date:r.flush_date,type:r.flush_type==='ivf'?'IVF OPU':'ET Flush',animal:r.donor_tag,detail:`${r.total_collected||0} collected \xb7 ${r.transferable||0} transferable`,color:'badge-green'})),
+    ...(transfers.data||[]).map(r=>({date:r.transfer_date,type:'ET Transfer',animal:r.recipient_tag,detail:`From: ${r.donor_tag||'—'} \xb7 ${r.outcome||'pending'}`,color:'badge-gray'})),
+    ...(pc.data||[]).map(r=>({date:r.check_date,type:'Preg Check',animal:r.animal_tag,detail:`${r.result}${r.expected_calving?' \xb7 Calves '+r.expected_calving:''}`,color:r.result==='pregnant'?'badge-green':'badge-red'})),
+  ].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  content.innerHTML=`<div class="card"><div class="card-title">All Breeding Records (${all.length})</div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Date</th><th>Type</th><th>Animal</th><th>Detail</th></tr></thead>
+      <tbody>${all.length?all.map(r=>`<tr><td>${r.date||'—'}</td><td><span class="badge ${r.color}" style="font-size:10px">${r.type}</span></td><td><strong>${r.animal||'—'}</strong></td><td style="font-size:12px;color:var(--gray)">${r.detail}</td></tr>`).join(''):'<tr><td colspan="4" style="text-align:center;color:var(--gray-lt);padding:20px">No breeding records yet</td></tr>'}</tbody>
+    </table></div>
+  </div>`;
+}
+
 
 // ── PASTURES ───────────────────────────────────────────────────────────────
 async function loadPastures() {
