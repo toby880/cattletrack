@@ -334,6 +334,7 @@ tr:hover td{background:var(--bg)}
           <div style="font-size:18px;font-weight:700" id="profile-name">—</div>
           <div style="font-size:12px;color:var(--gray)" id="profile-sub">—</div>
         </div>
+        <button onclick="openEditAnimal()" style="background:var(--orange);color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Edit</button>
         <span id="profile-status-badge" class="badge badge-green">Active</span>
       </div>
       <div class="tab-bar">
@@ -867,6 +868,89 @@ tr:hover td{background:var(--bg)}
     <div style="display:flex;gap:10px;margin-top:4px">
       <button class="btn btn-secondary" onclick="closeAddAnimal()" style="flex:1">Cancel</button>
       <button class="btn btn-primary" onclick="saveNewAnimal()" style="flex:2">Add Animal</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT ANIMAL MODAL -->
+<div class="modal-overlay" id="edit-animal-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="modal-title" style="margin-bottom:0">Edit Animal</div>
+      <button onclick="closeEditAnimal()" style="background:var(--bg2);border:none;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer;font-family:inherit">Cancel</button>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Ear Tag</label><input type="text" id="ea-tag" placeholder="e.g. H2R-K253"></div>
+      <div class="form-group"><label>Name</label><input type="text" id="ea-name" placeholder="Registered name"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Reg Number</label><input type="text" id="ea-reg" placeholder="RAAA #"></div>
+      <div class="form-group"><label>Tattoo</label><input type="text" id="ea-tattoo"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Sex</label>
+        <select id="ea-sex"><option value="Cow">Cow</option><option value="Heifer">Heifer</option><option value="Bull">Bull</option><option value="Steer">Steer</option></select>
+      </div>
+      <div class="form-group"><label>Type</label>
+        <select id="ea-type"><option value="Registered">Registered</option><option value="Commercial">Commercial</option></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Birth Date</label><input type="date" id="ea-dob"></div>
+      <div class="form-group"><label>Breed</label>
+        <select id="ea-breed">
+          <option value="Red Angus">Red Angus</option>
+          <option value="Black Angus">Black Angus</option>
+          <option value="Hereford">Hereford</option>
+          <option value="Simmental">Simmental</option>
+          <option value="Composite">Composite</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Color</label><input type="text" id="ea-color"></div>
+      <div class="form-group"><label>Horn Status</label>
+        <select id="ea-horns"><option value="Polled">Polled</option><option value="Horned">Horned</option><option value="Scurred">Scurred</option></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Sire</label><input type="text" id="ea-sire"></div>
+      <div class="form-group"><label>Dam</label><input type="text" id="ea-dam"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Category</label><input type="text" id="ea-category" placeholder="e.g. AI/ET Cows"></div>
+      <div class="form-group"><label>Location</label><input type="text" id="ea-location" placeholder="Current pasture"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Acquisition</label>
+        <select id="ea-acquisition" onchange="toggleEditPurchaseFields()">
+          <option value="raised">Raised</option>
+          <option value="purchased">Purchased</option>
+        </select>
+      </div>
+      <div class="form-group" id="ea-price-wrap">
+        <label>Purchase Price ($)</label>
+        <input type="number" id="ea-price" placeholder="0.00" inputmode="decimal">
+      </div>
+    </div>
+    <div class="form-group" id="ea-breeder-wrap">
+      <label>Purchased From</label><input type="text" id="ea-breeder">
+    </div>
+    <div class="form-group">
+      <label>Status</label>
+      <select id="ea-status">
+        <option value="active">Active</option>
+        <option value="donor">ET Donor</option>
+        <option value="sold">Sold</option>
+        <option value="dead">Dead</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Notes</label><textarea id="ea-notes" placeholder="Any notes..."></textarea></div>
+    <div style="display:flex;gap:10px;margin-top:4px">
+      <button class="btn btn-danger btn-sm" onclick="confirmDeleteAnimal()" style="flex:1">Delete</button>
+      <button class="btn btn-primary" onclick="saveEditAnimal()" style="flex:2">Save Changes</button>
     </div>
   </div>
 </div>
@@ -2043,8 +2127,111 @@ async function runQuickReport(type) {
 
 async function runReport(type) { runQuickReport(type); }
 
+// ── EDIT ANIMAL ────────────────────────────────────────────────────────────
+function openEditAnimal() {
+  if(!currentAnimal) return;
+  const a = currentAnimal;
+  document.getElementById('ea-tag').value = a.tag||'';
+  document.getElementById('ea-name').value = a.name||'';
+  document.getElementById('ea-reg').value = a.reg_number||'';
+  document.getElementById('ea-tattoo').value = a.tattoo||'';
+  document.getElementById('ea-sex').value = a.sex||'Cow';
+  document.getElementById('ea-type').value = a.animal_type||'Registered';
+  document.getElementById('ea-dob').value = a.dob||'';
+  document.getElementById('ea-breed').value = a.breed||'Red Angus';
+  document.getElementById('ea-color').value = a.color||'';
+  document.getElementById('ea-horns').value = a.horn_status||'Polled';
+  document.getElementById('ea-sire').value = a.sire||'';
+  document.getElementById('ea-dam').value = a.dam||'';
+  document.getElementById('ea-category').value = a.category||'';
+  document.getElementById('ea-location').value = a.location||'';
+  document.getElementById('ea-acquisition').value = a.acquisition||'raised';
+  document.getElementById('ea-price').value = a.purchase_price||'';
+  document.getElementById('ea-breeder').value = a.purchased_from||'';
+  document.getElementById('ea-status').value = a.status||'active';
+  document.getElementById('ea-notes').value = a.notes||'';
+  toggleEditPurchaseFields();
+  document.getElementById('edit-animal-modal').classList.add('open');
+}
 
-// ── SETTINGS ───────────────────────────────────────────────────────────────
+function closeEditAnimal() {
+  document.getElementById('edit-animal-modal').classList.remove('open');
+}
+
+function toggleEditPurchaseFields() {
+  const isPurchased = document.getElementById('ea-acquisition').value === 'purchased';
+  document.getElementById('ea-price-wrap').style.display = isPurchased ? 'block' : 'none';
+  document.getElementById('ea-breeder-wrap').style.display = isPurchased ? 'block' : 'none';
+}
+
+async function saveEditAnimal() {
+  if(!currentAnimal) return;
+  const updates = {
+    tag: document.getElementById('ea-tag').value.trim(),
+    name: document.getElementById('ea-name').value.trim()||null,
+    reg_number: document.getElementById('ea-reg').value.trim()||null,
+    tattoo: document.getElementById('ea-tattoo').value.trim()||null,
+    sex: document.getElementById('ea-sex').value,
+    animal_type: document.getElementById('ea-type').value,
+    dob: document.getElementById('ea-dob').value||null,
+    breed: document.getElementById('ea-breed').value,
+    color: document.getElementById('ea-color').value.trim()||null,
+    horn_status: document.getElementById('ea-horns').value,
+    sire: document.getElementById('ea-sire').value.trim()||null,
+    dam: document.getElementById('ea-dam').value.trim()||null,
+    category: document.getElementById('ea-category').value.trim()||null,
+    location: document.getElementById('ea-location').value.trim()||null,
+    acquisition: document.getElementById('ea-acquisition').value,
+    purchase_price: parseFloat(document.getElementById('ea-price').value)||null,
+    purchased_from: document.getElementById('ea-breeder').value.trim()||null,
+    status: document.getElementById('ea-status').value,
+    notes: document.getElementById('ea-notes').value.trim()||null,
+  };
+  if(!updates.tag) { alert('Ear tag is required.'); return; }
+
+  if(currentAnimal.id) {
+    const {error} = await sb.from('animals').update(updates).eq('id', currentAnimal.id);
+    if(error) { alert('Error saving: ' + error.message); return; }
+  } else {
+    const {error} = await dbInsert('animals', updates);
+    if(error) { alert('Error saving: ' + error.message); return; }
+  }
+
+  // Refresh cache
+  const {data} = await dbSelect('animals');
+  if(data) cache.set('animals', data);
+
+  closeEditAnimal();
+
+  // Update profile header
+  const updated = (cache.get('animals')||[]).find(a => a.tag === updates.tag) || {...currentAnimal, ...updates};
+  currentAnimal = updated;
+  document.getElementById('profile-name').textContent = updated.tag + (updated.name?' — '+updated.name:'');
+  document.getElementById('profile-sub').textContent = [updated.sex, updated.animal_type, updated.breed].filter(Boolean).join(' · ');
+  const statusColors = {active:'badge-green',sold:'badge-red',dead:'badge-gray',donor:'badge-blue'};
+  const sb2 = document.getElementById('profile-status-badge');
+  sb2.textContent = updated.status||'active';
+  sb2.className = 'badge '+(statusColors[updated.status]||'badge-green');
+  showProfileTab('info');
+  alert('✅ ' + updates.tag + ' updated');
+}
+
+async function confirmDeleteAnimal() {
+  if(!currentAnimal) return;
+  const confirmed = confirm(`Delete ${currentAnimal.tag}?\n\nThis cannot be undone. Calving records, health events, and weights linked to this animal will not be deleted.`);
+  if(!confirmed) return;
+  if(currentAnimal.id) {
+    const {error} = await sb.from('animals').delete().eq('id', currentAnimal.id);
+    if(error) { alert('Error: ' + error.message); return; }
+  }
+  const {data} = await dbSelect('animals');
+  if(data) cache.set('animals', data);
+  closeEditAnimal();
+  closeProfile();
+  alert('Animal deleted.');
+}
+
+// ── SETTINGS ────────────────────────────────────────────────────────────────
 function loadSettings() {
   document.getElementById('set-ranch-name').value=currentRanch.name||'';
   document.getElementById('set-owner-name').value=currentRanch.owner_name||'';
