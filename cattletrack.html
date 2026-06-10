@@ -447,7 +447,85 @@ tr:hover td{background:var(--bg)}
               </select>
             </div>
           </div>
-          <div class="form-group"><label>Product / Vaccine</label><input type="text" id="h-product" placeholder="e.g. Bovishield, Draxxin, Ivermectin"></div>
+          <div class="form-group">
+            <label>Product / Vaccine</label>
+            <div style="display:flex;gap:8px">
+              <select id="h-product-select" onchange="autofillDrug()" style="flex:1;font-size:14px">
+                <option value="">— Select from drug list —</option>
+                <optgroup label="Antibiotics">
+                  <option value="Draxxin|28|IM">Draxxin (tulathromycin) — 28d</option>
+                  <option value="Excenel|4|SQ">Excenel (ceftiofur) — 4d</option>
+                  <option value="Nuflor|36|SQ">Nuflor (florfenicol) — 36d</option>
+                  <option value="Nuflor Gold|36|SQ">Nuflor Gold — 36d</option>
+                  <option value="LA-200|28|SQ">LA-200 (oxytetracycline) — 28d</option>
+                  <option value="Biomycin 200|28|SQ">Biomycin 200 — 28d</option>
+                  <option value="Tetradure 300|28|SQ">Tetradure 300 — 28d</option>
+                  <option value="Baytril 100|28|SQ">Baytril 100 (enrofloxacin) — 28d</option>
+                  <option value="Micotil|42|SQ">Micotil (tilmicosin) — 42d</option>
+                  <option value="Zuprevo|21|SQ">Zuprevo (tildipirosin) — 21d</option>
+                  <option value="Zactran|21|SQ">Zactran (gamithromycin) — 21d</option>
+                  <option value="Naxcel|4|SQ">Naxcel (ceftiofur) — 4d</option>
+                  <option value="Penicillin G|10|IM">Penicillin G — 10d</option>
+                </optgroup>
+                <optgroup label="Antiparasitic / Dewormers">
+                  <option value="Ivermectin Pour-On|48|topical">Ivermectin Pour-On — 48d</option>
+                  <option value="Ivermectin Injectable|35|SQ">Ivermectin Injectable — 35d</option>
+                  <option value="Dectomax Pour-On|45|topical">Dectomax Pour-On — 45d</option>
+                  <option value="Dectomax Injectable|35|SQ">Dectomax Injectable — 35d</option>
+                  <option value="Cydectin Pour-On|0|topical">Cydectin Pour-On — 0d</option>
+                  <option value="Cydectin Injectable|17|SQ">Cydectin Injectable — 17d</option>
+                  <option value="Safe-Guard|8|oral">Safe-Guard (fenbendazole) — 8d</option>
+                  <option value="Valbazen|27|oral">Valbazen (albendazole) — 27d</option>
+                  <option value="Prohibit|7|oral">Prohibit (levamisole) — 7d</option>
+                </optgroup>
+                <optgroup label="Anti-inflammatories">
+                  <option value="Banamine|4|IV">Banamine (flunixin) — 4d</option>
+                  <option value="Metacam|21|SQ">Metacam (meloxicam) — 21d</option>
+                  <option value="Dexamethasone|0|IM">Dexamethasone — 0d</option>
+                </optgroup>
+                <optgroup label="Vaccines">
+                  <option value="Bovishield Gold 5|0|SQ">Bovishield Gold 5 — 0d</option>
+                  <option value="Bovishield Gold FP 5|0|SQ">Bovishield Gold FP 5 — 0d</option>
+                  <option value="Vista Once SQ|0|SQ">Vista Once SQ — 0d</option>
+                  <option value="Pyramid 5|0|SQ">Pyramid 5 — 0d</option>
+                  <option value="Cattlemaster Gold FP5|0|SQ">Cattlemaster Gold FP5 — 0d</option>
+                  <option value="Triangle 5|0|SQ">Triangle 5 — 0d</option>
+                  <option value="Express FP|0|SQ">Express FP — 0d</option>
+                  <option value="Lepto Shield|0|SQ">Lepto Shield — 0d</option>
+                  <option value="Vision 7|0|SQ">Vision 7 (clostridial) — 0d</option>
+                  <option value="Ultra Choice 7|0|SQ">Ultra Choice 7 — 0d</option>
+                  <option value="Covexin 8|0|SQ">Covexin 8 — 0d</option>
+                  <option value="Piliguard Pinkeye|0|SQ">Piliguard Pinkeye — 0d</option>
+                  <option value="Nasalgen|0|intranasal">Nasalgen (IBRV intranasal) — 0d</option>
+                  <option value="ScourGuard 4K|0|SQ">ScourGuard 4K — 0d</option>
+                  <option value="Bar-Vac CD/T|0|SQ">Bar-Vac CD/T — 0d</option>
+                </optgroup>
+                <optgroup label="Reproductive / Hormones">
+                  <option value="CIDR|0|intravaginal">CIDR (progesterone) — 0d</option>
+                  <option value="Estrumate|0|IM">Estrumate (PGF2α) — 0d</option>
+                  <option value="Lutalyse|0|IM">Lutalyse (PGF2α) — 0d</option>
+                  <option value="Factrel|0|IM">Factrel (GnRH) — 0d</option>
+                  <option value="Cystorelin|0|IM">Cystorelin (GnRH) — 0d</option>
+                  <option value="Fertagyl|0|IM">Fertagyl (GnRH) — 0d</option>
+                  <option value="OvaCyst|0|IM">OvaCyst (GnRH) — 0d</option>
+                  <option value="ECP|0|IM">ECP (estradiol cypionate) — 0d</option>
+                  <option value="MGA (in feed)|0|oral">MGA (melengestrol acetate) — 0d</option>
+                </optgroup>
+                <optgroup label="Other">
+                  <option value="Vitamin A&D|0|IM">Vitamin A&D — 0d</option>
+                  <option value="Vitamin B Complex|0|IM">Vitamin B Complex — 0d</option>
+                  <option value="Vitamin E/Selenium|0|IM">Vitamin E / Selenium — 0d</option>
+                  <option value="BoSe|30|IM">BoSe (selenium) — 30d</option>
+                  <option value="MuSe|30|IM">MuSe (selenium) — 30d</option>
+                  <option value="Epinephrine|0|SQ">Epinephrine — 0d</option>
+                  <option value="Dextrose 50%|0|IV">Dextrose 50% — 0d</option>
+                  <option value="Calcium (CMPK)|0|SQ">Calcium / CMPK — 0d</option>
+                  <option value="custom||">+ Enter custom product...</option>
+                </optgroup>
+              </select>
+            </div>
+            <input type="text" id="h-product" placeholder="Or type product name here" style="margin-top:6px">
+          </div>
           <div class="form-row">
             <div class="form-group"><label>Dosage</label><input type="text" id="h-dosage" placeholder="e.g. 5ml"></div>
             <div class="form-group"><label>Route</label>
@@ -1294,8 +1372,21 @@ function showHealthTab(tab) {
   if(tab==='withdrawal') renderWithdrawal();
 }
 
+function autofillDrug() {
+  const sel = document.getElementById('h-product-select');
+  const val = sel.value;
+  if(!val || val === 'custom||') {
+    document.getElementById('h-product').value = '';
+    document.getElementById('h-product').focus();
+    return;
+  }
+  const [name, days, route] = val.split('|');
+  document.getElementById('h-product').value = name;
+  document.getElementById('h-withdrawal').value = days || '0';
+  if(route) document.getElementById('h-route').value = route;
+}
+
 async function saveHealth() {
-  const animal = document.getElementById('h-animal').value.trim();
   const date = document.getElementById('h-date').value;
   if(!animal||!date){alert('Animal tag and date are required.');return;}
   const wd = parseInt(document.getElementById('h-withdrawal').value)||0;
@@ -1312,6 +1403,8 @@ async function saveHealth() {
   });
   if(error){alert('Error: '+error.message);return;}
   ['h-animal','h-product','h-dosage','h-cost','h-withdrawal','h-by','h-notes'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('h-product-select').value='';
+  document.getElementById('h-route').value='';
   alert(`✅ Health event saved for ${animal}${wd>0?' · Withdrawal: '+wd+'d':''}`);
 }
 
