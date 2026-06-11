@@ -4179,10 +4179,10 @@ async function importEPDs(event) {
   const text=await file.text();
   if(!text||!text.trim()){alert('File appears to be empty');return;}
   const firstLine=text.split(/\r?\n/).find(l=>l.trim());
-  const isSEN=firstLine&&firstLine.length>300;
   const isLeachman=firstLine&&firstLine.includes('LC $Profit');
-  if(isSEN){await importSENFile(text);}
-  else if(isLeachman){await importLeachmanCSV(text);}
+  const isSEN=firstLine&&firstLine.length>300&&!isLeachman&&!firstLine.includes(',');
+  if(isLeachman){await importLeachmanCSV(text);}
+  else if(isSEN){await importSENFile(text);}
   else{await importEPDCSV(text);}
 }
 
@@ -4199,6 +4199,11 @@ async function importLeachmanCSV(text) {
   const iFeeder=col('LC $Feeder'), iTerminal=col('LC $Terminal');
   const iFert=col('LC ABC FERT'), iBS=col('LC ABC BS'), iTS=col('LC ABC TS');
   const iTag=col('Visual Tag'), iPrefix=col('AR Prefix');
+
+  // Debug - check column detection
+  console.log('LC Import cols:', {iProfit,iRanch,iFeeder,iTerminal,iFert,iBS,iTS,iTag,iPrefix});
+  console.log('Total lines:', lines.length);
+  console.log('Sample line 2:', lines[1]?.substring(0,100));
 
   // Load animals for matching
   const {data:freshAnimals}=await dbSelect('animals');
@@ -4221,7 +4226,7 @@ async function importLeachmanCSV(text) {
       a.tag==='H2R-'+tag
     );
 
-    if(!match){skipped++;continue;}
+    if(!match){skipped++;if(skipped<=3)console.log('No match for:',fullTag,tag);continue;}
 
     const profit=parseFloat(clean(vals[iProfit]))||null;
     const ranch=parseFloat(clean(vals[iRanch]))||null;
