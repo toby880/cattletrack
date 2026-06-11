@@ -1404,7 +1404,7 @@ async function renderSireAnalysis(content) {
   const sireStats = {};
 
   calving.forEach(r => {
-    const sire = r.sire_tag || 'Unknown';
+    const sire = (r.sire_tag || 'Unknown').toUpperCase().trim();
     if(!sireStats[sire]) sireStats[sire] = {
       name: sire, calves: 0, bulls: 0, heifers: 0,
       birthWeights: [], easeScores: [], weaningWeights: [],
@@ -1423,7 +1423,7 @@ async function renderSireAnalysis(content) {
 
   // Add AI conception data
   aiRecords.forEach(r => {
-    const sire = r.sire || 'Unknown';
+    const sire = (r.sire || 'Unknown').toUpperCase().trim();
     if(!sireStats[sire]) sireStats[sire] = {
       name: sire, calves: 0, bulls: 0, heifers: 0,
       birthWeights: [], easeScores: [], weaningWeights: [],
@@ -1476,7 +1476,7 @@ async function renderSireAnalysis(content) {
         <div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
             <div>
-              <div style="font-size:16px;font-weight:700">${s.name}</div>
+              <div style="font-size:16px;font-weight:700">${s.name.replace(/\b\w/g,c=>c.toUpperCase())}</div>
               <div style="font-size:12px;color:var(--gray);margin-top:2px">${s.calves} calves · ${s.bulls}B ${s.heifers}H</div>
             </div>
             <div style="text-align:center;background:var(--bg2);border-radius:8px;padding:6px 12px">
