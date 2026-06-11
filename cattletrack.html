@@ -4239,7 +4239,8 @@ async function importLeachmanCSV(text) {
     if(!profit&&!ranch&&!feeder&&!terminal){skipped++;continue;}
 
     // Check if EPD record exists
-    const {data:existing}=await sb.from('epds').select('id').eq('animal_tag',match.tag).eq('ranch_id',currentRanch.id).single();
+    const {data:existingArr}=await sb.from('epds').select('id').eq('animal_tag',match.tag).eq('ranch_id',currentRanch.id);
+    const existing=existingArr&&existingArr.length>0?existingArr[0]:null;
 
     let error;
     if(existing){
