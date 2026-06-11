@@ -3755,7 +3755,7 @@ function parseSENLine(line) {
     const docPos=allNums[epdStart+15].pos;
     const rawAfter=line.substring(docPos);
     // Skip to after contemporaries (3-4 digit integer preceded by 2+ spaces)
-    const contM=rawAfter.match(/\s{2,}(\d{3,4})\s*/);
+    const contM=rawAfter.match(/\s{2,}-?(\d{3,4})\s*/);
     if(contM){
       let rest=rawAfter.substring(contM.index+contM[0].length);
       // Truncate at first uppercase letter (start of pedigree tag)
