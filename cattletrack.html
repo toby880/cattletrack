@@ -2016,11 +2016,24 @@ async function showProfileTab(tab) {
       });
     }
     content.innerHTML = `
-      <div class="card" style="margin-bottom:10px"><div class="card-title">RAAA EPDs</div>${display||'<div style="color:var(--gray-lt);font-size:13px">No EPDs recorded yet.</div>'}</div>
+      <div class="card" style="margin-bottom:10px"><div class="card-title">RAAA EPDs</div>${display||'<div style="color:var(--gray-lt);font-size:13px">No EPDs recorded yet. Import your RAAA Pro Extract (.sen) below.</div>'}</div>
+      ${epds&&(epds.lc_profit||epds.lc_ranch) ? `
+      <div class="card" style="margin-bottom:10px">
+        <div class="card-title">Leachman Indexes</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          ${epds.lc_profit!=null?`<div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:18px;font-weight:800;color:var(--orange)">${epds.lc_profit.toLocaleString()}</div><div style="font-size:11px;color:var(--gray)">$Profit</div></div>`:''}
+          ${epds.lc_ranch!=null?`<div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:18px;font-weight:800;color:var(--orange)">${epds.lc_ranch.toFixed(2)}</div><div style="font-size:11px;color:var(--gray)">$Ranch</div></div>`:''}
+          ${epds.lc_feeder!=null?`<div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:18px;font-weight:800">${epds.lc_feeder.toFixed(2)}</div><div style="font-size:11px;color:var(--gray)">$Feeder</div></div>`:''}
+          ${epds.lc_terminal!=null?`<div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:18px;font-weight:800">${epds.lc_terminal.toLocaleString()}</div><div style="font-size:11px;color:var(--gray)">$Terminal</div></div>`:''}
+          ${epds.lc_fert!=null?`<div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:18px;font-weight:800">${epds.lc_fert.toFixed(2)}</div><div style="font-size:11px;color:var(--gray)">Fertility</div></div>`:''}
+          ${epds.lc_bs!=null?`<div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:18px;font-weight:800">${epds.lc_bs.toFixed(2)}</div><div style="font-size:11px;color:var(--gray)">Body Structure</div></div>`:''}
+          ${epds.lc_ts!=null?`<div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:18px;font-weight:800">${epds.lc_ts.toFixed(2)}</div><div style="font-size:11px;color:var(--gray)">Teat/Udder</div></div>`:''}
+        </div>
+      </div>` : ''}
       <div class="card">
-        <div class="card-title">Update EPDs</div>
-        <div class="form-group"><label>Import RAAA Pro Extract (.sen) or CSV</label><input type="file" id="epd-import" onchange="importEPDs(event)" style="font-size:13px"></div>
-        <div style="font-size:12px;color:var(--gray);margin-bottom:12px">Upload your RAAA Pro Extract (.sen) to import EPDs, pedigree and names for your whole herd at once. Or enter manually below:</div>
+        <div class="card-title">Import Data</div>
+        <div class="form-group"><label>RAAA Pro Extract (.sen) or Leachman CSV</label><input type="file" id="epd-import" onchange="importEPDs(event)" style="font-size:13px" accept=".sen,.csv,.txt"></div>
+        <div style="font-size:12px;color:var(--gray);margin-bottom:12px">Upload your RAAA Pro Extract (.sen) to update EPDs and pedigree for all animals. Upload your Leachman CSV to import $Profit, $Ranch, $Feeder, $Terminal, Fertility, BS, and TS scores.</div>
         <div class="form-row">${['bw','ww','yw','adg','dmi','milk','hpg','cem','mw','stay','fat','rea','marbling','ced','me','hb','gm','pro'].map(f=>`<div class="form-group"><label>${labels[f]}</label><input type="number" id="epd-${f}" value="${epds?.[f]??''}" step="0.01" placeholder="0.0"></div>`).join('')}</div>
         <button class="btn btn-primary" onclick="saveEPDs('${tag}')">Save EPDs</button>
       </div>`;
@@ -4167,7 +4180,72 @@ async function importEPDs(event) {
   if(!text||!text.trim()){alert('File appears to be empty');return;}
   const firstLine=text.split(/\r?\n/).find(l=>l.trim());
   const isSEN=firstLine&&firstLine.length>300;
-  if(isSEN){await importSENFile(text);}else{await importEPDCSV(text);}
+  const isLeachman=firstLine&&firstLine.includes('LC $Profit');
+  if(isSEN){await importSENFile(text);}
+  else if(isLeachman){await importLeachmanCSV(text);}
+  else{await importEPDCSV(text);}
+}
+
+async function importLeachmanCSV(text) {
+  const lines = text.split(/\r?\n/).filter(l=>l.trim());
+  if(lines.length < 2){alert('No data found');return;}
+
+  // Parse headers
+  const clean = s => (s||'').replace(/^="?|"?$/g,'').trim();
+  const headers = lines[0].split(',').map(h=>h.replace(/"/g,'').trim());
+
+  const col = name => headers.indexOf(name);
+  const iProfit=col('LC $Profit'), iRanch=col('LC $Ranch');
+  const iFeeder=col('LC $Feeder'), iTerminal=col('LC $Terminal');
+  const iFert=col('LC ABC FERT'), iBS=col('LC ABC BS'), iTS=col('LC ABC TS');
+  const iTag=col('Visual Tag'), iPrefix=col('AR Prefix');
+
+  // Load animals for matching
+  const {data:freshAnimals}=await dbSelect('animals');
+  if(freshAnimals)cache.set('animals',freshAnimals);
+  const animals=cache.get('animals')||[];
+
+  let imported=0, skipped=0;
+  for(let i=1;i<lines.length;i++){
+    const vals=lines[i].split(',');
+    const tag=clean(vals[iTag]);
+    const prefix=clean(vals[iPrefix]);
+    if(!tag)continue;
+
+    // Build full tag to match against animals
+    const fullTag=prefix?`${prefix}-${tag}`:tag;
+
+    // Try to match animal
+    const match=animals.find(a=>
+      a.tag===fullTag||
+      a.tag===tag||
+      a.tag==='H2R-'+tag
+    );
+
+    if(!match){skipped++;continue;}
+
+    const profit=parseFloat(vals[iProfit])||null;
+    const ranch=parseFloat(vals[iRanch])||null;
+    const feeder=parseFloat(vals[iFeeder])||null;
+    const terminal=parseFloat(vals[iTerminal])||null;
+    const fert=parseFloat(vals[iFert])||null;
+    const bs=parseFloat(vals[iBS])||null;
+    const ts=parseFloat(vals[iTS])||null;
+
+    if(!profit&&!ranch&&!feeder&&!terminal){skipped++;continue;}
+
+    const {error}=await sb.from('epds').upsert({
+      animal_tag:match.tag,ranch_id:currentRanch.id,
+      lc_profit:profit,lc_ranch:ranch,
+      lc_feeder:feeder,lc_terminal:terminal,
+      lc_fert:fert,lc_bs:bs,lc_ts:ts,
+    },{onConflict:'animal_tag,ranch_id',ignoreDuplicates:false});
+
+    if(!error)imported++;else skipped++;
+  }
+
+  alert(`✅ Leachman data imported for ${imported} animals.\n${skipped} skipped (no matching animal or no data).`);
+  if(currentAnimal)showProfileTab('epds');
 }
 
 async function importSENFile(text) {
