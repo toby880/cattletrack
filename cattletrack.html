@@ -359,6 +359,7 @@ tr:hover td{background:var(--bg)}
         <button class="tab" onclick="showProfileTab('offspring')">Offspring</button>
         <button class="tab" onclick="showProfileTab('performance')">Performance</button>
         <button class="tab" onclick="showProfileTab('health')">Health</button>
+        <button class="tab" onclick="showProfileTab('measurements')">Measurements</button>
         <button class="tab" onclick="showProfileTab('pedigree')">Pedigree</button>
         <button class="tab" onclick="showProfileTab('epds')">EPDs</button>
         <button class="tab" onclick="showProfileTab('embryo')">Embryo</button>
@@ -2046,6 +2047,74 @@ async function showProfileTab(tab) {
       : '<div class="empty"><div class="empty-icon">🐄</div><p>No offspring on record.</p></div>';
   }
 
+  if(tab==='measurements') {
+    const {data:meas} = await sb.from('measurements').select('*')
+      .eq('ranch_id',currentRanch.id).eq('animal_tag',tag)
+      .order('measure_date',{ascending:false});
+    const today = new Date().toISOString().split('T')[0];
+    const scoreLabel = (score,max) => {
+      if(score==null) return '—';
+      const pct = score/max;
+      const color = pct>=0.7?'var(--green)':pct>=0.4?'var(--orange)':'var(--red)';
+      return `<span style="font-size:20px;font-weight:800;color:${color}">${score}</span><span style="font-size:11px;color:var(--gray)">/${max}</span>`;
+    };
+    const latest = meas?.[0];
+    content.innerHTML = `
+      ${latest ? `
+      <div class="card" style="margin-bottom:10px">
+        <div class="card-title">Latest Scores <span style="font-size:12px;font-weight:400;color:var(--gray)">${latest.measure_date||''}</span></div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center;padding:8px 0">
+          <div style="background:var(--bg2);border-radius:8px;padding:12px">
+            <div>${scoreLabel(latest.bag_score,9)}</div>
+            <div style="font-size:11px;color:var(--gray);margin-top:4px">Bag Score</div>
+          </div>
+          <div style="background:var(--bg2);border-radius:8px;padding:12px">
+            <div>${scoreLabel(latest.teat_score,9)}</div>
+            <div style="font-size:11px;color:var(--gray);margin-top:4px">Teat Score</div>
+          </div>
+          <div style="background:var(--bg2);border-radius:8px;padding:12px">
+            <div>${scoreLabel(latest.hair_shed_score,5)}</div>
+            <div style="font-size:11px;color:var(--gray);margin-top:4px">Hair Shed</div>
+          </div>
+          ${latest.bcs!=null?`<div style="background:var(--bg2);border-radius:8px;padding:12px"><div>${scoreLabel(latest.bcs,9)}</div><div style="font-size:11px;color:var(--gray);margin-top:4px">BCS</div></div>`:''}
+          ${latest.frame_score!=null?`<div style="background:var(--bg2);border-radius:8px;padding:12px"><div><span style="font-size:20px;font-weight:800">${latest.frame_score}</span></div><div style="font-size:11px;color:var(--gray);margin-top:4px">Frame Score</div></div>`:''}
+        </div>
+        ${latest.notes?`<div style="font-size:12px;color:var(--gray);padding-top:8px;border-top:1px solid var(--border)">${latest.notes}</div>`:''}
+      </div>` : ''}
+      ${meas&&meas.length>1?`
+      <div class="card" style="margin-bottom:10px">
+        <div class="card-title">History</div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Date</th><th>Bag</th><th>Teat</th><th>Hair Shed</th><th>BCS</th><th>Notes</th></tr></thead>
+          <tbody>${meas.map(m=>`<tr>
+            <td>${m.measure_date||'—'}</td>
+            <td>${m.bag_score!=null?m.bag_score:'—'}</td>
+            <td>${m.teat_score!=null?m.teat_score:'—'}</td>
+            <td>${m.hair_shed_score!=null?m.hair_shed_score:'—'}</td>
+            <td>${m.bcs!=null?m.bcs:'—'}</td>
+            <td style="font-size:12px;color:var(--gray)">${m.notes||'—'}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+      </div>` : ''}
+      <div class="card">
+        <div class="card-title">Add Measurement</div>
+        <div class="form-row">
+          <div class="form-group"><label>Date</label><input type="date" id="meas-date" value="${today}"></div>
+          <div class="form-group"><label>Bag Score (1-9)</label><input type="number" id="meas-bag" min="1" max="9" placeholder="—" inputmode="numeric"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Teat Score (1-9)</label><input type="number" id="meas-teat" min="1" max="9" placeholder="—" inputmode="numeric"></div>
+          <div class="form-group"><label>Hair Shed Score (1-5)</label><input type="number" id="meas-hair" min="1" max="5" placeholder="—" inputmode="numeric"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>BCS (1-9)</label><input type="number" id="meas-bcs" min="1" max="9" step="0.5" placeholder="—" inputmode="decimal"></div>
+          <div class="form-group"><label>Frame Score</label><input type="number" id="meas-frame" min="1" max="9" step="0.1" placeholder="—" inputmode="decimal"></div>
+        </div>
+        <div class="form-group"><label>Notes</label><input type="text" id="meas-notes" placeholder="Any observations..."></div>
+        <button class="btn btn-primary" onclick="saveMeasurement('${tag}')">Save Measurement</button>
+      </div>`;
+  }
+
   if(tab==='pedigree') {
     const {data: ped} = await sb.from('pedigrees').select('*').eq('ranch_id',currentRanch.id).eq('animal_tag',tag).single();
     content.innerHTML = `
@@ -3713,6 +3782,30 @@ async function applyGroupAction() {
   loadAnimals();
 }
 
+async function saveMeasurement(tag) {
+  const date = document.getElementById('meas-date')?.value;
+  const bag = document.getElementById('meas-bag')?.value;
+  const teat = document.getElementById('meas-teat')?.value;
+  const hair = document.getElementById('meas-hair')?.value;
+  const bcs = document.getElementById('meas-bcs')?.value;
+  const frame = document.getElementById('meas-frame')?.value;
+  const notes = document.getElementById('meas-notes')?.value?.trim();
+  if(!date){alert('Date is required.');return;}
+  if(!bag&&!teat&&!hair&&!bcs&&!frame){alert('Enter at least one measurement.');return;}
+  const {error}=await dbInsert('measurements',{
+    animal_tag:tag,ranch_id:currentRanch.id,
+    measure_date:date,
+    bag_score:bag?parseInt(bag):null,
+    teat_score:teat?parseInt(teat):null,
+    hair_shed_score:hair?parseInt(hair):null,
+    bcs:bcs?parseFloat(bcs):null,
+    frame_score:frame?parseFloat(frame):null,
+    notes:notes||null,
+  });
+  if(error){alert('Error: '+error.message);return;}
+  alert('\u2705 Measurement saved for '+tag);
+  showProfileTab('measurements');
+}
 
 function openEditAnimal() {
   if(!currentAnimal) return;
