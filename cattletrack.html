@@ -1519,7 +1519,7 @@ async function showProfileTab(tab) {
 
   if(tab==='epds') {
     const {data: epds} = await sb.from('epds').select('*').eq('ranch_id', currentRanch.id).eq('animal_tag', tag).single();
-    const groups = {Growth:['bw','ww','yw','adg','dmi'],Maternal:['milk','mw','stay','hpg'],Carcass:['rea','fat','marbling'],Calving:['ced','cem'],Indexes:['hb','gm','pro'],Other:['me','doc']};
+    const groups = {Growth:['bw','ww','yw','adg','dmi'],Maternal:['milk','mw','stay','hpg'],Carcass:['rea','fat','marbling'],Calving:['ced','cem'],Indexes:['hb','gm','pro'],Other:['me']};
     const labels = {bw:'BW',ww:'WW',yw:'YW',adg:'ADG',dmi:'DMI',milk:'Milk',hpg:'HPG',cem:'CEM',mw:'MW',stay:'Stay',fat:'FAT',rea:'REA',marbling:'Marbling',ced:'CED',me:'ME',doc:'Doc',hb:'HerdBuilder',gm:'GridMaster',pro:'PROs',ced:'CED',ww:'WW',yw:'YW',radg:'RADG',dmi:'DMI',milk:'Milk',mw:'MW',mh:'MH',cem:'CEM',rea:'REA',fat:'FAT'};
     let display = '';
     if(epds) {
@@ -1534,7 +1534,7 @@ async function showProfileTab(tab) {
         <div class="card-title">Update EPDs</div>
         <div class="form-group"><label>Import RAAA Pro Extract (.sen) or CSV</label><input type="file" id="epd-import" onchange="importEPDs(event)" style="font-size:13px"></div>
         <div style="font-size:12px;color:var(--gray);margin-bottom:12px">Upload your RAAA Pro Extract (.sen) to import EPDs, pedigree and names for your whole herd at once. Or enter manually below:</div>
-        <div class="form-row">${['bw','ww','yw','adg','dmi','milk','hpg','cem','mw','stay','fat','rea','marbling','ced','me','doc','hb','gm','pro'].map(f=>`<div class="form-group"><label>${labels[f]}</label><input type="number" id="epd-${f}" value="${epds?.[f]??''}" step="0.01" placeholder="0.0"></div>`).join('')}</div>
+        <div class="form-row">${['bw','ww','yw','adg','dmi','milk','hpg','cem','mw','stay','fat','rea','marbling','ced','me','hb','gm','pro'].map(f=>`<div class="form-group"><label>${labels[f]}</label><input type="number" id="epd-${f}" value="${epds?.[f]??''}" step="0.01" placeholder="0.0"></div>`).join('')}</div>
         <button class="btn btn-primary" onclick="saveEPDs('${tag}')">Save EPDs</button>
       </div>`;
   }
@@ -3651,7 +3651,7 @@ async function deleteInventoryItem(id, name) {
 
 // ── EPDs, PEDIGREE & SEN IMPORT ────────────────────────────────────────────
 async function saveEPDs(tag) {
-  const fields=['bw','ww','yw','adg','dmi','milk','hpg','cem','mw','stay','fat','rea','marbling','ced','me','doc','hb','gm','pro'];
+  const fields=['bw','ww','yw','adg','dmi','milk','hpg','cem','mw','stay','fat','rea','marbling','ced','me','hb','gm','pro'];
   const data={animal_tag:tag,ranch_id:currentRanch.id};
   fields.forEach(f=>{const v=document.getElementById('epd-'+f)?.value;if(v!==''&&v!==undefined&&v!==null)data[f]=parseFloat(v);});
   await sb.from('epds').upsert(data,{onConflict:'animal_tag,ranch_id'});
@@ -3738,7 +3738,7 @@ function parseSENLine(line) {
   // Find block using BW/WW/YW ranges: BW -10 to +10, WW 30-110, YW 60-170
   const allNums=[];const numRe=/-?\d+\.\d+/g;let nm;
   while((nm=numRe.exec(line))!==null)allNums.push({pos:nm.index,val:parseFloat(nm[0])});
-  const epdNames=['bw','ww','yw','adg','dmi','milk','hpg','cem','mw','stay','fat','rea','marbling','ced','me','doc'];
+  const epdNames=['bw','ww','yw','adg','dmi','milk','hpg','cem','mw','stay','fat','rea','marbling','ced','me','unknown16'];
   let epdStart=-1;
   for(let i=0;i<allNums.length-15;i++){
     const bw=allNums[i].val,ww=allNums[i+1].val,yw=allNums[i+2].val;
