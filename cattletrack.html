@@ -2026,7 +2026,7 @@ async function showProfileTab(tab) {
           ${epds.lc_feeder!=null?`<div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:18px;font-weight:800">${epds.lc_feeder.toFixed(2)}</div><div style="font-size:11px;color:var(--gray)">$Feeder</div></div>`:''}
           ${epds.lc_terminal!=null?`<div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:18px;font-weight:800">${epds.lc_terminal.toLocaleString()}</div><div style="font-size:11px;color:var(--gray)">$Terminal</div></div>`:''}
           ${epds.lc_fert!=null?`<div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:18px;font-weight:800">${epds.lc_fert.toFixed(2)}</div><div style="font-size:11px;color:var(--gray)">Fertility</div></div>`:''}
-          ${epds.lc_bs!=null?`<div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:18px;font-weight:800">${epds.lc_bs.toFixed(2)}</div><div style="font-size:11px;color:var(--gray)">Body Structure</div></div>`:''}
+          ${epds.lc_bs!=null?`<div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:18px;font-weight:800">${epds.lc_bs.toFixed(2)}</div><div style="font-size:11px;color:var(--gray)">Bag Score</div></div>`:''}
           ${epds.lc_ts!=null?`<div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:18px;font-weight:800">${epds.lc_ts.toFixed(2)}</div><div style="font-size:11px;color:var(--gray)">Teat/Udder</div></div>`:''}
         </div>
       </div>` : ''}
@@ -4200,10 +4200,6 @@ async function importLeachmanCSV(text) {
   const iFert=col('LC ABC FERT'), iBS=col('LC ABC BS'), iTS=col('LC ABC TS');
   const iTag=col('Visual Tag'), iPrefix=col('AR Prefix');
 
-  // Debug - check column detection
-  console.log('LC Import cols:', {iProfit,iRanch,iFeeder,iTerminal,iFert,iBS,iTS,iTag,iPrefix});
-  console.log('Total lines:', lines.length);
-  console.log('Sample line 2:', lines[1]?.substring(0,100));
 
   // Load animals for matching
   const {data:freshAnimals}=await dbSelect('animals');
@@ -4226,7 +4222,7 @@ async function importLeachmanCSV(text) {
       a.tag==='H2R-'+tag
     );
 
-    if(!match){skipped++;if(skipped<=3)console.log('No match for:',fullTag,tag);continue;}
+    if(!match){skipped++;continue;}
 
     const profit=parseFloat(clean(vals[iProfit]))||null;
     const ranch=parseFloat(clean(vals[iRanch]))||null;
