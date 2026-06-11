@@ -3729,7 +3729,7 @@ function parseSENLine(line) {
   a.tag=line.substring(80,84).trim();
   a.herd_prefix=line.substring(86,89).trim();
   a.herd_tag=(a.herd_prefix&&a.tag)?a.herd_prefix+'-'+a.tag:a.tag;
-  const nameM=line.match(/RA[A-Z]\d\s+([\w][\w\s]+?)\s{2,}P12/);
+  const nameM=line.match(/R[A-Z0-9][A-Z]\d\s+([\w][\w\s]+?)\s{2,}P8?\d{3}/);
   if(nameM)a.name=nameM[1].trim();
   const dobM=line.match(/P12(\d{4})(\d{2})(\d{2})/);
   if(dobM){const y=parseInt(dobM[1]),mo=parseInt(dobM[2]),d=parseInt(dobM[3]);if(y>1980&&y<2030&&mo>=1&&mo<=12&&d>=1&&d<=31)a.dob=`${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;}
@@ -3738,12 +3738,12 @@ function parseSENLine(line) {
   // Find block using BW/WW/YW ranges: BW -10 to +10, WW 30-110, YW 60-170
   const allNums=[];const numRe=/-?\d+\.\d+/g;let nm;
   while((nm=numRe.exec(line))!==null)allNums.push({pos:nm.index,val:parseFloat(nm[0])});
-  const epdNames=['bw','ww','yw','adg','dmi','milk','hpg','cem','mw','stay','fat','rea','marbling','ced','me','unknown16'];
+  const epdNames=['bw','ww','yw','adg','dmi','milk','hpg','cem','mw','stay','fat','rea','marbling','ced','me',null];
   let epdStart=-1;
   for(let i=0;i<allNums.length-15;i++){
     const bw=allNums[i].val,ww=allNums[i+1].val,yw=allNums[i+2].val;
     if(bw>=-10&&bw<=10&&ww>=30&&ww<=110&&yw>=60&&yw<=170){
-      for(let j=0;j<epdNames.length;j++){if(i+j<allNums.length)a.epds[epdNames[j]]=allNums[i+j].val;}
+      for(let j=0;j<epdNames.length;j++){if(i+j<allNums.length&&epdNames[j])a.epds[epdNames[j]]=allNums[i+j].val;}
       epdStart=i;break;
     }
   }
