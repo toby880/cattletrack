@@ -3780,22 +3780,35 @@ function parseSENLine(line) {
     }
   }
 
-  // Pedigree - find start after accuracy % block (two small decimals like "65.3 76.6")
-  const accM=line.match(/(\d{1,2}\.\d)\s+(\d{1,2}\.\d)\s*([A-Z])/);
-  const pedStart=accM?line.indexOf(accM[3],line.indexOf(accM[0])+accM[0].length-1):Math.floor(line.length*0.6);
-  const pedSection=line.substring(pedStart);
-  const pedRoles=['sire','dam','pgs','pgd','mgs','mgd'];
-  const pedRe=/([A-Z][A-Z0-9]{1,6})\s{1,5}([\w][\w\s\.\/]+?)\s{3,}(?:UAR|UAN|RAA|RAB|RAC|RED|RAN)\s+(\d{5,10})/g;
-  let pm;let pi=0;
-  while((pm=pedRe.exec(pedSection))!==null&&pi<pedRoles.length){
-    const ptag=pm[1].trim();
-    const pname=pm[2].trim().replace(/\s+/g,' ').replace(/\s*UAR\s*\d+.*$/,'').trim();
-    const preg=pm[3].trim();
-    if(ptag.length>=2&&ptag.length<=7&&!/^\d+$/.test(ptag)&&ptag!=='UAR'&&ptag!=='UAN'){
-      a.pedigree[pedRoles[pi]]=ptag;
-      a.pedigree[pedRoles[pi]+'_name']=pname;
-      a.pedigree[pedRoles[pi]+'_reg']=preg;
-      pi++;
+  // Pedigree - fixed-width 47-char records after index block
+  // Find first UAR/UAN after EPD/index section, then parse backwards in 47-char chunks
+  if(epdStart>=0 && epdStart+15<allNums.length){
+    const rawAfter=line.substring(allNums[epdStart+15].pos);
+    const firstUar=rawAfter.match(/(?:UAR|UAN)\s+\d+/);
+    if(firstUar){
+      const uarIdx=rawAfter.indexOf(firstUar[0]);
+      const pedStart=Math.max(0, uarIdx-34);
+      const pedSection=rawAfter.substring(pedStart);
+      const pedRoles=['sire','dam','pgs','pgd','mgs','mgd'];
+      let pi=0;
+      const uarRe=/(?:UAR|UAN)\s+\d+/g;
+      let um;
+      while((um=uarRe.exec(pedSection))!==null && pi<6){
+        const recStart=Math.max(0,um.index-34);
+        const rec=pedSection.substring(recStart,um.index);
+        const parts=rec.trim().split(/\s+/,2);
+        if(parts.length<1)continue;
+        const ptag=parts[0].trim();
+        const pname=rec.trim().substring(ptag.length).trim();
+        const regM=um[0].match(/\d+/);
+        const preg=regM?regM[0].substring(0,7):'';
+        if(ptag&&ptag!=='UAR'&&ptag!=='UAN'&&ptag.length>=2&&preg){
+          a.pedigree[pedRoles[pi]]=ptag;
+          a.pedigree[pedRoles[pi]+'_name']=pname;
+          a.pedigree[pedRoles[pi]+'_reg']=preg;
+          pi++;
+        }
+      }
     }
   }
   return a;
