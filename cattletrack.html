@@ -3749,23 +3749,33 @@ function parseSENLine(line) {
   }
 
   // Find HB GM PRO indexes after EPD block
-  // Pattern after doc EPD: [doc_val]  [contemporaries 3-4 digits]  [PRO 2-3 digits]  [HB.x][GM.x] (may run together)
+  // Format: unknown16_val  contemporaries  PRO  HB  GM  [pedigree]
+  // Numbers may be concatenated in various ways
   if(epdStart>=0 && epdStart+15<allNums.length){
     const docPos=allNums[epdStart+15].pos;
     const rawAfter=line.substring(docPos);
-    // PRO is integer after contemporaries, HB and GM are decimals (may be concatenated like "60.2108.6")
-    const idxM=rawAfter.match(/\s(\d{3,4})\s+(\d{2,3})\s+(\d{2,3}\.\d)(\d{2,3}\.\d)/);
-    if(idxM){
-      a.epds.pro=parseFloat(idxM[2]);
-      a.epds.hb=parseFloat(idxM[3]);
-      a.epds.gm=parseFloat(idxM[4]);
-    } else {
-      // Try with space between HB and GM
-      const idxM2=rawAfter.match(/\s(\d{3,4})\s+(\d{2,3})\s+(\d{2,3}\.\d)\s+(\d{2,3}\.\d)/);
-      if(idxM2){
-        a.epds.pro=parseFloat(idxM2[2]);
-        a.epds.hb=parseFloat(idxM2[3]);
-        a.epds.gm=parseFloat(idxM2[4]);
+    // Skip to after contemporaries (3-4 digit integer preceded by 2+ spaces)
+    const contM=rawAfter.match(/\s{2,}(\d{3,4})\s*/);
+    if(contM){
+      let rest=rawAfter.substring(contM.index+contM[0].length);
+      // Truncate at first uppercase letter (start of pedigree tag)
+      rest=rest.split(/[A-Z]/)[0];
+      // Try all concatenation patterns: PRO(int), HB(xx.x), GM(xxx.x)
+      const patterns=[
+        /^(\d{2,3})\s+(\d{2,3}\.\d)\s+(\d{2,3}\.\d)/,   // all spaced
+        /^(\d{2,3})(\d{2,3}\.\d)\s+(\d{2,3}\.\d)/,        // PRO+HB concat
+        /^(\d{2,3})\s+(\d{2,3}\.\d)(\d{2,3}\.\d)/,        // HB+GM concat
+        /^(\d{2,3})(\d{2,3}\.\d)(\d{2,3}\.\d)/,            // all concat
+      ];
+      for(const pat of patterns){
+        const m=rest.trim().match(pat);
+        if(m){
+          const pro=parseInt(m[1]),hb=parseFloat(m[2]),gm=parseFloat(m[3]);
+          if(pro>=50&&pro<=300&&hb>=0&&hb<=200&&gm>=0&&gm<=200){
+            a.epds.pro=pro; a.epds.hb=hb; a.epds.gm=gm;
+            break;
+          }
+        }
       }
     }
   }
