@@ -1519,7 +1519,7 @@ async function showProfileTab(tab) {
 
   if(tab==='epds') {
     const {data: epds} = await sb.from('epds').select('*').eq('ranch_id', currentRanch.id).eq('animal_tag', tag).single();
-    const groups = {Growth:['bw','ww','yw','adg','dmi'],Maternal:['milk','mw','stay'],Carcass:['rea','fat','marbling'],Calving:['ced','cem','hpg'],Indexes:['hb','gm','pro'],Other:['me','doc']};
+    const groups = {Growth:['bw','ww','yw','adg','dmi'],Maternal:['milk','mw','stay','hpg'],Carcass:['rea','fat','marbling'],Calving:['ced','cem'],Indexes:['hb','gm','pro'],Other:['me','doc']};
     const labels = {bw:'BW',ww:'WW',yw:'YW',adg:'ADG',dmi:'DMI',milk:'Milk',hpg:'HPG',cem:'CEM',mw:'MW',stay:'Stay',fat:'FAT',rea:'REA',marbling:'Marbling',ced:'CED',me:'ME',doc:'Doc',hb:'HerdBuilder',gm:'GridMaster',pro:'PROs',ced:'CED',ww:'WW',yw:'YW',radg:'RADG',dmi:'DMI',milk:'Milk',mw:'MW',mh:'MH',cem:'CEM',rea:'REA',fat:'FAT'};
     let display = '';
     if(epds) {
