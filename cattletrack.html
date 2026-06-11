@@ -4190,8 +4190,8 @@ async function importLeachmanCSV(text) {
   const lines = text.split(/\r?\n/).filter(l=>l.trim());
   if(lines.length < 2){alert('No data found');return;}
 
-  // Parse headers
-  const clean = s => (s||'').replace(/^="?|"?$/g,'').trim();
+  // Parse headers - strip surrounding quotes
+  const clean = s => (s||'').replace(/^="?|"$/g,'').replace(/^"|"$/g,'').trim();
   const headers = lines[0].split(',').map(h=>h.replace(/"/g,'').trim());
 
   const col = name => headers.indexOf(name);
@@ -4210,7 +4210,6 @@ async function importLeachmanCSV(text) {
     const vals=lines[i].split(',');
     const tag=clean(vals[iTag]);
     const prefix=clean(vals[iPrefix]);
-    if(!tag)continue;
 
     // Build full tag to match against animals
     const fullTag=prefix?`${prefix}-${tag}`:tag;
@@ -4224,24 +4223,38 @@ async function importLeachmanCSV(text) {
 
     if(!match){skipped++;continue;}
 
-    const profit=parseFloat(vals[iProfit])||null;
-    const ranch=parseFloat(vals[iRanch])||null;
-    const feeder=parseFloat(vals[iFeeder])||null;
-    const terminal=parseFloat(vals[iTerminal])||null;
-    const fert=parseFloat(vals[iFert])||null;
-    const bs=parseFloat(vals[iBS])||null;
-    const ts=parseFloat(vals[iTS])||null;
+    const profit=parseFloat(clean(vals[iProfit]))||null;
+    const ranch=parseFloat(clean(vals[iRanch]))||null;
+    const feeder=parseFloat(clean(vals[iFeeder]))||null;
+    const terminal=parseFloat(clean(vals[iTerminal]))||null;
+    const fert=parseFloat(clean(vals[iFert]))||null;
+    const bs=parseFloat(clean(vals[iBS]))||null;
+    const ts=parseFloat(clean(vals[iTS]))||null;
 
     if(!profit&&!ranch&&!feeder&&!terminal){skipped++;continue;}
 
-    const {error}=await sb.from('epds').upsert({
-      animal_tag:match.tag,ranch_id:currentRanch.id,
-      lc_profit:profit,lc_ranch:ranch,
-      lc_feeder:feeder,lc_terminal:terminal,
-      lc_fert:fert,lc_bs:bs,lc_ts:ts,
-    },{onConflict:'animal_tag,ranch_id',ignoreDuplicates:false});
+    // Check if EPD record exists
+    const {data:existing}=await sb.from('epds').select('id').eq('animal_tag',match.tag).eq('ranch_id',currentRanch.id).single();
 
-    if(!error)imported++;else skipped++;
+    let error;
+    if(existing){
+      // Update existing record
+      ({error}=await sb.from('epds').update({
+        lc_profit:profit,lc_ranch:ranch,
+        lc_feeder:feeder,lc_terminal:terminal,
+        lc_fert:fert,lc_bs:bs,lc_ts:ts,
+      }).eq('animal_tag',match.tag).eq('ranch_id',currentRanch.id));
+    } else {
+      // Insert new record with just Leachman data
+      ({error}=await sb.from('epds').insert({
+        animal_tag:match.tag,ranch_id:currentRanch.id,
+        lc_profit:profit,lc_ranch:ranch,
+        lc_feeder:feeder,lc_terminal:terminal,
+        lc_fert:fert,lc_bs:bs,lc_ts:ts,
+      }));
+    }
+
+    if(!error)imported++;else{console.error('LC import error:',error);skipped++;}
   }
 
   alert(`✅ Leachman data imported for ${imported} animals.\n${skipped} skipped (no matching animal or no data).`);
