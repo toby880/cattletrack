@@ -279,6 +279,7 @@ tr:hover td{background:var(--bg)}
 
   <nav class="nav">
     <button class="nav-btn active" onclick="showPage('dashboard')">Dashboard</button>
+    <button class="nav-btn" onclick="showPage('insights')">⚡ Insights</button>
     <button class="nav-btn" onclick="showPage('animals')">Animals</button>
     <button class="nav-btn" onclick="showPage('calving')">Calving</button>
     <button class="nav-btn" onclick="showPage('weights')">Weights</button>
@@ -294,6 +295,16 @@ tr:hover td{background:var(--bg)}
   <main class="main" id="app-main">
 
     <!-- DASHBOARD -->
+    <!-- INSIGHTS -->
+    <div class="page" id="page-insights">
+      <div class="tab-bar">
+        <button class="tab active" onclick="showInsightsTab('sire')">🐂 Sire Analysis</button>
+        <button class="tab" onclick="showInsightsTab('cow')">🐄 Cow Performance</button>
+        <button class="tab" onclick="showInsightsTab('planner')">📅 Breeding Planner</button>
+      </div>
+      <div id="insights-content"><div class="loading"><div class="spinner"></div>Loading...</div></div>
+    </div>
+
     <div class="page active" id="page-dashboard">
       <div class="stat-grid" id="dash-stats">
         <div class="stat-card orange"><div class="stat-num" id="ds-animals">—</div><div class="stat-label">Animals</div></div>
@@ -1350,6 +1361,7 @@ function showPage(name) {
   });
   // Load page data
   if(name==='dashboard') loadDashboard();
+  if(name==='insights') showInsightsTab('sire');
   if(name==='animals') loadAnimals();
   if(name==='calving') { showCalvingTab('log'); }
   if(name==='weights') { showWeightsTab('log'); }
@@ -1361,6 +1373,481 @@ function showPage(name) {
   if(name==='inventory') showInventoryTab('medications');
   if(name==='reports') { setTimeout(()=>{ showReportsTab('builder'); updateReportColumns(); }, 50); }
   if(name==='settings') loadSettings();
+}
+
+// ── INSIGHTS ───────────────────────────────────────────────────────────────
+async function showInsightsTab(tab) {
+  document.querySelectorAll('#page-insights .tab').forEach((b,i) =>
+    b.classList.toggle('active', ['sire','cow','planner'][i]===tab));
+  const content = document.getElementById('insights-content');
+  content.innerHTML = '<div class="loading"><div class="spinner"></div>Analyzing your herd data...</div>';
+  if(tab==='sire') await renderSireAnalysis(content);
+  else if(tab==='cow') await renderCowPerformance(content);
+  else if(tab==='planner') renderBreedingPlanner(content);
+}
+
+// ── SIRE ANALYSIS ──────────────────────────────────────────────────────────
+async function renderSireAnalysis(content) {
+  const [calvingRes, weightsRes, aiRes, pregRes] = await Promise.all([
+    sb.from('calving_records').select('*').eq('ranch_id', currentRanch.id),
+    sb.from('weights').select('*').eq('ranch_id', currentRanch.id).eq('weight_type','weaning'),
+    sb.from('ai_records').select('*').eq('ranch_id', currentRanch.id),
+    sb.from('preg_checks').select('*').eq('ranch_id', currentRanch.id),
+  ]);
+
+  const calving = calvingRes.data || [];
+  const weights = weightsRes.data || [];
+  const aiRecords = aiRes.data || [];
+  const pregChecks = pregRes.data || [];
+
+  // Build sire stats from calving records
+  const sireStats = {};
+
+  calving.forEach(r => {
+    const sire = r.sire_tag || 'Unknown';
+    if(!sireStats[sire]) sireStats[sire] = {
+      name: sire, calves: 0, bulls: 0, heifers: 0,
+      birthWeights: [], easeScores: [], weaningWeights: [],
+      aiConceptions: 0, aiAttempts: 0,
+    };
+    const s = sireStats[sire];
+    s.calves++;
+    if(r.sex==='Bull') s.bulls++;
+    if(r.sex==='Heifer') s.heifers++;
+    if(r.birth_weight) s.birthWeights.push(parseFloat(r.birth_weight));
+    if(r.calving_ease) s.easeScores.push(parseInt(r.calving_ease));
+    // Match weaning weight
+    const ww = weights.find(w => w.animal_tag === r.calf_tag);
+    if(ww) s.weaningWeights.push(parseFloat(ww.weight_lbs));
+  });
+
+  // Add AI conception data
+  aiRecords.forEach(r => {
+    const sire = r.sire || 'Unknown';
+    if(!sireStats[sire]) sireStats[sire] = {
+      name: sire, calves: 0, bulls: 0, heifers: 0,
+      birthWeights: [], easeScores: [], weaningWeights: [],
+      aiConceptions: 0, aiAttempts: 0,
+    };
+    sireStats[sire].aiAttempts++;
+  });
+
+  // Match preg checks to AI records
+  pregChecks.filter(p=>p.result==='pregnant'&&p.breed_type==='ai').forEach(p => {
+    const ai = aiRecords.find(r => r.cow_tag === p.animal_tag);
+    if(ai && ai.sire && sireStats[ai.sire]) {
+      sireStats[ai.sire].aiConceptions++;
+    }
+  });
+
+  const avg = arr => arr.length ? (arr.reduce((a,b)=>a+b,0)/arr.length) : null;
+  const pct = (n,d) => d > 0 ? Math.round(n/d*100) : null;
+
+  const sires = Object.values(sireStats)
+    .filter(s => s.calves > 0 || s.aiAttempts > 0)
+    .sort((a,b) => b.calves - a.calves);
+
+  if(!sires.length) {
+    content.innerHTML = '<div class="empty"><div class="empty-icon">🐂</div><p>No calving records yet. Log calving records to see sire analysis.</p></div>';
+    return;
+  }
+
+  const scoreColor = score => score >= 80 ? 'var(--green)' : score >= 60 ? 'var(--orange)' : 'var(--red)';
+  const easeLabel = avg => !avg ? '—' : avg <= 1.5 ? '🟢 Excellent' : avg <= 2.5 ? '🟡 Good' : '🔴 Difficult';
+
+  content.innerHTML = `
+    <div style="margin-bottom:12px">
+      <div style="font-size:13px;color:var(--gray)">Showing ${sires.length} sires · Based on ${calving.length} calving records</div>
+    </div>
+    ${sires.map(s => {
+      const avgBW = avg(s.birthWeights);
+      const avgEase = avg(s.easeScores);
+      const avgWW = avg(s.weaningWeights);
+      const concRate = pct(s.aiConceptions, s.aiAttempts);
+
+      // Calculate a simple performance score
+      let score = 50;
+      if(avgEase) score += (3 - avgEase) * 15; // lower ease = better
+      if(avgWW) score += Math.min(20, (avgWW - 400) / 10); // heavier weaning = better
+      if(avgBW) score -= Math.max(0, avgBW - 90) * 0.5; // penalize heavy birth weights
+      score = Math.max(0, Math.min(100, Math.round(score)));
+
+      return `
+        <div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+            <div>
+              <div style="font-size:16px;font-weight:700">${s.name}</div>
+              <div style="font-size:12px;color:var(--gray);margin-top:2px">${s.calves} calves · ${s.bulls}B ${s.heifers}H</div>
+            </div>
+            <div style="text-align:center;background:var(--bg2);border-radius:8px;padding:6px 12px">
+              <div style="font-size:22px;font-weight:800;color:${scoreColor(score)}">${score}</div>
+              <div style="font-size:10px;color:var(--gray)">Score</div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+            <div style="background:var(--bg2);border-radius:8px;padding:8px;text-align:center">
+              <div style="font-size:16px;font-weight:700">${avgBW ? avgBW.toFixed(1)+' lb' : '—'}</div>
+              <div style="font-size:10px;color:var(--gray)">Avg Birth Wt</div>
+            </div>
+            <div style="background:var(--bg2);border-radius:8px;padding:8px;text-align:center">
+              <div style="font-size:13px;font-weight:700">${easeLabel(avgEase)}</div>
+              <div style="font-size:10px;color:var(--gray)">Calving Ease</div>
+            </div>
+            <div style="background:var(--bg2);border-radius:8px;padding:8px;text-align:center">
+              <div style="font-size:16px;font-weight:700">${avgWW ? avgWW.toFixed(0)+' lb' : '—'}</div>
+              <div style="font-size:10px;color:var(--gray)">Avg Wean Wt</div>
+            </div>
+            <div style="background:var(--bg2);border-radius:8px;padding:8px;text-align:center">
+              <div style="font-size:16px;font-weight:700">${concRate !== null ? concRate+'%' : '—'}</div>
+              <div style="font-size:10px;color:var(--gray)">Conception</div>
+            </div>
+          </div>
+        </div>`;
+    }).join('')}`;
+}
+
+// ── COW PERFORMANCE ────────────────────────────────────────────────────────
+async function renderCowPerformance(content) {
+  const [animalsRes, calvingRes, healthRes, pregRes] = await Promise.all([
+    sb.from('animals').select('*').eq('ranch_id', currentRanch.id).in('sex',['Cow','Heifer']).neq('status','sold').neq('status','dead'),
+    sb.from('calving_records').select('*').eq('ranch_id', currentRanch.id),
+    sb.from('health_events').select('*').eq('ranch_id', currentRanch.id),
+    sb.from('preg_checks').select('*').eq('ranch_id', currentRanch.id),
+  ]);
+
+  const animals = animalsRes.data || [];
+  const calving = calvingRes.data || [];
+  const health = healthRes.data || [];
+  const pregChecks = pregRes.data || [];
+
+  if(!animals.length) {
+    content.innerHTML = '<div class="empty"><div class="empty-icon">🐄</div><p>No cow records found.</p></div>';
+    return;
+  }
+
+  // Score each cow
+  const cowScores = animals.map(cow => {
+    const calvingHistory = calving.filter(c => c.dam_tag === cow.tag);
+    const healthHistory = health.filter(h => h.animal_tag === cow.tag);
+    const pregHistory = pregChecks.filter(p => p.animal_tag === cow.tag);
+
+    // Scoring factors
+    let score = 100;
+    let flags = [];
+
+    // Calving ease — penalize difficult calvings
+    const easeScores = calvingHistory.map(c => parseInt(c.calving_ease)||1);
+    const avgEase = easeScores.length ? easeScores.reduce((a,b)=>a+b)/easeScores.length : 1;
+    if(avgEase > 2.5) { score -= 20; flags.push('Difficult calvings'); }
+    else if(avgEase > 1.5) { score -= 5; }
+
+    // Conception — penalize open cows
+    const opens = pregHistory.filter(p=>p.result==='open').length;
+    const total = pregHistory.length;
+    if(opens > 0 && total > 0) {
+      const openRate = opens/total;
+      score -= Math.round(openRate * 30);
+      if(openRate > 0.5) flags.push('Poor conception rate');
+    }
+
+    // Health costs — penalize high treatment costs
+    const totalHealthCost = healthHistory.reduce((s,h)=>s+(h.cost||0),0);
+    if(totalHealthCost > 500) { score -= 15; flags.push(`High health costs ($${totalHealthCost.toFixed(0)})`); }
+    else if(totalHealthCost > 200) { score -= 5; }
+
+    // Age — penalize very old cows (10+ years)
+    if(cow.dob) {
+      const age = (new Date() - new Date(cow.dob)) / (365.25 * 24 * 3600 * 1000);
+      if(age > 12) { score -= 15; flags.push(`Age: ${age.toFixed(0)} years`); }
+      else if(age > 10) { score -= 8; }
+    }
+
+    // Calf production — reward productivity
+    if(calvingHistory.length > 0) score += Math.min(15, calvingHistory.length * 3);
+
+    score = Math.max(0, Math.min(100, Math.round(score)));
+
+    return {
+      tag: cow.tag,
+      name: cow.name,
+      dob: cow.dob,
+      calves: calvingHistory.length,
+      avgEase: avgEase.toFixed(1),
+      opens,
+      pregChecks: total,
+      healthCost: totalHealthCost,
+      score,
+      flags,
+      cull: score < 50,
+    };
+  }).sort((a,b) => a.score - b.score); // worst first
+
+  const cullCandidates = cowScores.filter(c => c.cull);
+  const scoreColor = s => s >= 75 ? 'var(--green)' : s >= 50 ? 'var(--orange)' : 'var(--red)';
+
+  content.innerHTML = `
+    ${cullCandidates.length ? `
+      <div class="alert alert-warning" style="margin-bottom:12px">
+        ⚠️ <strong>${cullCandidates.length} cull candidates</strong> identified based on performance score below 50.
+      </div>` : `
+      <div class="alert alert-success" style="margin-bottom:12px">
+        ✅ No cull candidates identified — your herd is performing well!
+      </div>`}
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-size:13px;color:var(--gray)">${cowScores.length} cows ranked · Worst performers first</div>
+      <div style="display:flex;gap:8px">
+        <span style="font-size:11px;color:var(--green);font-weight:600">🟢 75+</span>
+        <span style="font-size:11px;color:var(--orange);font-weight:600">🟡 50-74</span>
+        <span style="font-size:11px;color:var(--red);font-weight:600">🔴 &lt;50</span>
+      </div>
+    </div>
+
+    <div class="card" style="padding:0">
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Cow</th><th>Score</th><th>Calves</th><th>Avg Ease</th>
+            <th>Opens</th><th>Health $</th><th>Flags</th>
+          </tr></thead>
+          <tbody>
+            ${cowScores.map(c => `
+              <tr style="${c.cull?'background:#FFF5F5':''}">
+                <td><strong>${c.tag}</strong>${c.name?`<div style="font-size:11px;color:var(--gray)">${c.name}</div>`:''}</td>
+                <td><span style="font-weight:800;color:${scoreColor(c.score)}">${c.score}</span></td>
+                <td>${c.calves}</td>
+                <td>${c.calves>0?c.avgEase:'—'}</td>
+                <td>${c.pregChecks>0?c.opens+'/'+c.pregChecks:'—'}</td>
+                <td>${c.healthCost>0?'$'+c.healthCost.toFixed(0):'—'}</td>
+                <td style="font-size:11px;color:var(--red)">${c.flags.join(', ')||'—'}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;padding:12px;background:var(--bg2);border-radius:8px;font-size:12px;color:var(--gray)">
+      <strong>How scores are calculated:</strong> Starts at 100. Deductions for difficult calvings, failed preg checks, high health costs, and age. Bonus points for calf production. Scores below 50 are flagged as cull candidates.
+    </div>`;
+}
+
+// ── BREEDING SEASON PLANNER ────────────────────────────────────────────────
+function renderBreedingPlanner(content) {
+  const today = new Date().toISOString().split('T')[0];
+  content.innerHTML = `
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">Breeding Season Planner</div>
+      <div style="font-size:13px;color:var(--gray);margin-bottom:14px">
+        Enter your target calving start date and the planner works backwards to give you your complete breeding season timeline.
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Target Calving Start Date</label>
+          <input type="date" id="plan-calving-start" onchange="updateBreedingPlan()">
+        </div>
+        <div class="form-group">
+          <label>Breeding Method</label>
+          <select id="plan-method" onchange="updateBreedingPlan()">
+            <option value="ai-natural">AI then Natural Service</option>
+            <option value="ai-only">AI Only</option>
+            <option value="natural-only">Natural Service Only</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>AI Sync Protocol</label>
+          <select id="plan-protocol" onchange="updateBreedingPlan()">
+            <option value="7and7">7&7 (14 days)</option>
+            <option value="cosynch">7-Day Co-Synch (9 days)</option>
+            <option value="cidr">CIDR Co-Synch (9 days)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Cleanup Bull Days</label>
+          <select id="plan-cleanup" onchange="updateBreedingPlan()">
+            <option value="45">45 days</option>
+            <option value="60">60 days</option>
+            <option value="30">30 days</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Cow Type</label>
+        <select id="plan-cowtype" onchange="updateBreedingPlan()">
+          <option value="cow">Mature Cows (283 day gestation)</option>
+          <option value="heifer">Heifers (283 day gestation)</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="breeding-plan-output"></div>`;
+
+  // Auto-calculate with default date (next spring)
+  const nextSpring = new Date();
+  nextSpring.setFullYear(nextSpring.getFullYear() + (nextSpring.getMonth() >= 3 ? 1 : 0));
+  nextSpring.setMonth(0); nextSpring.setDate(15);
+  document.getElementById('plan-calving-start').value = nextSpring.toISOString().split('T')[0];
+  updateBreedingPlan();
+}
+
+function updateBreedingPlan() {
+  const calvingStart = document.getElementById('plan-calving-start')?.value;
+  if(!calvingStart) return;
+
+  const method = document.getElementById('plan-method')?.value || 'ai-natural';
+  const protocol = document.getElementById('plan-protocol')?.value || '7and7';
+  const cleanupDays = parseInt(document.getElementById('plan-cleanup')?.value || '45');
+  const cowType = document.getElementById('plan-cowtype')?.value || 'cow';
+
+  const gestation = 283;
+  const calving = new Date(calvingStart);
+
+  // Work backwards from calving start
+  const conception = new Date(calving);
+  conception.setDate(conception.getDate() - gestation);
+
+  // AI date = conception date
+  const aiDate = new Date(conception);
+
+  // Sync protocol start = AI date - protocol length
+  const protocolDays = protocol === '7and7' ? 14 : 9;
+  const syncStart = new Date(aiDate);
+  syncStart.setDate(syncStart.getDate() - protocolDays);
+
+  // Bull turn-out = AI date (or conception for natural only)
+  const bullTurnout = new Date(aiDate);
+  if(method === 'ai-natural') bullTurnout.setDate(bullTurnout.getDate() + 3); // 3 days after AI
+  if(method === 'natural-only') bullTurnout.setDate(bullTurnout.getDate() - 0);
+
+  // Bull pull = turn-out + cleanup days
+  const bullPull = new Date(bullTurnout);
+  bullPull.setDate(bullPull.getDate() + cleanupDays);
+
+  // Last possible calving = bull pull + gestation
+  const lastCalving = new Date(bullPull);
+  lastCalving.setDate(lastCalving.getDate() + gestation);
+
+  // Post-partum interval (heifers need 60 days, cows 50 days minimum)
+  const ppiDays = cowType === 'heifer' ? 60 : 50;
+  const previousCalvingNeeded = new Date(syncStart);
+  previousCalvingNeeded.setDate(previousCalvingNeeded.getDate() - ppiDays);
+
+  // Preg check date = ~35 days after AI
+  const pregCheckDate = new Date(aiDate);
+  pregCheckDate.setDate(pregCheckDate.getDate() + 35);
+
+  // Pre-breeding vaccination (50 days before sync start)
+  const vaccineDate = new Date(syncStart);
+  vaccineDate.setDate(vaccineDate.getDate() - 50);
+
+  const fmt = d => d.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+  const daysBetween = (a,b) => Math.round((b-a)/86400000);
+
+  const steps = [];
+
+  if(method !== 'natural-only') {
+    steps.push({icon:'💉', label:'Pre-breeding vaccinations', date:vaccineDate, detail:'BVD, vibrio, lepto — 50 days before sync start', color:'badge-blue', urgent: daysBetween(new Date(), vaccineDate) < 14});
+    steps.push({icon:'🐄', label:'Cows must be 50+ days post-partum', date:previousCalvingNeeded, detail:`All cows must have calved by this date to be eligible for breeding`, color:'badge-orange', urgent: false});
+    steps.push({icon:'💊', label:`Sync Start — Day 0`, date:syncStart, detail:protocol==='7and7'?'Insert CIDR + PGF₂α':protocol==='cosynch'?'Administer GnRH':'Insert CIDR + GnRH', color:'badge-orange', urgent: daysBetween(new Date(), syncStart) < 14});
+
+    if(protocol === '7and7') {
+      const day7 = new Date(syncStart); day7.setDate(day7.getDate()+7);
+      steps.push({icon:'💊', label:'Day 7 — Remove CIDR + PGF₂α', date:day7, detail:'Remove CIDR, administer PGF₂α', color:'badge-orange', urgent: daysBetween(new Date(), day7) < 7});
+    } else {
+      const day7b = new Date(syncStart); day7b.setDate(day7b.getDate()+7);
+      steps.push({icon:'💊', label:'Day 7 — PGF₂α', date:day7b, detail:'Administer PGF₂α', color:'badge-orange', urgent: daysBetween(new Date(), day7b) < 7});
+    }
+
+    steps.push({icon:'🐂', label:'AI Day — GnRH + Breed', date:aiDate, detail:`Administer GnRH, breed all cows · Expected conception date`, color:'badge-red', urgent: daysBetween(new Date(), aiDate) < 14});
+  }
+
+  if(method !== 'ai-only') {
+    steps.push({icon:'🐂', label:'Turn Out Cleanup Bull', date:bullTurnout, detail:`Bull turns out for ${cleanupDays} days of natural service`, color:'badge-blue', urgent: daysBetween(new Date(), bullTurnout) < 14});
+    steps.push({icon:'🔍', label:'Pregnancy Check', date:pregCheckDate, detail:'Check AI-bred cows ~35 days post-breeding', color:'badge-green', urgent: false});
+    steps.push({icon:'🐂', label:'Pull Cleanup Bull', date:bullPull, detail:`Remove bull after ${cleanupDays} days`, color:'badge-orange', urgent: daysBetween(new Date(), bullPull) < 14});
+  }
+
+  steps.push({icon:'🐄', label:'First Calves Expected', date:calving, detail:'Target calving start date', color:'badge-green', urgent: false});
+  steps.push({icon:'🐄', label:'Last Calves Expected', date:lastCalving, detail:`End of calving season — ${daysBetween(calving, lastCalving)} day calving window`, color:'badge-gray', urgent: false});
+
+  // Sort by date
+  steps.sort((a,b) => a.date - b.date);
+
+  const daysUntil = d => Math.round((d - new Date())/86400000);
+
+  const output = document.getElementById('breeding-plan-output');
+  if(!output) return;
+
+  output.innerHTML = `
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">Your Breeding Season Timeline</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+        <div style="background:var(--bg2);border-radius:8px;padding:12px;text-align:center">
+          <div style="font-size:11px;color:var(--gray);margin-bottom:4px">AI / Conception Date</div>
+          <div style="font-size:16px;font-weight:700;color:var(--orange)">${fmt(aiDate)}</div>
+        </div>
+        <div style="background:var(--bg2);border-radius:8px;padding:12px;text-align:center">
+          <div style="font-size:11px;color:var(--gray);margin-bottom:4px">Calving Window</div>
+          <div style="font-size:14px;font-weight:700">${fmt(calving)} — ${fmt(lastCalving)}</div>
+        </div>
+      </div>
+      ${steps.map(s => {
+        const days = daysUntil(s.date);
+        const when = days < 0 ? `${Math.abs(days)}d ago` : days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `${days} days`;
+        const whenColor = days < 0 ? 'var(--gray-lt)' : days <= 7 ? 'var(--red)' : days <= 14 ? 'var(--amber)' : 'var(--gray)';
+        return `
+          <div style="display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--border)">
+            <span style="font-size:22px;flex-shrink:0">${s.icon}</span>
+            <div style="flex:1">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+                <strong style="font-size:13px">${s.label}</strong>
+                <span class="badge ${s.color}" style="font-size:10px;flex-shrink:0">${fmt(s.date)}</span>
+              </div>
+              <div style="font-size:12px;color:var(--gray);margin-top:2px">${s.detail}</div>
+            </div>
+            <div style="font-size:12px;font-weight:600;color:${whenColor};text-align:right;flex-shrink:0;min-width:60px">${when}</div>
+          </div>`;
+      }).join('')}
+    </div>
+
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-primary" onclick="saveBreedingPlanToCalendar()" style="flex:1">📅 Add to Calendar</button>
+      <button class="btn btn-secondary" onclick="printBreedingPlan()" style="flex:1">🖨 Print Plan</button>
+    </div>`;
+
+  // Store plan for calendar save
+  window._breedingPlan = steps;
+}
+
+async function saveBreedingPlanToCalendar() {
+  if(!window._breedingPlan) return;
+  let saved = 0;
+  for(const step of window._breedingPlan) {
+    const date = step.date.toISOString().split('T')[0];
+    const {error} = await dbInsert('tasks', {
+      title: step.label,
+      category: 'breeding',
+      due_date: date,
+      priority: step.urgent ? 'high' : 'medium',
+      notes: step.detail,
+      done: false,
+    });
+    if(!error) saved++;
+  }
+  alert(`✅ ${saved} events added to your Calendar!`);
+}
+
+function printBreedingPlan() {
+  const content = document.getElementById('breeding-plan-output')?.innerHTML;
+  if(!content) return;
+  const win = window.open('','_blank');
+  win.document.write(`<html><head><title>Breeding Season Plan</title>
+    <style>body{font-family:sans-serif;font-size:13px;padding:20px}h2{color:#E8751A}.badge{padding:3px 8px;border-radius:4px;font-size:11px;background:#f0f0f0}</style>
+    </head><body><h2>CattleTrack Analytics — Breeding Season Plan</h2><p><em>${currentRanch?.name||''}</em></p>${content}</body></html>`);
+  win.document.close();
+  win.print();
 }
 
 // ── DASHBOARD ──────────────────────────────────────────────────────────────
