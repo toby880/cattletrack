@@ -3649,6 +3649,148 @@ async function deleteInventoryItem(id, name) {
 }
 
 
+// ── EPDs, PEDIGREE & SEN IMPORT ────────────────────────────────────────────
+async function saveEPDs(tag) {
+  const fields=['ced','ww','yw','radg','dmi','milk','mw','mh','cem','hp','rea','fat','marbling','hb','gm','pro'];
+  const data={animal_tag:tag,ranch_id:currentRanch.id};
+  fields.forEach(f=>{const v=document.getElementById('epd-'+f)?.value;if(v!==''&&v!==undefined&&v!==null)data[f]=parseFloat(v);});
+  await sb.from('epds').upsert(data,{onConflict:'animal_tag,ranch_id'});
+  alert('\u2705 EPDs saved for '+tag);
+  showProfileTab('epds');
+}
+
+async function savePedigree(tag) {
+  const data={animal_tag:tag,ranch_id:currentRanch.id,
+    sire:document.getElementById('ped-sire')?.value?.trim()||null,
+    dam:document.getElementById('ped-dam')?.value?.trim()||null,
+    paternal_grandsire:document.getElementById('ped-pgs')?.value?.trim()||null,
+    paternal_granddam:document.getElementById('ped-pgd')?.value?.trim()||null,
+    maternal_grandsire:document.getElementById('ped-mgs')?.value?.trim()||null,
+    maternal_granddam:document.getElementById('ped-mgd')?.value?.trim()||null,
+  };
+  await sb.from('pedigrees').upsert(data,{onConflict:'animal_tag,ranch_id'});
+  alert('\u2705 Pedigree saved for '+tag);
+  showProfileTab('pedigree');
+}
+
+async function importEPDs(event) {
+  const file=event.target.files[0];
+  if(!file){alert('No file selected');return;}
+  const text=await file.text();
+  if(!text||!text.trim()){alert('File appears to be empty');return;}
+  const firstLine=text.split(/\r?\n/).find(l=>l.trim());
+  const isSEN=firstLine&&firstLine.length>300;
+  if(isSEN){await importSENFile(text);}else{await importEPDCSV(text);}
+}
+
+async function importSENFile(text) {
+  const lines=text.split(/\r?\n/).filter(l=>l.trim());
+  if(!lines.length){alert('No data found in file');return;}
+  const {data:freshAnimals}=await dbSelect('animals');
+  if(freshAnimals)cache.set('animals',freshAnimals);
+  let imported=0,skipped=0;
+  for(const line of lines){
+    try{
+      const a=parseSENLine(line);
+      if(!a||!a.reg_number){skipped++;continue;}
+      const animals=cache.get('animals')||[];
+      const match=animals.find(x=>x.tag===a.herd_tag||x.tag===a.tag||x.reg_number===a.reg_number);
+      const matchTag=match?.tag||a.herd_tag||a.tag;
+      if(!matchTag){skipped++;continue;}
+      if(Object.keys(a.epds).length>0){
+        await sb.from('epds').upsert({...a.epds,animal_tag:matchTag,ranch_id:currentRanch.id},{onConflict:'animal_tag,ranch_id'});
+      }
+      if(a.pedigree.sire||a.pedigree.dam){
+        await sb.from('pedigrees').upsert({
+          animal_tag:matchTag,ranch_id:currentRanch.id,
+          sire:a.pedigree.sire_name||a.pedigree.sire||null,
+          dam:a.pedigree.dam_name||a.pedigree.dam||null,
+          paternal_grandsire:a.pedigree.pgs_name||a.pedigree.pgs||null,
+          paternal_granddam:a.pedigree.pgd_name||a.pedigree.pgd||null,
+          maternal_grandsire:a.pedigree.mgs_name||a.pedigree.mgs||null,
+          maternal_granddam:a.pedigree.mgd_name||a.pedigree.mgd||null,
+        },{onConflict:'animal_tag,ranch_id'});
+      }
+      if(a.name&&match){await sb.from('animals').update({name:a.name,reg_number:a.reg_number}).eq('id',match.id);}
+      imported++;
+    }catch(e){console.error(e);skipped++;}
+  }
+  const {data}=await dbSelect('animals');
+  if(data)cache.set('animals',data);
+  alert(`\u2705 Imported data for ${imported} animal(s).\nEPDs and pedigree updated.\n${skipped} skipped (no matching animal in your herd).`);
+  if(currentAnimal)showProfileTab('epds');
+}
+
+function parseSENLine(line) {
+  if(!line||line.length<100)return null;
+  const a={epds:{},pedigree:{}};
+  a.assoc=line.substring(0,3).trim();
+  a.reg_number=line.substring(3,10).trim();
+  a.tag=line.substring(80,84).trim();
+  a.herd_prefix=line.substring(86,89).trim();
+  a.herd_tag=(a.herd_prefix&&a.tag)?a.herd_prefix+'-'+a.tag:a.tag;
+  const nameM=line.match(/RA[A-Z]\d\s+([\w][\w\s]+?)\s{2,}P12/);
+  if(nameM)a.name=nameM[1].trim();
+  const dobM=line.match(/P12(\d{4})(\d{2})(\d{2})/);
+  if(dobM){const y=parseInt(dobM[1]),mo=parseInt(dobM[2]),d=parseInt(dobM[3]);if(y>1980&&y<2030&&mo>=1&&mo<=12&&d>=1&&d<=31)a.dob=`${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;}
+  const allNums=[];const numRe=/-?\d+\.\d+/g;let nm;
+  while((nm=numRe.exec(line))!==null)allNums.push({pos:nm.index,val:parseFloat(nm[0])});
+  const mainEpdNames=['ced','ww','yw','radg','dmi','milk','mw','mh','cem','hp','rea','fat','marbling'];
+  let epdBlockEnd=-1;
+  for(let i=0;i<allNums.length-12;i++){
+    const ced=allNums[i].val,ww=allNums[i+1].val,yw=allNums[i+2].val;
+    if(ced>=-15&&ced<=20&&ww>=30&&ww<=110&&yw>=60&&yw<=170){
+      for(let j=0;j<mainEpdNames.length;j++){if(i+j<allNums.length)a.epds[mainEpdNames[j]]=allNums[i+j].val;}
+      epdBlockEnd=i+mainEpdNames.length;break;
+    }
+  }
+  if(epdBlockEnd>0){
+    let idx=epdBlockEnd;
+    while(idx<allNums.length&&allNums[idx].val>0&&allNums[idx].val<1)idx++;
+    const idxNames=['hb','gm','pro'];
+    for(let k=0;k<3;k++){if(idx+k<allNums.length)a.epds[idxNames[k]]=allNums[idx+k].val;}
+  }
+  // Pedigree - find start after accuracy % block (two small decimals like "65.3 76.6")
+  const accM=line.match(/(\d{1,2}\.\d)\s+(\d{1,2}\.\d)\s*([A-Z])/);
+  const pedStart=accM?line.indexOf(accM[3],line.indexOf(accM[0])+accM[0].length-1):Math.floor(line.length*0.6);
+  const pedSection=line.substring(pedStart);
+  const pedRoles=['sire','dam','pgs','pgd','mgs','mgd'];
+  const pedRe=/([A-Z][A-Z0-9]{1,6})\s{1,5}([\w][\w\s\.\/]+?)\s{3,}(?:UAR|UAN|RAA|RAB|RAC|RED|RAN)\s+(\d{5,10})/g;
+  let pm;let pi=0;
+  while((pm=pedRe.exec(pedSection))!==null&&pi<pedRoles.length){
+    const ptag=pm[1].trim();
+    const pname=pm[2].trim().replace(/\s+/g,' ').replace(/\s*UAR\s*\d+.*$/,'').trim();
+    const preg=pm[3].trim();
+    if(ptag.length>=2&&ptag.length<=7&&!/^\d+$/.test(ptag)&&ptag!=='UAR'&&ptag!=='UAN'){
+      a.pedigree[pedRoles[pi]]=ptag;
+      a.pedigree[pedRoles[pi]+'_name']=pname;
+      a.pedigree[pedRoles[pi]+'_reg']=preg;
+      pi++;
+    }
+  }
+  return a;
+}
+
+async function importEPDCSV(text) {
+  const lines=text.split('\n');
+  const headers=lines[0].split(',').map(h=>h.trim().toLowerCase().replace(/[^a-z0-9$_]/g,''));
+  let imported=0;
+  for(let i=1;i<lines.length;i++){
+    if(!lines[i].trim())continue;
+    const vals=lines[i].split(',');
+    const row={};headers.forEach((h,j)=>row[h]=vals[j]?.trim());
+    const matchTag=row['regnumber']||row['reg']||row['tag']||row['eartag'];
+    if(!matchTag)continue;
+    const epds={animal_tag:matchTag,ranch_id:currentRanch.id};
+    ['ced','ww','yw','radg','dmi','milk','mw','mh','cem','hp','rea','fat','marbling','hb','gm','pro'].forEach(f=>{const v=row[f];if(v&&!isNaN(parseFloat(v)))epds[f]=parseFloat(v);});
+    if(Object.keys(epds).length>2){await sb.from('epds').upsert(epds,{onConflict:'animal_tag,ranch_id'});imported++;}
+  }
+  alert(`\u2705 Imported EPDs for ${imported} animal(s) from CSV`);
+  if(currentAnimal)showProfileTab('epds');
+}
+
+
+
 function loadSettings() {
   document.getElementById('set-ranch-name').value=currentRanch.name||'';
   document.getElementById('set-owner-name').value=currentRanch.owner_name||'';
