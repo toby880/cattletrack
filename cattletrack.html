@@ -5082,9 +5082,9 @@ async function renderCashPrices(content) {
       <div class="alert alert-warning">⚠️ Could not fetch live market data. Check your connection and try again.</div>
       <div class="card">
         <div class="card-title">Manual Price Entry</div>
-        <div style="font-size:13px;color:var(--gray);margin-bottom:12px">Enter current prices manually to use the Sell Calculator:</div>
+        <div style="font-size:13px;color:var(--gray);margin-bottom:12px">Enter current prices to use the Sell Calculator:</div>
         <div class="form-row">
-          <div class="form-group"><label>750-800 lb Steers ($/cwt)</label><input type="number" id="manual-steer-price" placeholder="285.00" inputmode="decimal"></div>
+          <div class="form-group"><label>Cash Price ($/cwt) — enter any weight class</label><input type="number" id="manual-steer-price" placeholder="285.00" inputmode="decimal"></div>
           <div class="form-group"><label>CME Nearby Futures ($/cwt)</label><input type="number" id="manual-cme" placeholder="295.00" inputmode="decimal"></div>
         </div>
         <button class="btn btn-primary" onclick="showMarketsTab('calculator')">Go to Sell Calculator →</button>
