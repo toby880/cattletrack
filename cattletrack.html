@@ -736,6 +736,7 @@ tr:hover td{background:var(--bg)}
       <div class="tab-bar">
         <button class="tab active" onclick="showMarketsTab('prices')">Cash Prices</button>
         <button class="tab" onclick="showMarketsTab('futures')">Futures</button>
+        <button class="tab" onclick="showMarketsTab('lrp')">LRP Rates</button>
         <button class="tab" onclick="showMarketsTab('calculator')">Sell Calculator</button>
       </div>
       <div id="markets-content"><div class="loading"><div class="spinner"></div>Loading market data...</div></div>
@@ -5010,11 +5011,12 @@ let marketDataTime = null;
 
 async function showMarketsTab(tab) {
   document.querySelectorAll('#page-markets .tab-bar .tab').forEach((b,i)=>
-    b.classList.toggle('active',['prices','futures','calculator'][i]===tab));
+    b.classList.toggle('active',['prices','futures','lrp','calculator'][i]===tab));
   const content = document.getElementById('markets-content');
 
   if(tab==='prices') await renderCashPrices(content);
   else if(tab==='futures') renderFutures(content);
+  else if(tab==='lrp') await renderLRPRates(content);
   else if(tab==='calculator') renderSellCalculator(content);
 }
 
@@ -5150,6 +5152,170 @@ async function renderCashPrices(content) {
 
   // Store prices for calculator
   window._marketPrices = data;
+}
+
+async function renderLRPRates(content) {
+  // Check localStorage for today's cached LRP data
+  const today = new Date().toISOString().split('T')[0];
+  const cached = localStorage.getItem('ct_lrp_'+today);
+  let lrpData = cached ? JSON.parse(cached) : null;
+
+  if(!lrpData) {
+    content.innerHTML = '<div class="loading"><div class="spinner"></div>Fetching LRP rates from USDA RMA...</div>';
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1500,
+          tools: [{type:'web_search_20250305',name:'web_search'}],
+          messages: [{
+            role: 'user',
+            content: `Search for today's current USDA RMA LRP Livestock Risk Protection feeder cattle coverage prices and rates. Look at rma.usda.gov livestock reports or search "LRP feeder cattle rates today ${today}". I need the coverage prices and net premium costs per cwt for:
+- Steers weight 1 (under 6 cwt) at 90%, 95%, 100% coverage
+- Steers weight 2 (6-10 cwt) at 90%, 95%, 100% coverage  
+- Heifers weight 1 (under 6 cwt) at 90%, 95%, 100% coverage
+- Heifers weight 2 (6-10 cwt) at 90%, 95%, 100% coverage
+For the most common insurance period (26 weeks is typical).
+
+Return ONLY a JSON object, no other text:
+{
+  "date": "${today}",
+  "period_weeks": 26,
+  "expected_ending_value": 285.50,
+  "steers_wt1": [
+    {"coverage_pct": 90, "coverage_price": 256.95, "premium_cwt": 2.15, "net_premium_cwt": 0.57},
+    {"coverage_pct": 95, "coverage_price": 271.23, "premium_cwt": 3.82, "net_premium_cwt": 1.01},
+    {"coverage_pct": 100, "coverage_price": 285.50, "premium_cwt": 6.44, "net_premium_cwt": 1.70}
+  ],
+  "steers_wt2": [...same format...],
+  "heifers_wt1": [...],
+  "heifers_wt2": [...],
+  "notes": "any relevant notes about today's rates or market conditions"
+}`
+          }]
+        })
+      });
+      const data = await response.json();
+      const text = data.content?.filter(c=>c.type==='text').map(c=>c.text).join('')||'';
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if(jsonMatch) {
+        lrpData = JSON.parse(jsonMatch[0]);
+        localStorage.setItem('ct_lrp_'+today, JSON.stringify(lrpData));
+      }
+    } catch(e) { console.error('LRP fetch error:', e); }
+  }
+
+  const weights = [
+    {key:'steers_wt1', label:'Steers — Under 6 cwt (Light)', desc:'500-599 lb target'},
+    {key:'steers_wt2', label:'Steers — 6-10 cwt (Heavy)', desc:'600-900 lb target'},
+    {key:'heifers_wt1', label:'Heifers — Under 6 cwt (Light)', desc:'500-599 lb target'},
+    {key:'heifers_wt2', label:'Heifers — 6-10 cwt (Heavy)', desc:'600-900 lb target'},
+  ];
+
+  // Manual entry form always shown
+  const manualSection = `
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">Manual LRP Entry</div>
+      <div style="font-size:12px;color:var(--gray);margin-bottom:10px">Enter rates from your agent's daily quote. These save for today.</div>
+      <div class="form-row">
+        <div class="form-group"><label>Expected Ending Value ($/cwt)</label><input type="number" id="lrp-eev" placeholder="285.00" inputmode="decimal" value="${lrpData?.expected_ending_value||''}"></div>
+        <div class="form-group"><label>Insurance Period</label>
+          <select id="lrp-period">
+            <option value="13">13 weeks</option><option value="17">17 weeks</option>
+            <option value="21">21 weeks</option><option value="26" selected>26 weeks</option>
+            <option value="30">30 weeks</option><option value="39">39 weeks</option>
+            <option value="52">52 weeks</option>
+          </select>
+        </div>
+      </div>
+      <div style="font-size:12px;font-weight:600;color:var(--orange);margin:10px 0 6px">Steers — 6-9 cwt (most common for wheat stocker)</div>
+      <div id="lrp-manual-rows">
+        ${[90,95,97,100].map(pct=>`
+        <div class="form-row" style="margin-bottom:4px">
+          <div class="form-group"><label>${pct}% Coverage</label>
+            <input type="number" id="lrp-s2-${pct}-price" placeholder="Coverage price" inputmode="decimal" value="${lrpData?.steers_wt2?.find(r=>r.coverage_pct===pct)?.coverage_price||''}">
+          </div>
+          <div class="form-group"><label>Net Premium ($/cwt)</label>
+            <input type="number" id="lrp-s2-${pct}-net" placeholder="Net premium" inputmode="decimal" step="0.01" value="${lrpData?.steers_wt2?.find(r=>r.coverage_pct===pct)?.net_premium_cwt||''}">
+          </div>
+        </div>`).join('')}
+      </div>
+      <div style="font-size:12px;font-weight:600;color:var(--orange);margin:10px 0 6px">Heifers — 6-9 cwt</div>
+      ${[90,95,97,100].map(pct=>`
+      <div class="form-row" style="margin-bottom:4px">
+        <div class="form-group"><label>${pct}% Coverage</label>
+          <input type="number" id="lrp-h2-${pct}-price" placeholder="Coverage price" inputmode="decimal" value="${lrpData?.heifers_wt2?.find(r=>r.coverage_pct===pct)?.coverage_price||''}">
+        </div>
+        <div class="form-group"><label>Net Premium ($/cwt)</label>
+          <input type="number" id="lrp-h2-${pct}-net" placeholder="Net premium" inputmode="decimal" step="0.01" value="${lrpData?.heifers_wt2?.find(r=>r.coverage_pct===pct)?.net_premium_cwt||''}">
+        </div>
+      </div>`).join('')}
+      <button class="btn btn-primary" onclick="saveLRPManual()">Save Today's Rates</button>
+    </div>`;
+
+  // Display fetched or saved data
+  const displaySection = lrpData ? `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div style="font-size:12px;color:var(--gray)">LRP Rates · ${lrpData.date||today} · ${lrpData.period_weeks||26} week period</div>
+      <button onclick="localStorage.removeItem('ct_lrp_${today}');renderLRPRates(document.getElementById('markets-content'))" 
+        style="background:var(--bg2);border:none;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit">🔄 Refresh</button>
+    </div>
+    ${lrpData.expected_ending_value ? `
+    <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;text-align:center">
+      <div style="font-size:11px;color:var(--gray);margin-bottom:4px">Expected Ending Value</div>
+      <div style="font-size:28px;font-weight:800;color:var(--orange)">$${parseFloat(lrpData.expected_ending_value).toFixed(2)}/cwt</div>
+      <div style="font-size:11px;color:var(--gray)">CME Feeder Cattle Index basis</div>
+    </div>` : ''}
+    ${weights.filter(w=>lrpData[w.key]?.length).map(w=>`
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">${w.label}</div>
+      <div style="font-size:11px;color:var(--gray);margin-bottom:8px">${w.desc}</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Coverage</th><th>Coverage Price</th><th>Gross Premium</th><th style="color:var(--green)">Net Premium*</th><th>Protection</th></tr></thead>
+        <tbody>${(lrpData[w.key]||[]).map(r=>`
+          <tr>
+            <td><strong>${r.coverage_pct}%</strong></td>
+            <td>$${parseFloat(r.coverage_price||0).toFixed(2)}/cwt</td>
+            <td>${r.premium_cwt?'$'+parseFloat(r.premium_cwt).toFixed(2)+'/cwt':'—'}</td>
+            <td style="color:var(--green)"><strong>${r.net_premium_cwt?'$'+parseFloat(r.net_premium_cwt).toFixed(2)+'/cwt':'—'}</strong></td>
+            <td style="font-size:11px;color:var(--gray)">${lrpData.expected_ending_value&&r.coverage_price?
+              'If price drops below $'+parseFloat(r.coverage_price).toFixed(2)+', you get paid the difference':'—'}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table></div>
+    </div>`).join('')}
+    ${lrpData.notes?`<div class="card"><div class="card-title">Market Notes</div><div style="font-size:13px;line-height:1.6">${lrpData.notes}</div></div>`:''}
+    <div style="font-size:11px;color:var(--gray-lt);padding:8px;text-align:center">*Net premium after ~73.5% federal subsidy. Must be purchased through a licensed agent by 8:25 AM CT the following day.</div>
+    <button class="btn btn-primary" style="width:100%;margin-top:4px" onclick="showMarketsTab('calculator')">⚡ Use in Sell Calculator →</button>` :
+    `<div class="alert alert-warning">⚠️ Could not fetch LRP rates automatically. Enter them manually below from your agent's daily quote.</div>`;
+
+  content.innerHTML = displaySection + manualSection;
+}
+
+function saveLRPManual() {
+  const today = new Date().toISOString().split('T')[0];
+  const eev = parseFloat(document.getElementById('lrp-eev')?.value)||null;
+  const period = parseInt(document.getElementById('lrp-period')?.value)||26;
+
+  const steers_wt2 = [90,95,97,100].map(pct=>({
+    coverage_pct: pct,
+    coverage_price: parseFloat(document.getElementById(`lrp-s2-${pct}-price`)?.value)||null,
+    net_premium_cwt: parseFloat(document.getElementById(`lrp-s2-${pct}-net`)?.value)||null,
+  })).filter(r=>r.coverage_price);
+
+  const heifers_wt2 = [90,95,97,100].map(pct=>({
+    coverage_pct: pct,
+    coverage_price: parseFloat(document.getElementById(`lrp-h2-${pct}-price`)?.value)||null,
+    net_premium_cwt: parseFloat(document.getElementById(`lrp-h2-${pct}-net`)?.value)||null,
+  })).filter(r=>r.coverage_price);
+
+  const data = {date:today, period_weeks:period, expected_ending_value:eev, steers_wt2, heifers_wt2};
+  localStorage.setItem('ct_lrp_'+today, JSON.stringify(data));
+  window._lrpData = data;
+  alert('✅ LRP rates saved for today');
+  renderLRPRates(document.getElementById('markets-content'));
 }
 
 function renderFutures(content) {
