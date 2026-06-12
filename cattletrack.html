@@ -5200,8 +5200,8 @@ Return ONLY a JSON object, no other text:
     {key:'heifers_by_weight', label:'Heifers — Net Premium by Target Weight'},
   ];
 
-  // Manual entry form always shown
-  const weekOptions = [13,17,21,26,30,34,39,43,47,52];
+  // Manual entry form - simplified to 13 week only
+  const saved13 = lrpData?.rows?.find(r=>r.weeks===13)||{};
   const manualSection = `
     <div class="card" style="margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
@@ -5213,9 +5213,8 @@ Return ONLY a JSON object, no other text:
       </div>
       <div style="font-size:13px;color:var(--gray)">Opens the official USDA LRP quote tool in a new tab.</div>
     </div>
-
     <div class="card">
-      <div class="card-title">Enter Today's LRP Quote</div>
+      <div class="card-title">Today's LRP Quote — 13 Week</div>
       <div style="font-size:12px;color:var(--gray);margin-bottom:12px">Enter from your agent's daily email. Valid until 8:25 AM CT tomorrow.</div>
       <div class="form-row">
         <div class="form-group"><label>Type</label>
@@ -5234,31 +5233,13 @@ Return ONLY a JSON object, no other text:
       </div>
       <div class="form-row">
         <div class="form-group"><label>Head Count</label><input type="number" id="lrp-head" placeholder="50" inputmode="numeric" value="${lrpData?.head_count||''}"></div>
-        <div class="form-group"><label>Coverage %</label>
-          <select id="lrp-coverage">
-            <option value="100">100%</option>
-            <option value="95">95%</option>
-            <option value="90">90%</option>
-          </select>
-        </div>
+        <div class="form-group"><label>End Date</label><input type="date" id="lrp-13-date" value="${saved13.end_date||''}"></div>
       </div>
-
-      <div style="display:grid;grid-template-columns:60px 1fr 1fr 1fr;gap:6px;margin:10px 0 4px">
-        <div style="font-size:11px;color:var(--gray);font-weight:600">Weeks</div>
-        <div style="font-size:11px;color:var(--gray);font-weight:600">End Date</div>
-        <div style="font-size:11px;color:var(--gray);font-weight:600">Expected Value</div>
-        <div style="font-size:11px;color:var(--gray);font-weight:600">Premium/cwt</div>
+      <div class="form-row">
+        <div class="form-group"><label>Expected Value ($/cwt)</label><input type="number" id="lrp-13-ev" placeholder="319.65" step="0.01" inputmode="decimal" value="${saved13.expected_value||''}"></div>
+        <div class="form-group"><label>Producer Premium ($/cwt)</label><input type="number" id="lrp-13-prem" placeholder="8.27" step="0.01" inputmode="decimal" value="${saved13.premium_cwt||''}"></div>
       </div>
-      ${weekOptions.map(w=>{
-        const saved = lrpData?.rows?.find(r=>r.weeks===w)||{};
-        return `<div style="display:grid;grid-template-columns:60px 1fr 1fr 1fr;gap:6px;margin-bottom:6px;align-items:center">
-          <div style="font-size:13px;font-weight:600;color:var(--orange)">${w}wk</div>
-          <input type="date" id="lrp-${w}-date" style="padding:6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;width:100%" value="${saved.end_date||''}">
-          <input type="number" id="lrp-${w}-ev" placeholder="0.00" step="0.01" inputmode="decimal" style="padding:6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;width:100%" value="${saved.expected_value||''}">
-          <input type="number" id="lrp-${w}-prem" placeholder="0.00" step="0.01" inputmode="decimal" style="padding:6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;width:100%" value="${saved.premium_cwt||''}">
-        </div>`;
-      }).join('')}
-      <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="saveLRPManual()">Save Today's Rates</button>
+      <button class="btn btn-primary" style="width:100%;margin-top:4px" onclick="saveLRPManual()">Save Today's Rate</button>
     </div>`;
 
   // Display fetched or saved data
@@ -5307,31 +5288,28 @@ Return ONLY a JSON object, no other text:
 
 function saveLRPManual() {
   const today = new Date().toISOString().split('T')[0];
-  const weekOptions = [13,17,21,26,30,34,39,43,47,52];
-  const rows = weekOptions.map(w=>({
-    weeks: w,
-    end_date: document.getElementById(`lrp-${w}-date`)?.value||null,
-    expected_value: parseFloat(document.getElementById(`lrp-${w}-ev`)?.value)||null,
-    coverage_price: parseFloat(document.getElementById(`lrp-${w}-cov`)?.value)||null,
-    premium_cwt: parseFloat(document.getElementById(`lrp-${w}-prem`)?.value)||null,
-  })).filter(r=>r.expected_value||r.premium_cwt);
-
-  if(!rows.length){alert('Enter at least one row of data.');return;}
-
+  const ev = parseFloat(document.getElementById('lrp-13-ev')?.value)||null;
+  const prem = parseFloat(document.getElementById('lrp-13-prem')?.value)||null;
+  if(!ev&&!prem){alert('Enter at least Expected Value or Premium.');return;}
+  const rows = [{
+    weeks: 13,
+    end_date: document.getElementById('lrp-13-date')?.value||null,
+    expected_value: ev,
+    premium_cwt: prem,
+  }];
   const data = {
     date: today,
-    type: document.getElementById('lrp-type')?.value||'',
+    type: document.getElementById('lrp-type')?.value||'Feeder Cattle — Heifers Wt2',
     target_cwt: parseInt(document.getElementById('lrp-target-cwt')?.value)||9,
-    head_count: parseInt(document.getElementById('lrp-head')?.value)||null,
-    coverage_pct: parseInt(document.getElementById('lrp-coverage')?.value)||100,
+    head_count: parseInt(document.getElementById('lrp-head')?.value)||50,
+    coverage_pct: 100,
     rows,
   };
   localStorage.setItem('ct_lrp_'+today, JSON.stringify(data));
   window._lrpData = data;
-  alert('✅ LRP rates saved for today');
+  alert('✅ LRP rate saved for today');
   renderLRPRates(document.getElementById('markets-content'));
 }
-
 function renderFutures(content) {
   // Embed Barchart widget for CME feeder cattle futures
   content.innerHTML = `
