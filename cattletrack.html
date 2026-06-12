@@ -2381,7 +2381,8 @@ function populateCalvingDropdowns() {
   const damSelect = document.getElementById('cv-dam');
   if(damSelect) {
     const cows = (cache.get('animals')||[])
-      .filter(a=>['Cow','Heifer'].includes(a.sex)&&a.status!=='sold'&&a.status!=='dead')
+      .filter(a=>['cow','heifer'].includes((a.sex||'').toLowerCase()))
+      .filter(a=>a.status!=='sold'&&a.status!=='dead')
       .sort((a,b)=>a.tag.localeCompare(b.tag));
     damSelect.innerHTML = '<option value="">— Select Dam —</option>' +
       cows.map(a=>`<option value="${a.tag}">${a.tag}${a.name?' — '+a.name:''}</option>`).join('') +
