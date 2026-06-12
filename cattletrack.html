@@ -1853,43 +1853,170 @@ function printBreedingPlan() {
 
 // ── DASHBOARD ──────────────────────────────────────────────────────────────
 async function loadDashboard() {
-  const [animals, calving, health, sales] = await Promise.all([
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+  const yearAgo = new Date(); yearAgo.setFullYear(yearAgo.getFullYear()-1);
+  const next30 = new Date(); next30.setDate(today.getDate()+30);
+  const next7 = new Date(); next7.setDate(today.getDate()+7);
+
+  const [animals, calving, health, sales, tasks, pregChecks, aiRecords, syncGroups, semenInv] = await Promise.all([
     dbSelect('animals'),
     dbSelect('calving_records'),
     dbSelect('health_events'),
     dbSelect('sales'),
+    sb.from('tasks').select('*').eq('ranch_id',currentRanch.id).eq('done',false).lte('due_date',next30.toISOString().split('T')[0]).order('due_date'),
+    sb.from('preg_checks').select('*').eq('ranch_id',currentRanch.id).order('check_date',{ascending:false}).limit(200),
+    sb.from('ai_records').select('*').eq('ranch_id',currentRanch.id).order('ai_date',{ascending:false}).limit(100),
+    sb.from('sync_groups').select('*').eq('ranch_id',currentRanch.id).eq('status','active'),
+    sb.from('semen_inventory').select('*').eq('ranch_id',currentRanch.id),
   ]);
-  document.getElementById('ds-animals').textContent = animals.data?.length || 0;
-  // Calves this season (born in last 12 months)
-  const yearAgo = new Date(); yearAgo.setFullYear(yearAgo.getFullYear()-1);
-  const recentCalves = calving.data?.filter(c => new Date(c.birth_date) > yearAgo).length || 0;
-  document.getElementById('ds-calves').textContent = recentCalves;
-  document.getElementById('ds-health').textContent = health.data?.length || 0;
-  document.getElementById('ds-sales').textContent = sales.data?.length || 0;
+
+  const allAnimals = animals.data || [];
+  const allCalving = calving.data || [];
+  const allHealth = health.data || [];
+  const allTasks = tasks.data || [];
+  const allPreg = pregChecks.data || [];
+  const allAI = aiRecords.data || [];
+  const allSync = syncGroups.data || [];
+  const allSemen = semenInv.data || [];
+
+  // ── STAT CARDS ──────────────────────────────────────────────────────────
+  const activeCows = allAnimals.filter(a=>['Cow','Heifer'].includes(a.sex)&&a.status!=='sold'&&a.status!=='dead').length;
+  const activeBulls = allAnimals.filter(a=>a.sex==='Bull'&&a.status!=='sold'&&a.status!=='dead').length;
+  const recentCalves = allCalving.filter(c=>c.birth_date&&new Date(c.birth_date)>yearAgo).length;
+  const thisYearCalves = allCalving.filter(c=>c.birth_date&&new Date(c.birth_date).getFullYear()===today.getFullYear()).length;
+
+  document.getElementById('ds-animals').textContent = activeCows;
+  document.getElementById('ds-calves').textContent = thisYearCalves;
+  document.getElementById('ds-health').textContent = allHealth.filter(h=>h.event_date&&new Date(h.event_date)>yearAgo).length;
+  document.getElementById('ds-sales').textContent = allAnimals.filter(a=>a.status==='sold').length;
+
+  // ── ALERTS ──────────────────────────────────────────────────────────────
+  const alerts = [];
 
   // Withdrawal alerts
-  const today = new Date();
-  const inWD = health.data?.filter(h => {
-    if(!h.withdrawal_days || h.withdrawal_days <= 0) return false;
+  const inWD = allHealth.filter(h => {
+    if(!h.withdrawal_days||h.withdrawal_days<=0) return false;
     const clear = new Date(h.event_date);
-    clear.setDate(clear.getDate() + h.withdrawal_days);
+    clear.setDate(clear.getDate()+h.withdrawal_days);
     return clear >= today;
-  }) || [];
-  const alertBox = document.getElementById('dash-alerts');
-  alertBox.innerHTML = inWD.length
-    ? `<div class="alert alert-danger">⚠️ <strong>${inWD.length} animal(s)</strong> in withdrawal period. Check Health → Withdrawal tab.</div>`
-    : '';
+  });
+  if(inWD.length) alerts.push(`<div class="alert alert-danger">⚠️ <strong>${inWD.length} animal(s)</strong> in withdrawal period — check Health tab</div>`);
 
-  // Recent activity
-  const all = [
-    ...(calving.data||[]).slice(0,5).map(r=>({date:r.birth_date, icon:'🐄', text:`Calving: ${r.calf_tag} born — dam ${r.dam_tag||'—'}`})),
-    ...(health.data||[]).slice(0,5).map(r=>({date:r.event_date, icon:'💉', text:`${r.event_type}: ${r.product||''} — ${r.animal_tag}`})),
-    ...(sales.data||[]).slice(0,5).map(r=>({date:r.sale_date, icon:'💰', text:`Sale: ${r.animal_tag} to ${r.buyer||'buyer'} — $${(r.net_price||0).toFixed(0)}`})),
-  ].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,8);
+  // Low semen inventory
+  const lowSemen = allSemen.filter(s=>s.straws<=5);
+  if(lowSemen.length) alerts.push(`<div class="alert alert-warning">📦 Low semen inventory: <strong>${lowSemen.map(s=>s.sire).join(', ')}</strong></div>`);
+
+  // Overdue tasks
+  const overdue = allTasks.filter(t=>t.due_date<todayStr);
+  if(overdue.length) alerts.push(`<div class="alert alert-warning">📋 <strong>${overdue.length} overdue task${overdue.length>1?'s':''}</strong> — check Calendar</div>`);
+
+  // Active sync groups with steps due today
+  const syncDueToday = allSync.filter(g=>(g.steps||[]).some(s=>!s.completed&&s.date===todayStr));
+  if(syncDueToday.length) alerts.push(`<div class="alert alert-danger">💊 <strong>Sync step due TODAY</strong> — ${syncDueToday.map(g=>g.name).join(', ')}</div>`);
+
+  document.getElementById('dash-alerts').innerHTML = alerts.join('');
+
+  // ── UPCOMING TASKS ──────────────────────────────────────────────────────
+  const upcomingTasks = allTasks.filter(t=>t.due_date>=todayStr).slice(0,5);
+  const overdueTasks = allTasks.filter(t=>t.due_date<todayStr).slice(0,3);
+  const taskItems = [...overdueTasks.map(t=>{
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div><div style="font-size:13px;font-weight:500;color:var(--red)">${t.title}</div>
+      <div style="font-size:11px;color:var(--red)">Overdue — was due ${t.due_date}</div></div>
+      <span class="badge badge-red" style="font-size:10px">Overdue</span></div>`;
+  }), ...upcomingTasks.map(t=>{
+    const days = Math.ceil((new Date(t.due_date)-today)/86400000);
+    const color = days===0?'var(--red)':days<=3?'var(--amber)':'var(--gray)';
+    const label = days===0?'Today':days===1?'Tomorrow':`${days}d`;
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div><div style="font-size:13px;font-weight:500">${t.title}</div>
+      <div style="font-size:11px;color:var(--gray)">${t.category||'general'}${t.animal_tag?' · '+t.animal_tag:''}</div></div>
+      <span style="font-size:12px;font-weight:700;color:${color};flex-shrink:0;margin-left:8px">${label}</span></div>`;
+  })];
+
+  // ── BREEDING SEASON STATUS ───────────────────────────────────────────────
+  const activeSync = allSync.length;
+  const recentAI = allAI.filter(a=>a.ai_date&&new Date(a.ai_date)>new Date(today.getFullYear(),0,1)).length;
+  const openCows = allPreg.filter(p=>p.result==='open'&&p.check_date&&new Date(p.check_date)>yearAgo).length;
+  const pregnantCows = allPreg.filter(p=>p.result==='pregnant'&&p.check_date&&new Date(p.check_date)>yearAgo).length;
+  const conceptionRate = (recentAI>0&&pregnantCows>0) ? Math.round(pregnantCows/(pregnantCows+openCows)*100) : null;
+
+  // ── CALVING SEASON STATUS ────────────────────────────────────────────────
+  const last30days = new Date(); last30days.setDate(today.getDate()-30);
+  const recentCalvings = allCalving.filter(c=>c.birth_date&&new Date(c.birth_date)>last30days);
+  const difficultCalvings = recentCalvings.filter(c=>parseInt(c.calving_ease)>=3).length;
+
+  // ── CULL CANDIDATES ──────────────────────────────────────────────────────
+  const cullCount = allAnimals.filter(a => {
+    if(!['Cow','Heifer'].includes(a.sex)||a.status==='sold'||a.status==='dead') return false;
+    const opens = allPreg.filter(p=>p.animal_tag===a.tag&&p.result==='open').length;
+    const total = allPreg.filter(p=>p.animal_tag===a.tag).length;
+    const healthCost = allHealth.filter(h=>h.animal_tag===a.tag).reduce((s,h)=>s+(h.cost||0),0);
+    let score = 100;
+    if(opens>0&&total>0) score -= Math.round(opens/total*30);
+    if(healthCost>500) score -= 15;
+    if(a.dob) { const age=(today-new Date(a.dob))/(365.25*24*3600*1000); if(age>12) score-=15; }
+    return score < 50;
+  }).length;
+
+  // ── BUILD DASHBOARD HTML ─────────────────────────────────────────────────
   const actBox = document.getElementById('dash-activity');
-  actBox.innerHTML = all.length
-    ? all.map(e=>`<div style="display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)"><span style="font-size:18px">${e.icon}</span><div><div style="font-size:13px;font-weight:500">${e.text}</div><div style="font-size:11px;color:var(--gray)">${e.date||''}</div></div></div>`).join('')
-    : '<div class="empty"><div class="empty-icon">🐄</div><p>No recent activity yet.</p></div>';
+  actBox.innerHTML = `
+    <!-- Breeding & Calving Summary Row -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px">
+        <div style="font-size:11px;font-weight:600;color:var(--orange);text-transform:uppercase;margin-bottom:8px">🐄 Herd Summary</div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid var(--border)"><span style="color:var(--gray)">Cows/Heifers</span><strong>${activeCows}</strong></div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid var(--border)"><span style="color:var(--gray)">Bulls</span><strong>${activeBulls}</strong></div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid var(--border)"><span style="color:var(--gray)">${today.getFullYear()} Calves</span><strong>${thisYearCalves}</strong></div>
+        ${cullCount>0?`<div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0" onclick="showPage('insights')" style="cursor:pointer"><span style="color:var(--red)">Cull Candidates</span><strong style="color:var(--red)">${cullCount} ⚠️</strong></div>`:'<div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0"><span style="color:var(--gray)">Cull Candidates</span><strong style="color:var(--green)">None ✓</strong></div>'}
+      </div>
+      <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px">
+        <div style="font-size:11px;font-weight:600;color:var(--orange);text-transform:uppercase;margin-bottom:8px">🐂 Breeding Status</div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid var(--border)"><span style="color:var(--gray)">Active Sync Groups</span><strong>${activeSync}</strong></div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid var(--border)"><span style="color:var(--gray)">${today.getFullYear()} AI Breedings</span><strong>${recentAI}</strong></div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid var(--border)"><span style="color:var(--gray)">Pregnant (last check)</span><strong style="color:var(--green)">${pregnantCows}</strong></div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0"><span style="color:var(--gray)">Conception Rate</span><strong style="color:${conceptionRate&&conceptionRate>=85?'var(--green)':conceptionRate&&conceptionRate>=70?'var(--amber)':'var(--red)'}">${conceptionRate!==null?conceptionRate+'%':'—'}</strong></div>
+      </div>
+    </div>
+
+    <!-- Recent Calvings -->
+    ${recentCalvings.length?`
+    <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:11px;font-weight:600;color:var(--orange);text-transform:uppercase">🐄 Recent Calvings (last 30 days)</div>
+        <span style="font-size:12px;color:var(--gray)">${recentCalvings.length} calves${difficultCalvings?` · <span style="color:var(--red)">${difficultCalvings} difficult</span>`:'  · all easy'}</span>
+      </div>
+      ${recentCalvings.slice(0,4).map(c=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
+          <div><strong>${c.calf_tag}</strong> <span style="color:var(--gray)">· dam ${c.dam_tag||'—'} · ${c.sex||'—'}</span></div>
+          <div style="text-align:right;flex-shrink:0"><span style="color:${parseInt(c.calving_ease)>=3?'var(--red)':'var(--green)'}">${c.birth_date||'—'}</span>${c.birth_weight?`<div style="font-size:11px;color:var(--gray)">${c.birth_weight} lb</div>`:''}</div>
+        </div>`).join('')}
+      ${recentCalvings.length>4?`<div style="font-size:12px;color:var(--gray);padding-top:6px;text-align:center">+${recentCalvings.length-4} more — see Calving tab</div>`:''}
+    </div>`:
+    `<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px;text-align:center;color:var(--gray);font-size:13px">No calvings in the last 30 days</div>`}
+
+    <!-- Upcoming Tasks -->
+    <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:11px;font-weight:600;color:var(--orange);text-transform:uppercase">📋 Upcoming Tasks</div>
+        <span onclick="showPage('calendar')" style="font-size:12px;color:var(--orange);cursor:pointer">View all →</span>
+      </div>
+      ${taskItems.length?taskItems.join(''):
+      '<div style="text-align:center;color:var(--gray);font-size:13px;padding:8px 0">No upcoming tasks in the next 30 days</div>'}
+    </div>
+
+    <!-- Quick Actions -->
+    <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px">
+      <div style="font-size:11px;font-weight:600;color:var(--orange);text-transform:uppercase;margin-bottom:10px">⚡ Quick Actions</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <button onclick="showPage('calving')" style="background:var(--bg2);border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;text-align:left">🐄 Log Calving</button>
+        <button onclick="showPage('health')" style="background:var(--bg2);border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;text-align:left">💉 Log Treatment</button>
+        <button onclick="openGroupAction()" style="background:var(--bg2);border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;text-align:left">👥 Group Action</button>
+        <button onclick="showPage('insights')" style="background:var(--bg2);border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;text-align:left">⚡ View Insights</button>
+      </div>
+    </div>`;
 }
 
 // ── ANIMALS ────────────────────────────────────────────────────────────────
