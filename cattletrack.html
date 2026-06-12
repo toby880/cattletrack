@@ -2195,8 +2195,9 @@ async function showProfileTab(tab) {
         ${!isAngus?`<div class="form-group"><label>RAAA Pro Extract (.sen) or Leachman CSV</label><input type="file" id="epd-import" onchange="importEPDs(event)" style="font-size:13px" accept=".sen,.csv,.txt"></div>`:''}
         <div class="form-group"><label>${isAngus?'AAA EPD File (.xlsx)':'AAA EPD File (.xlsx) — for Black Angus animals'}</label><input type="file" id="aaa-import" onchange="importAAAFile(this.files[0])" style="font-size:13px" accept=".xlsx,.xls"></div>
         <div style="font-size:12px;color:var(--gray);margin-bottom:12px">${isAngus?'Upload your AAA EPD Excel file to import all EPDs and $Values for your Angus animals.':'RAAA members: upload your Pro Extract (.sen). Leachman: upload your CSV. Black Angus: use the AAA EPD file upload below.'}</div>
-        <div class="form-row">${['bw','ww','yw','adg','dmi','milk','hpg','cem','mw','stay','fat','rea','marbling','ced','me','hb','gm','pro'].map(f=>`<div class="form-group"><label>${labels[f]}</label><input type="number" id="epd-${f}" value="${epds?.[f]??''}" step="0.01" placeholder="0.0"></div>`).join('')}</div>
-        <button class="btn btn-primary" onclick="saveEPDs('${tag}')">Save EPDs</button>
+        ${!isAngus?`<div class="form-row">${['bw','ww','yw','adg','dmi','milk','hpg','cem','mw','stay','fat','rea','marbling','ced','me','hb','gm','pro'].map(f=>`<div class="form-group"><label>${labels[f]}</label><input type="number" id="epd-${f}" value="${epds?.[f]??''}" step="0.01" placeholder="0.0"></div>`).join('')}</div>
+        <button class="btn btn-primary" onclick="saveEPDs('${tag}')">Save EPDs</button>`:''}
+
       </div>`;
   }
 
