@@ -390,7 +390,12 @@ tr:hover td{background:var(--bg)}
           <div class="card-title">New Calving Record</div>
           <div class="form-group"><label>Calf Tag / ID</label><input type="text" id="cv-tag" placeholder="e.g. K253-P"></div>
           <div class="form-row">
-            <div class="form-group"><label>Dam Tag</label><input type="text" id="cv-dam" placeholder="Dam ID"></div>
+            <div class="form-group"><label>Dam</label>
+              <select id="cv-dam" style="width:100%">
+                <option value="">— Select Dam —</option>
+                ${(cache.get('animals')||[]).filter(a=>['Cow','Heifer'].includes(a.sex)&&a.status!=='sold'&&a.status!=='dead').sort((a,b)=>a.tag.localeCompare(b.tag)).map(a=>`<option value="${a.tag}">${a.tag}${a.name?' — '+a.name:''}</option>`).join('')}
+              </select>
+            </div>
             <div class="form-group"><label>Sire</label><input type="text" id="cv-sire" placeholder="Sire name or tag"></div>
           </div>
           <div class="form-row">
@@ -1120,14 +1125,30 @@ async function processOfflineQueue() {
   if(!offlineQueue.length || !currentRanch) return;
   document.getElementById('syncBanner').classList.add('show');
   const failed = [];
+  let synced = 0;
   for(const item of offlineQueue) {
     try {
-      await sb.from(item.table).insert({...item.data, ranch_id: currentRanch.id});
+      const result = await sb.from(item.table).insert({...item.data, ranch_id: currentRanch.id}).select();
+      if(result.error) {
+        // Only retry if it's not a duplicate — duplicates should be dropped
+        if(!result.error.message?.includes('duplicate') && !result.error.message?.includes('unique')) {
+          failed.push(item);
+        }
+      } else {
+        synced++;
+      }
     } catch(e) { failed.push(item); }
   }
   offlineQueue = failed;
   localStorage.setItem('ct_offline_queue', JSON.stringify(offlineQueue));
   document.getElementById('syncBanner').classList.remove('show');
+  if(synced > 0) {
+    // Show brief success message
+    const banner = document.getElementById('syncBanner');
+    banner.textContent = `✅ ${synced} record${synced>1?'s':''} synced`;
+    banner.classList.add('show');
+    setTimeout(()=>{ banner.classList.remove('show'); banner.textContent=''; }, 3000);
+  }
 }
 
 async function dbInsert(table, data) {
@@ -1136,7 +1157,21 @@ async function dbInsert(table, data) {
     localStorage.setItem('ct_offline_queue', JSON.stringify(offlineQueue));
     return {data: [{...data, id: 'offline-'+Date.now()}], error: null};
   }
-  return await sb.from(table).insert({...data, ranch_id: currentRanch.id}).select();
+  try {
+    const result = await sb.from(table).insert({...data, ranch_id: currentRanch.id}).select();
+    if(result.error && (result.error.message?.includes('fetch') || result.error.message?.includes('network') || result.error.code === 'PGRST301')) {
+      // Network error even though navigator.onLine was true — queue it
+      offlineQueue.push({table, data});
+      localStorage.setItem('ct_offline_queue', JSON.stringify(offlineQueue));
+      return {data: [{...data, id: 'offline-'+Date.now()}], error: null};
+    }
+    return result;
+  } catch(e) {
+    // Network failure — queue for later
+    offlineQueue.push({table, data});
+    localStorage.setItem('ct_offline_queue', JSON.stringify(offlineQueue));
+    return {data: [{...data, id: 'offline-'+Date.now()}], error: null};
+  }
 }
 
 async function dbSelect(table, filters={}) {
@@ -2355,7 +2390,8 @@ async function saveCalving() {
     notes: document.getElementById('cv-notes').value.trim(),
   });
   if(error) { alert('Error saving: '+error.message); return; }
-  ['cv-tag','cv-dam','cv-sire','cv-weight','cv-location','cv-notes'].forEach(id=>document.getElementById(id).value='');
+  ['cv-tag','cv-sire','cv-weight','cv-location','cv-notes'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('cv-dam').selectedIndex = 0;
   alert('✅ Calving record saved for '+tag);
 }
 
