@@ -4528,12 +4528,15 @@ async function importAAAFile(file) {
   const animals=cache.get('animals')||[];
 
   let imported=0, skipped=0;
+  console.log('AAA import: rows=',rows.length,'headers=',headers.slice(0,5));
+  console.log('Animals in cache:', animals.length);
 
   for(const vals of rows) {
     if(!vals||vals.length<10)continue;
     const tag=String(vals[iTag]||'').trim().replace(/\s+/g,'');
     const name=String(vals[iName]||'').trim();
     const reg=String(vals[iReg]||'').trim();
+    console.log('AAA row: tag=',repr(tag),'name=',name,'reg=',reg);
     if(!tag&&!reg&&!name)continue;
 
     const match=animals.find(a=>
@@ -4542,6 +4545,7 @@ async function importAAAFile(file) {
       (name && a.name&&a.name.trim().toUpperCase()===name.trim().toUpperCase())
     );
 
+    console.log('Match result:', match?.tag, 'for tag='+tag+' name='+name+' reg='+reg);
     if(!match){skipped++;continue;}
 
     const n=i=>{ if(i<0||i>=vals.length)return null; const x=parseFloat(vals[i]); return isNaN(x)?null:x; };
