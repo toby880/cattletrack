@@ -727,11 +727,28 @@ tr:hover td{background:var(--bg)}
 
     <!-- REPORTS -->
     <!-- INVENTORY -->
+    <!-- MARKETS -->
+    <div class="page" id="page-markets">
+      <div class="section-header">
+        <div class="section-title">📈 Markets</div>
+        <button class="btn btn-secondary btn-sm" onclick="showPage('stockers')">← Stockers</button>
+      </div>
+      <div class="tab-bar">
+        <button class="tab active" onclick="showMarketsTab('prices')">Cash Prices</button>
+        <button class="tab" onclick="showMarketsTab('futures')">Futures</button>
+        <button class="tab" onclick="showMarketsTab('calculator')">Sell Calculator</button>
+      </div>
+      <div id="markets-content"><div class="loading"><div class="spinner"></div>Loading market data...</div></div>
+    </div>
+
     <!-- STOCKERS -->
     <div class="page" id="page-stockers">
       <div class="section-header">
         <div class="section-title">Stockers</div>
-        <button class="btn btn-primary btn-sm" onclick="openNewStockerGroup()">+ New Group</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" onclick="showPage('markets')">📈 Markets</button>
+          <button class="btn btn-primary btn-sm" onclick="openNewStockerGroup()">+ New Group</button>
+        </div>
       </div>
       <div id="stocker-list-view">
         <div class="loading"><div class="spinner"></div>Loading...</div>
@@ -1505,6 +1522,7 @@ function showPage(name) {
   if(name==='calendar') loadCalendar();
   if(name==='inventory') showInventoryTab('medications');
   if(name==='stockers') loadStockerGroups();
+  if(name==='markets') showMarketsTab('prices');
   if(name==='reports') { setTimeout(()=>{ showReportsTab('builder'); updateReportColumns(); }, 50); }
   if(name==='settings') loadSettings();
 }
@@ -4986,7 +5004,378 @@ async function importEPDCSV(text) {
 
 
 
-// ── STOCKERS ───────────────────────────────────────────────────────────────
+// ── MARKETS ────────────────────────────────────────────────────────────────
+let marketDataCache = null;
+let marketDataTime = null;
+
+async function showMarketsTab(tab) {
+  document.querySelectorAll('#page-markets .tab-bar .tab').forEach((b,i)=>
+    b.classList.toggle('active',['prices','futures','calculator'][i]===tab));
+  const content = document.getElementById('markets-content');
+
+  if(tab==='prices') await renderCashPrices(content);
+  else if(tab==='futures') renderFutures(content);
+  else if(tab==='calculator') renderSellCalculator(content);
+}
+
+async function fetchMarketData(content) {
+  // Use Claude API to fetch and parse USDA Oklahoma market data
+  if(marketDataCache && marketDataTime && (Date.now()-marketDataTime) < 3600000) {
+    return marketDataCache; // Cache for 1 hour
+  }
+
+  content.innerHTML = '<div class="loading"><div class="spinner"></div>Fetching Oklahoma market prices...</div>';
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        tools: [{type:'web_search_20250305',name:'web_search'}],
+        messages: [{
+          role: 'user',
+          content: `Search for current Oklahoma feeder cattle cash prices from USDA AMS. Look for the most recent Oklahoma National Stockyards or Oklahoma Direct Feeder Cattle report prices for steers and heifers at different weights (600-700 lb, 700-800 lb, 800-900 lb). Also get the current CME Feeder Cattle futures price. Return ONLY a JSON object like this, no other text:
+{
+  "report_date": "date of report",
+  "steers": [
+    {"weight": "750-800", "price": 285.50, "head": 450},
+    {"weight": "800-850", "price": 278.25, "head": 320}
+  ],
+  "heifers": [
+    {"weight": "700-750", "price": 272.00, "head": 280}
+  ],
+  "cme_feeder_nearby": 295.50,
+  "cme_feeder_deferred": 288.75,
+  "market_notes": "brief summary of market conditions"
+}`
+        }]
+      })
+    });
+
+    const data = await response.json();
+    const text = data.content?.filter(c=>c.type==='text').map(c=>c.text).join('') || '';
+
+    // Parse JSON from response
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if(jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      marketDataCache = parsed;
+      marketDataTime = Date.now();
+      return parsed;
+    }
+  } catch(e) {
+    console.error('Market data error:', e);
+  }
+  return null;
+}
+
+async function renderCashPrices(content) {
+  const data = await fetchMarketData(content);
+
+  if(!data) {
+    content.innerHTML = `
+      <div class="alert alert-warning">⚠️ Could not fetch live market data. Check your connection and try again.</div>
+      <div class="card">
+        <div class="card-title">Manual Price Entry</div>
+        <div style="font-size:13px;color:var(--gray);margin-bottom:12px">Enter current prices manually to use the Sell Calculator:</div>
+        <div class="form-row">
+          <div class="form-group"><label>750-800 lb Steers ($/cwt)</label><input type="number" id="manual-steer-price" placeholder="285.00" inputmode="decimal"></div>
+          <div class="form-group"><label>CME Nearby Futures ($/cwt)</label><input type="number" id="manual-cme" placeholder="295.00" inputmode="decimal"></div>
+        </div>
+        <button class="btn btn-primary" onclick="showMarketsTab('calculator')">Go to Sell Calculator →</button>
+      </div>`;
+    return;
+  }
+
+  const fmt = v => v ? `$${parseFloat(v).toFixed(2)}` : '—';
+
+  content.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-size:12px;color:var(--gray)">Source: USDA AMS · ${data.report_date||'Latest available'}</div>
+      <button onclick="marketDataCache=null;showMarketsTab('prices')" style="background:var(--bg2);border:none;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit">🔄 Refresh</button>
+    </div>
+
+    <!-- CME Futures Summary -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
+        <div style="font-size:11px;color:var(--gray);margin-bottom:4px">CME Feeder Cattle — Nearby</div>
+        <div style="font-size:28px;font-weight:800;color:var(--orange)">${fmt(data.cme_feeder_nearby)}</div>
+        <div style="font-size:11px;color:var(--gray)">per cwt</div>
+      </div>
+      <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
+        <div style="font-size:11px;color:var(--gray);margin-bottom:4px">CME Feeder Cattle — Deferred</div>
+        <div style="font-size:28px;font-weight:800;color:var(--dark)">${fmt(data.cme_feeder_deferred)}</div>
+        <div style="font-size:11px;color:var(--gray)">per cwt</div>
+      </div>
+    </div>
+
+    <!-- Oklahoma Cash Prices -->
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">Oklahoma Cash — Steers</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Weight (lbs)</th><th>Price ($/cwt)</th><th>Head</th></tr></thead>
+        <tbody>${(data.steers||[]).map(r=>`
+          <tr><td>${r.weight} lbs</td>
+          <td><strong style="color:var(--orange)">${fmt(r.price)}</strong></td>
+          <td style="color:var(--gray)">${r.head||'—'}</td></tr>`).join('')||
+          '<tr><td colspan="3" style="text-align:center;color:var(--gray-lt)">No data</td></tr>'}
+        </tbody>
+      </table></div>
+    </div>
+
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">Oklahoma Cash — Heifers</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Weight (lbs)</th><th>Price ($/cwt)</th><th>Head</th></tr></thead>
+        <tbody>${(data.heifers||[]).map(r=>`
+          <tr><td>${r.weight} lbs</td>
+          <td><strong style="color:var(--orange)">${fmt(r.price)}</strong></td>
+          <td style="color:var(--gray)">${r.head||'—'}</td></tr>`).join('')||
+          '<tr><td colspan="3" style="text-align:center;color:var(--gray-lt)">No data</td></tr>'}
+        </tbody>
+      </table></div>
+    </div>
+
+    ${data.market_notes ? `
+    <div class="card">
+      <div class="card-title">Market Summary</div>
+      <div style="font-size:13px;line-height:1.6;color:var(--dark)">${data.market_notes}</div>
+    </div>` : ''}
+
+    <button class="btn btn-primary" style="width:100%;margin-top:4px" onclick="showMarketsTab('calculator')">
+      ⚡ Use These Prices in Sell Calculator →
+    </button>`;
+
+  // Store prices for calculator
+  window._marketPrices = data;
+}
+
+function renderFutures(content) {
+  // Embed Barchart widget for CME feeder cattle futures
+  content.innerHTML = `
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">CME Feeder Cattle Futures</div>
+      <div style="font-size:12px;color:var(--gray);margin-bottom:10px">Live delayed quotes — CME Group</div>
+      <iframe src="https://widget.barchart.com/commodity/GF?widgetId=1" 
+        width="100%" height="300" frameborder="0" 
+        style="border-radius:8px"
+        sandbox="allow-scripts allow-same-origin">
+      </iframe>
+    </div>
+    <div class="card">
+      <div class="card-title">Live Cattle Futures</div>
+      <div style="font-size:12px;color:var(--gray);margin-bottom:10px">Live delayed quotes — CME Group</div>
+      <iframe src="https://widget.barchart.com/commodity/LC?widgetId=1"
+        width="100%" height="300" frameborder="0"
+        style="border-radius:8px"
+        sandbox="allow-scripts allow-same-origin">
+      </iframe>
+    </div>
+    <div style="font-size:11px;color:var(--gray-lt);text-align:center;padding:8px">
+      Quotes delayed 10 minutes. Source: Barchart.com / CME Group
+    </div>`;
+}
+
+async function renderSellCalculator(content) {
+  // Load stocker groups for the dropdown
+  const {data:groups} = await sb.from('stocker_groups').select('*')
+    .eq('ranch_id',currentRanch.id).eq('status','active');
+
+  const mkt = window._marketPrices;
+  const defaultPrice = mkt?.steers?.[0]?.price || mkt?.cme_feeder_nearby || '';
+
+  content.innerHTML = `
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">⚡ Sell Decision Calculator</div>
+      <div style="font-size:13px;color:var(--gray);margin-bottom:14px">
+        Enter your group's data to see whether to sell now or hold for more gain.
+      </div>
+
+      ${groups?.length ? `
+      <div class="form-group"><label>Load from Stocker Group (optional)</label>
+        <select id="calc-group" onchange="loadGroupIntoCalc()">
+          <option value="">— Enter manually —</option>
+          ${groups.map(g=>`<option value="${g.id}" data-cost="${g.cost_basis||0}" data-head="${g.head_count||0}" data-arrival="${g.arrival_avg_weight||0}" data-date="${g.arrival_date||''}">${g.name}</option>`).join('')}
+        </select>
+      </div>` : ''}
+
+      <div class="form-row">
+        <div class="form-group"><label>Current Head Count</label><input type="number" id="calc-head" placeholder="100" inputmode="numeric"></div>
+        <div class="form-group"><label>Current Avg Weight (lbs)</label><input type="number" id="calc-weight" placeholder="800" inputmode="numeric" oninput="runSellCalc()"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>ADG (lbs/day)</label><input type="number" id="calc-adg" placeholder="2.5" step="0.1" inputmode="decimal" oninput="runSellCalc()"></div>
+        <div class="form-group"><label>Days on Feed</label><input type="number" id="calc-days" placeholder="60" inputmode="numeric" oninput="runSellCalc()"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Total Cost Basis ($)</label><input type="number" id="calc-cost" placeholder="0" inputmode="numeric" oninput="runSellCalc()"></div>
+        <div class="form-group"><label>Daily Grazing Cost/Head ($)</label><input type="number" id="calc-daily-cost" placeholder="1.50" step="0.25" inputmode="decimal" oninput="runSellCalc()"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Current Cash Price ($/cwt)</label><input type="number" id="calc-price-now" placeholder="${defaultPrice}" inputmode="decimal" value="${defaultPrice}" oninput="runSellCalc()"></div>
+        <div class="form-group"><label>Sell in 30 days — Projected Price ($/cwt)</label><input type="number" id="calc-price-future" placeholder="${mkt?.cme_feeder_deferred||''}" inputmode="decimal" value="${mkt?.cme_feeder_deferred||''}" oninput="runSellCalc()"></div>
+      </div>
+      <div class="form-group"><label>Shrink % at sale</label>
+        <select id="calc-shrink" onchange="runSellCalc()">
+          <option value="2">2%</option><option value="3" selected>3%</option>
+          <option value="4">4%</option><option value="5">5%</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="calc-results"></div>`;
+
+  // Auto-run if we have data
+  setTimeout(runSellCalc, 100);
+}
+
+function loadGroupIntoCalc() {
+  const sel = document.getElementById('calc-group');
+  const opt = sel.selectedOptions[0];
+  if(!opt || !opt.value) return;
+
+  document.getElementById('calc-head').value = opt.dataset.cost ? '' : '';
+  document.getElementById('calc-cost').value = opt.dataset.cost || '';
+  document.getElementById('calc-head').value = opt.dataset.head || '';
+
+  // Calculate current weight from arrival weight + ADG * days
+  const arrivalWt = parseFloat(opt.dataset.arrival)||0;
+  const arrivalDate = opt.dataset.date;
+  if(arrivalDate && arrivalWt) {
+    const days = Math.round((new Date()-new Date(arrivalDate))/86400000);
+    document.getElementById('calc-days').value = days;
+    // Estimate current weight assuming 2.5 ADG
+    const estWeight = arrivalWt + (days * 2.5);
+    document.getElementById('calc-weight').value = Math.round(estWeight);
+    document.getElementById('calc-adg').value = 2.5;
+  }
+  runSellCalc();
+}
+
+function runSellCalc() {
+  const head = parseInt(document.getElementById('calc-head')?.value)||0;
+  const weight = parseFloat(document.getElementById('calc-weight')?.value)||0;
+  const adg = parseFloat(document.getElementById('calc-adg')?.value)||0;
+  const days = parseInt(document.getElementById('calc-days')?.value)||0;
+  const costBasis = parseFloat(document.getElementById('calc-cost')?.value)||0;
+  const dailyCost = parseFloat(document.getElementById('calc-daily-cost')?.value)||0;
+  const priceNow = parseFloat(document.getElementById('calc-price-now')?.value)||0;
+  const priceFuture = parseFloat(document.getElementById('calc-price-future')?.value)||0;
+  const shrink = parseFloat(document.getElementById('calc-shrink')?.value)||3;
+  const results = document.getElementById('calc-results');
+
+  if(!head||!weight||!priceNow) {
+    results.innerHTML = '<div style="text-align:center;color:var(--gray);font-size:13px;padding:20px">Enter head count, current weight, and current price to see analysis</div>';
+    return;
+  }
+
+  const shrinkFactor = 1 - shrink/100;
+
+  // Sell NOW
+  const sellNowWeightPerHead = weight * shrinkFactor;
+  const sellNowValuePerHead = (sellNowWeightPerHead/100) * priceNow;
+  const sellNowTotalValue = sellNowValuePerHead * head;
+  const profitNow = sellNowTotalValue - costBasis;
+  const profitPerHeadNow = profitNow / Math.max(1,head);
+
+  // Sell in 30 days
+  const holdDays = 30;
+  const futureWeight = weight + (adg * holdDays);
+  const futureWeightAfterShrink = futureWeight * shrinkFactor;
+  const futureValuePerHead = (futureWeightAfterShrink/100) * (priceFuture||priceNow);
+  const futureTotalValue = futureValuePerHead * head;
+  const holdingCost = dailyCost * holdDays * head;
+  const profitFuture = futureTotalValue - costBasis - holdingCost;
+  const profitPerHeadFuture = profitFuture / Math.max(1,head);
+
+  // Gain value vs cost of gain
+  const lbsGained = adg * holdDays * head;
+  const gainValue = futureTotalValue - sellNowTotalValue;
+  const gainCost = holdingCost;
+  const costOfGain = adg > 0 ? (dailyCost / adg).toFixed(2) : '—';
+  const valueOfGain = priceNow > 0 ? (priceNow/100).toFixed(4) : '—';
+
+  const sellNowBetter = profitNow >= profitFuture;
+  const recommendation = sellNowBetter
+    ? '🔴 SELL NOW'
+    : '🟢 HOLD 30 DAYS';
+  const recColor = sellNowBetter ? 'var(--red)' : 'var(--green)';
+  const recReason = sellNowBetter
+    ? `Holding 30 days costs $${gainCost.toFixed(0)} but only adds $${gainValue.toFixed(0)} in value — you lose $${(gainCost-gainValue).toFixed(0)}`
+    : `Holding 30 days costs $${gainCost.toFixed(0)} but adds $${gainValue.toFixed(0)} in value — you gain $${(gainValue-gainCost).toFixed(0)}`;
+
+  const fmt$ = v => '$'+v.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});
+  const fmtc = v => '$'+parseFloat(v).toFixed(2);
+
+  results.innerHTML = `
+    <!-- Recommendation -->
+    <div style="background:${recColor};color:white;border-radius:12px;padding:16px;text-align:center;margin-bottom:12px">
+      <div style="font-size:22px;font-weight:800;margin-bottom:6px">${recommendation}</div>
+      <div style="font-size:13px;opacity:0.9">${recReason}</div>
+    </div>
+
+    <!-- Sell Now vs Hold Comparison -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div style="background:var(--white);border:2px solid ${sellNowBetter?'var(--green)':'var(--border)'};border-radius:10px;padding:14px">
+        <div style="font-size:11px;font-weight:600;color:var(--gray);text-transform:uppercase;margin-bottom:8px">Sell Now</div>
+        <div style="font-size:13px;padding:3px 0;border-bottom:1px solid var(--border)"><span style="color:var(--gray)">Sell weight</span><br><strong>${Math.round(sellNowWeightPerHead)} lbs/hd</strong></div>
+        <div style="font-size:13px;padding:3px 0;border-bottom:1px solid var(--border)"><span style="color:var(--gray)">Total value</span><br><strong>${fmt$(sellNowTotalValue)}</strong></div>
+        <div style="font-size:13px;padding:3px 0;border-bottom:1px solid var(--border)"><span style="color:var(--gray)">Profit/loss</span><br><strong style="color:${profitNow>=0?'var(--green)':'var(--red)'}">${fmt$(profitNow)}</strong></div>
+        <div style="font-size:13px;padding:3px 0"><span style="color:var(--gray)">Per head</span><br><strong style="color:${profitPerHeadNow>=0?'var(--green)':'var(--red)'}">${fmt$(profitPerHeadNow)}/hd</strong></div>
+      </div>
+      <div style="background:var(--white);border:2px solid ${!sellNowBetter?'var(--green)':'var(--border)'};border-radius:10px;padding:14px">
+        <div style="font-size:11px;font-weight:600;color:var(--gray);text-transform:uppercase;margin-bottom:8px">Hold 30 Days</div>
+        <div style="font-size:13px;padding:3px 0;border-bottom:1px solid var(--border)"><span style="color:var(--gray)">Projected weight</span><br><strong>${Math.round(futureWeightAfterShrink)} lbs/hd</strong></div>
+        <div style="font-size:13px;padding:3px 0;border-bottom:1px solid var(--border)"><span style="color:var(--gray)">Total value</span><br><strong>${fmt$(futureTotalValue)}</strong></div>
+        <div style="font-size:13px;padding:3px 0;border-bottom:1px solid var(--border)"><span style="color:var(--gray)">Profit/loss</span><br><strong style="color:${profitFuture>=0?'var(--green)':'var(--red)'}">${fmt$(profitFuture)}</strong></div>
+        <div style="font-size:13px;padding:3px 0"><span style="color:var(--gray)">Per head</span><br><strong style="color:${profitPerHeadFuture>=0?'var(--green)':'var(--red)'}">${fmt$(profitPerHeadFuture)}/hd</strong></div>
+      </div>
+    </div>
+
+    <!-- Cost of Gain Analysis -->
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">Cost of Gain Analysis</div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid var(--border)">
+        <span style="color:var(--gray)">Cost of gain (grazing only)</span>
+        <strong>${fmtc(costOfGain)}/lb</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid var(--border)">
+        <span style="color:var(--gray)">Value of gain (at current price)</span>
+        <strong>${fmtc(parseFloat(valueOfGain)*100)}/cwt gained</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid var(--border)">
+        <span style="color:var(--gray)">30-day holding cost (total)</span>
+        <strong style="color:var(--red)">${fmt$(holdingCost)}</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0">
+        <span style="color:var(--gray)">30-day gain value (total)</span>
+        <strong style="color:${gainValue>=gainCost?'var(--green)':'var(--red)'}">${fmt$(gainValue)}</strong>
+      </div>
+    </div>
+
+    <!-- Break-even -->
+    <div class="card">
+      <div class="card-title">Break-Even Analysis</div>
+      ${costBasis > 0 ? `
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid var(--border)">
+        <span style="color:var(--gray)">Break-even price (sell now)</span>
+        <strong>${fmtc(costBasis/((sellNowWeightPerHead*head)/100))}/cwt</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid var(--border)">
+        <span style="color:var(--gray)">Break-even price (hold 30d)</span>
+        <strong>${fmtc((costBasis+holdingCost)/((futureWeightAfterShrink*head)/100))}/cwt</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0">
+        <span style="color:var(--gray)">Current price vs break-even</span>
+        <strong style="color:${priceNow>=(costBasis/((sellNowWeightPerHead*head)/100))?'var(--green)':'var(--red)'}">${priceNow>=(costBasis/((sellNowWeightPerHead*head)/100))?'✅ Above break-even':'❌ Below break-even'}</strong>
+      </div>` :
+      '<div style="color:var(--gray-lt);font-size:13px;text-align:center;padding:10px">Enter cost basis to see break-even analysis</div>'}
+    </div>`;
+}
+
+
 async function showPage_stockers() {
   await loadStockerGroups();
 }
