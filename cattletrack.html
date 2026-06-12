@@ -391,17 +391,11 @@ tr:hover td{background:var(--bg)}
           <div class="form-group"><label>Calf Tag / ID</label><input type="text" id="cv-tag" placeholder="e.g. K253-P"></div>
           <div class="form-row">
             <div class="form-group"><label>Dam</label>
-              <select id="cv-dam" style="width:100%">
-                <option value="">— Select Dam —</option>
-                ${(cache.get('animals')||[]).filter(a=>['Cow','Heifer'].includes(a.sex)&&a.status!=='sold'&&a.status!=='dead').sort((a,b)=>a.tag.localeCompare(b.tag)).map(a=>`<option value="${a.tag}">${a.tag}${a.name?' — '+a.name:''}</option>`).join('')}
-              </select>
+              <select id="cv-dam" style="width:100%"><option value="">— Select Dam —</option></select>
+              <input type="text" id="cv-dam-other" placeholder="Type dam tag..." style="margin-top:6px;display:none">
             </div>
             <div class="form-group"><label>Sire</label>
-              <select id="cv-sire" style="width:100%">
-                <option value="">— Select Sire —</option>
-                ${[...new Set((cache.get('semen_inventory')||[]).map(s=>s.sire))].sort().map(s=>`<option value="${s}">${s}</option>`).join('')}
-                <option value="other">Other (type below)</option>
-              </select>
+              <select id="cv-sire" style="width:100%"><option value="">— Select Sire —</option></select>
               <input type="text" id="cv-sire-other" placeholder="Type sire name..." style="margin-top:6px;display:none">
             </div>
           </div>
@@ -2379,19 +2373,33 @@ function showCalvingTab(tab) {
   document.getElementById('calving-records').style.display = tab==='records'?'block':'none';
   document.querySelectorAll('#page-calving .tab').forEach((b,i)=>b.classList.toggle('active',['log','records'][i]===tab));
   if(tab==='records') renderCalvingRecords();
-  // Load semen inventory into sire dropdown
-  if(tab==='log') {
-    const sireSelect = document.getElementById('cv-sire');
-    if(sireSelect && sireSelect.options.length <= 2) {
-      const sires = [...new Set((cache.get('semen_inventory')||[]).map(s=>s.sire))].sort();
-      sires.forEach(s => {
-        const opt = document.createElement('option');
-        opt.value = s; opt.textContent = s;
-        sireSelect.insertBefore(opt, sireSelect.lastElementChild);
-      });
-    }
-    // Toggle other field
-    if(sireSelect) sireSelect.onchange = () => {
+  if(tab==='log') populateCalvingDropdowns();
+}
+
+function populateCalvingDropdowns() {
+  // Populate dam dropdown
+  const damSelect = document.getElementById('cv-dam');
+  if(damSelect) {
+    const cows = (cache.get('animals')||[])
+      .filter(a=>['Cow','Heifer'].includes(a.sex)&&a.status!=='sold'&&a.status!=='dead')
+      .sort((a,b)=>a.tag.localeCompare(b.tag));
+    damSelect.innerHTML = '<option value="">— Select Dam —</option>' +
+      cows.map(a=>`<option value="${a.tag}">${a.tag}${a.name?' — '+a.name:''}</option>`).join('') +
+      '<option value="other">Other (type below)</option>';
+    damSelect.onchange = () => {
+      const other = document.getElementById('cv-dam-other');
+      if(other) other.style.display = damSelect.value==='other'?'block':'none';
+    };
+  }
+
+  // Populate sire dropdown from semen inventory
+  const sireSelect = document.getElementById('cv-sire');
+  if(sireSelect) {
+    const sires = [...new Set((cache.get('semen_inventory')||[]).map(s=>s.sire))].sort();
+    sireSelect.innerHTML = '<option value="">— Select Sire —</option>' +
+      sires.map(s=>`<option value="${s}">${s}</option>`).join('') +
+      '<option value="other">Other (type below)</option>';
+    sireSelect.onchange = () => {
       const other = document.getElementById('cv-sire-other');
       if(other) other.style.display = sireSelect.value==='other'?'block':'none';
     };
@@ -2402,13 +2410,15 @@ async function saveCalving() {
   const tag = document.getElementById('cv-tag').value.trim();
   const date = document.getElementById('cv-date').value;
   if(!tag||!date) { alert('Calf tag and birth date are required.'); return; }
+  const damSel = document.getElementById('cv-dam');
+  const dam = damSel?.value==='other' ? document.getElementById('cv-dam-other')?.value?.trim() : damSel?.value||'';
   const sireSelect = document.getElementById('cv-sire');
   const sire = sireSelect?.value==='other'
     ? document.getElementById('cv-sire-other')?.value?.trim()
     : sireSelect?.value || '';
   const {error} = await dbInsert('calving_records', {
     calf_tag: tag,
-    dam_tag: document.getElementById('cv-dam').value,
+    dam_tag: dam,
     sire_tag: sire,
     birth_date: date,
     sex: document.getElementById('cv-sex').value,
