@@ -2192,7 +2192,8 @@ async function showProfileTab(tab) {
       <div class="card">
         <div class="card-title">Import Data</div>
         <div class="form-group"><label>RAAA Pro Extract (.sen) or Leachman CSV</label><input type="file" id="epd-import" onchange="importEPDs(event)" style="font-size:13px" accept=".sen,.csv,.txt"></div>
-        <div style="font-size:12px;color:var(--gray);margin-bottom:12px">Upload your RAAA Pro Extract (.sen) to update EPDs and pedigree for all animals. Upload your Leachman CSV to import $Profit, $Ranch, $Feeder, $Terminal, Fertility, BS, and TS scores.</div>
+        <div class="form-group"><label>AAA EPD File (.xlsx)</label><input type="file" id="aaa-import" onchange="importAAAFile(this.files[0])" style="font-size:13px" accept=".xlsx,.xls"></div>
+        <div style="font-size:12px;color:var(--gray);margin-bottom:12px">RAAA members: upload your Pro Extract (.sen). Leachman: upload your CSV. Black Angus (AAA) members: upload your EPD Excel file.</div>
         <div class="form-row">${['bw','ww','yw','adg','dmi','milk','hpg','cem','mw','stay','fat','rea','marbling','ced','me','hb','gm','pro'].map(f=>`<div class="form-group"><label>${labels[f]}</label><input type="number" id="epd-${f}" value="${epds?.[f]??''}" step="0.01" placeholder="0.0"></div>`).join('')}</div>
         <button class="btn btn-primary" onclick="saveEPDs('${tag}')">Save EPDs</button>
       </div>`;
@@ -4472,7 +4473,7 @@ async function importEPDs(event) {
   if(!text||!text.trim()){alert('File appears to be empty');return;}
   const firstLine=text.split(/\r?\n/).find(l=>l.trim());
   const isLeachman=firstLine&&firstLine.includes('LC $Profit');
-  const isAAA=firstLine&&(firstLine.includes('CED')&&firstLine.includes('Marb')&&firstLine.includes('Beef Value'));
+  const isAAA=file.name.toLowerCase().includes('epd')&&(file.name.toLowerCase().endsWith('.xlsx')||file.name.toLowerCase().endsWith('.xls'));
   const isSEN=firstLine&&firstLine.length>300&&!isLeachman&&!firstLine.includes(',');
   if(isAAA){await importAAAFile(file);}
   else if(isLeachman){await importLeachmanCSV(text);}
