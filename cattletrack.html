@@ -5075,84 +5075,71 @@ async function fetchMarketData(content) {
 }
 
 async function renderCashPrices(content) {
-  const data = await fetchMarketData(content);
-
-  if(!data) {
-    content.innerHTML = `
-      <div class="alert alert-warning">⚠️ Could not fetch live market data. Check your connection and try again.</div>
-      <div class="card">
-        <div class="card-title">Manual Price Entry</div>
-        <div style="font-size:13px;color:var(--gray);margin-bottom:12px">Enter current prices to use the Sell Calculator:</div>
-        <div class="form-row">
-          <div class="form-group"><label>Cash Price ($/cwt) — enter any weight class</label><input type="number" id="manual-steer-price" placeholder="285.00" inputmode="decimal"></div>
-          <div class="form-group"><label>CME Nearby Futures ($/cwt)</label><input type="number" id="manual-cme" placeholder="295.00" inputmode="decimal"></div>
-        </div>
-        <button class="btn btn-primary" onclick="showMarketsTab('calculator')">Go to Sell Calculator →</button>
-      </div>`;
-    return;
-  }
-
-  const fmt = v => v ? `$${parseFloat(v).toFixed(2)}` : '—';
+  const today = new Date().toISOString().split('T')[0];
+  const cached = localStorage.getItem('ct_prices_'+today);
+  const saved = cached ? JSON.parse(cached) : null;
 
   content.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <div style="font-size:12px;color:var(--gray)">Source: USDA AMS · ${data.report_date||'Latest available'}</div>
-      <button onclick="marketDataCache=null;showMarketsTab('prices')" style="background:var(--bg2);border:none;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit">🔄 Refresh</button>
-    </div>
-
-    <!-- CME Futures Summary -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-      <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
-        <div style="font-size:11px;color:var(--gray);margin-bottom:4px">CME Feeder Cattle — Nearby</div>
-        <div style="font-size:28px;font-weight:800;color:var(--orange)">${fmt(data.cme_feeder_nearby)}</div>
-        <div style="font-size:11px;color:var(--gray)">per cwt</div>
-      </div>
-      <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
-        <div style="font-size:11px;color:var(--gray);margin-bottom:4px">CME Feeder Cattle — Deferred</div>
-        <div style="font-size:28px;font-weight:800;color:var(--dark)">${fmt(data.cme_feeder_deferred)}</div>
-        <div style="font-size:11px;color:var(--gray)">per cwt</div>
-      </div>
-    </div>
-
-    <!-- Oklahoma Cash Prices -->
     <div class="card" style="margin-bottom:10px">
-      <div class="card-title">Oklahoma Cash — Steers</div>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Weight (lbs)</th><th>Price ($/cwt)</th><th>Head</th></tr></thead>
-        <tbody>${(data.steers||[]).map(r=>`
-          <tr><td>${r.weight} lbs</td>
-          <td><strong style="color:var(--orange)">${fmt(r.price)}</strong></td>
-          <td style="color:var(--gray)">${r.head||'—'}</td></tr>`).join('')||
-          '<tr><td colspan="3" style="text-align:center;color:var(--gray-lt)">No data</td></tr>'}
-        </tbody>
-      </table></div>
+      <div class="card-title">Today's Prices</div>
+      <div style="font-size:12px;color:var(--gray);margin-bottom:12px">${today} — Enter the quotes you received today. Saves for the day.</div>
+
+      <div class="form-group">
+        <label>Description (e.g. "9 wt heifers")</label>
+        <input type="text" id="price-desc" placeholder="9 wt heifers" value="${saved?.desc||''}">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Cash Price ($/cwt)</label>
+          <input type="number" id="price-cash" placeholder="0.00" inputmode="decimal" step="0.25" value="${saved?.cash||''}">
+        </div>
+        <div class="form-group">
+          <label>CME Futures ($/cwt)</label>
+          <input type="number" id="price-cme" placeholder="0.00" inputmode="decimal" step="0.25" value="${saved?.cme||''}">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Notes (optional)</label>
+        <input type="text" id="price-notes" placeholder="Source, market, any conditions..." value="${saved?.notes||''}">
+      </div>
+      <button class="btn btn-primary" onclick="saveDailyPrices()">Save Prices</button>
     </div>
 
-    <div class="card" style="margin-bottom:10px">
-      <div class="card-title">Oklahoma Cash — Heifers</div>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Weight (lbs)</th><th>Price ($/cwt)</th><th>Head</th></tr></thead>
-        <tbody>${(data.heifers||[]).map(r=>`
-          <tr><td>${r.weight} lbs</td>
-          <td><strong style="color:var(--orange)">${fmt(r.price)}</strong></td>
-          <td style="color:var(--gray)">${r.head||'—'}</td></tr>`).join('')||
-          '<tr><td colspan="3" style="text-align:center;color:var(--gray-lt)">No data</td></tr>'}
-        </tbody>
-      </table></div>
+    ${saved ? `
+    <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
+      <div style="font-size:11px;color:var(--gray);margin-bottom:6px">SAVED FOR TODAY · ${saved.desc||'Cash price'}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="text-align:center">
+          <div style="font-size:30px;font-weight:800;color:var(--orange)">$${parseFloat(saved.cash||0).toFixed(2)}</div>
+          <div style="font-size:12px;color:var(--gray)">Cash Price/cwt</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:30px;font-weight:800;color:var(--dark)">$${parseFloat(saved.cme||0).toFixed(2)}</div>
+          <div style="font-size:12px;color:var(--gray)">CME Futures/cwt</div>
+        </div>
+      </div>
+      ${saved.notes?`<div style="font-size:12px;color:var(--gray);margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">${saved.notes}</div>`:''}
     </div>
+    <button class="btn btn-primary" style="width:100%" onclick="showMarketsTab('calculator')">⚡ Use in Sell Calculator →</button>
+    ` : ''}`;
 
-    ${data.market_notes ? `
-    <div class="card">
-      <div class="card-title">Market Summary</div>
-      <div style="font-size:13px;line-height:1.6;color:var(--dark)">${data.market_notes}</div>
-    </div>` : ''}
+  window._marketPrices = saved ? {cme_feeder_nearby: saved.cme, steers:[{price: saved.cash}]} : null;
+}
 
-    <button class="btn btn-primary" style="width:100%;margin-top:4px" onclick="showMarketsTab('calculator')">
-      ⚡ Use These Prices in Sell Calculator →
-    </button>`;
-
-  // Store prices for calculator
-  window._marketPrices = data;
+function saveDailyPrices() {
+  const today = new Date().toISOString().split('T')[0];
+  const data = {
+    date: today,
+    desc: document.getElementById('price-desc')?.value?.trim()||'',
+    cash: parseFloat(document.getElementById('price-cash')?.value)||null,
+    cme: parseFloat(document.getElementById('price-cme')?.value)||null,
+    notes: document.getElementById('price-notes')?.value?.trim()||'',
+  };
+  if(!data.cash && !data.cme){alert('Enter at least one price.');return;}
+  localStorage.setItem('ct_prices_'+today, JSON.stringify(data));
+  window._marketPrices = {cme_feeder_nearby: data.cme, steers:[{price: data.cash}]};
+  alert('✅ Prices saved for today');
+  renderCashPrices(document.getElementById('markets-content'));
 }
 
 async function renderLRPRates(content) {
@@ -5209,15 +5196,31 @@ Return ONLY a JSON object, no other text:
   }
 
   const weights = [
-    {key:'steers_wt2', label:'Steers — Weight 2 (600-1000 lb target)', desc:'Most common for wheat pasture stockers'},
-    {key:'heifers_wt2', label:'Heifers — Weight 2 (600-1000 lb target)', desc:''},
+    {key:'steers_by_weight', label:'Steers — Net Premium by Target Weight'},
+    {key:'heifers_by_weight', label:'Heifers — Net Premium by Target Weight'},
   ];
 
   // Manual entry form always shown
   const manualSection = `
     <div class="card" style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div class="card-title" style="margin-bottom:0">USDA RMA Calculator</div>
+        <a href="https://ewebapp.rma.usda.gov/apps/costestimator/" target="_blank" 
+          style="background:var(--orange);color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;font-family:inherit">
+          Open RMA Calculator ↗
+        </a>
+      </div>
+      <div style="font-size:13px;color:var(--gray);line-height:1.5">
+        The USDA RMA Cost Estimator gives you official LRP quotes for any weight and coverage level. 
+        Open it, get your quotes, then enter them below.
+        <br><br>
+        <strong>Steps:</strong> Select "Livestock Risk Protection" → "Feeder Cattle" → enter your state, head count, and target weight → compare coverage levels.
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:10px">
       <div class="card-title">Enter Today's LRP Rates</div>
-      <div style="font-size:12px;color:var(--gray);margin-bottom:10px">Enter the rates from your agent's daily quote. Saves for today.</div>
+      <div style="font-size:12px;color:var(--gray);margin-bottom:10px">Enter the rates from your agent or the RMA calculator. Saves for today.</div>
       <div class="form-row">
         <div class="form-group"><label>Expected Ending Value ($/cwt)</label><input type="number" id="lrp-eev" placeholder="285.00" inputmode="decimal" value="${lrpData?.expected_ending_value||''}"></div>
         <div class="form-group"><label>Insurance Period</label>
@@ -5229,31 +5232,34 @@ Return ONLY a JSON object, no other text:
           </select>
         </div>
       </div>
-      <div class="form-row">
-        <div class="form-group"><label>Target Sale Weight (cwt)</label><input type="number" id="lrp-target-wt" placeholder="7.5" step="0.5" inputmode="decimal" value="${lrpData?.target_weight||''}"></div>
-        <div class="form-group"><label>Head Count</label><input type="number" id="lrp-head" placeholder="100" inputmode="numeric" value="${lrpData?.head_count||''}"></div>
+
+      <div style="font-size:12px;font-weight:600;color:var(--orange);margin:10px 0 6px">Steers — by Target Sale Weight</div>
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:6px;margin-bottom:4px">
+        <div style="font-size:11px;color:var(--gray);font-weight:600">Target Weight</div>
+        <div style="font-size:11px;color:var(--gray);font-weight:600">90% Net Premium</div>
+        <div style="font-size:11px;color:var(--gray);font-weight:600">95% Net Premium</div>
       </div>
-      <div style="font-size:12px;font-weight:600;color:var(--orange);margin:10px 0 6px">Steers</div>
-      ${[90,95,97,100].map(pct=>`
-      <div class="form-row" style="margin-bottom:4px">
-        <div class="form-group"><label>${pct}% Coverage Price ($/cwt)</label>
-          <input type="number" id="lrp-s2-${pct}-price" placeholder="0.00" inputmode="decimal" step="0.01" value="${lrpData?.steers_wt2?.find(r=>r.coverage_pct===pct)?.coverage_price||''}">
-        </div>
-        <div class="form-group"><label>Net Premium ($/cwt)</label>
-          <input type="number" id="lrp-s2-${pct}-net" placeholder="0.00" inputmode="decimal" step="0.01" value="${lrpData?.steers_wt2?.find(r=>r.coverage_pct===pct)?.net_premium_cwt||''}">
-        </div>
+      ${[5,6,7,8,9].map(wt=>`
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:6px;margin-bottom:6px;align-items:center">
+        <div style="font-size:13px;font-weight:600">${wt} cwt (${wt*100} lb)</div>
+        <input type="number" id="lrp-s-${wt}-90" placeholder="$/cwt" inputmode="decimal" step="0.01" style="padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit" value="${lrpData?.steers_by_weight?.find(r=>r.wt===wt)?.net_90||''}">
+        <input type="number" id="lrp-s-${wt}-95" placeholder="$/cwt" inputmode="decimal" step="0.01" style="padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit" value="${lrpData?.steers_by_weight?.find(r=>r.wt===wt)?.net_95||''}">
       </div>`).join('')}
-      <div style="font-size:12px;font-weight:600;color:var(--orange);margin:10px 0 6px">Heifers</div>
-      ${[90,95,97,100].map(pct=>`
-      <div class="form-row" style="margin-bottom:4px">
-        <div class="form-group"><label>${pct}% Coverage Price ($/cwt)</label>
-          <input type="number" id="lrp-h2-${pct}-price" placeholder="0.00" inputmode="decimal" step="0.01" value="${lrpData?.heifers_wt2?.find(r=>r.coverage_pct===pct)?.coverage_price||''}">
-        </div>
-        <div class="form-group"><label>Net Premium ($/cwt)</label>
-          <input type="number" id="lrp-h2-${pct}-net" placeholder="0.00" inputmode="decimal" step="0.01" value="${lrpData?.heifers_wt2?.find(r=>r.coverage_pct===pct)?.net_premium_cwt||''}">
-        </div>
+
+      <div style="font-size:12px;font-weight:600;color:var(--orange);margin:12px 0 6px">Heifers — by Target Sale Weight</div>
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:6px;margin-bottom:4px">
+        <div style="font-size:11px;color:var(--gray);font-weight:600">Target Weight</div>
+        <div style="font-size:11px;color:var(--gray);font-weight:600">90% Net Premium</div>
+        <div style="font-size:11px;color:var(--gray);font-weight:600">95% Net Premium</div>
+      </div>
+      ${[5,6,7,8,9].map(wt=>`
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:6px;margin-bottom:6px;align-items:center">
+        <div style="font-size:13px;font-weight:600">${wt} cwt (${wt*100} lb)</div>
+        <input type="number" id="lrp-h-${wt}-90" placeholder="$/cwt" inputmode="decimal" step="0.01" style="padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit" value="${lrpData?.heifers_by_weight?.find(r=>r.wt===wt)?.net_90||''}">
+        <input type="number" id="lrp-h-${wt}-95" placeholder="$/cwt" inputmode="decimal" step="0.01" style="padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit" value="${lrpData?.heifers_by_weight?.find(r=>r.wt===wt)?.net_95||''}">
       </div>`).join('')}
-      <button class="btn btn-primary" onclick="saveLRPManual()">Save Today's Rates</button>
+
+      <button class="btn btn-primary" style="margin-top:8px" onclick="saveLRPManual()">Save Today's Rates</button>
     </div>`;
 
   // Display fetched or saved data
@@ -5272,17 +5278,17 @@ Return ONLY a JSON object, no other text:
     ${weights.filter(w=>lrpData[w.key]?.length).map(w=>`
     <div class="card" style="margin-bottom:10px">
       <div class="card-title">${w.label}</div>
-      <div style="font-size:11px;color:var(--gray);margin-bottom:8px">${w.desc}</div>
       <div class="table-wrap"><table>
-        <thead><tr><th>Coverage</th><th>Coverage Price</th><th>Net Premium/cwt</th><th>Cost/Head*</th></tr></thead>
+        <thead><tr><th>Target Weight</th><th>90% Net Premium</th><th>90% Cost/Head</th><th>95% Net Premium</th><th>95% Cost/Head</th></tr></thead>
         <tbody>${(lrpData[w.key]||[]).map(r=>{
-          const tgtWt = parseFloat(lrpData.target_weight)||7.5;
-          const costPerHead = r.net_premium_cwt ? (r.net_premium_cwt * tgtWt).toFixed(2) : null;
+          const cost90 = r.net_90 ? '$'+(r.net_90*r.wt).toFixed(2) : '—';
+          const cost95 = r.net_95 ? '$'+(r.net_95*r.wt).toFixed(2) : '—';
           return `<tr>
-            <td><strong>${r.coverage_pct}%</strong></td>
-            <td>$${parseFloat(r.coverage_price||0).toFixed(2)}/cwt</td>
-            <td style="color:var(--green)"><strong>${r.net_premium_cwt?'$'+parseFloat(r.net_premium_cwt).toFixed(2):'—'}</strong></td>
-            <td style="color:var(--orange)"><strong>${costPerHead?'$'+costPerHead:'—'}</strong></td>
+            <td><strong>${r.wt} cwt</strong></td>
+            <td>${r.net_90?'$'+r.net_90.toFixed(2):'—'}/cwt</td>
+            <td style="color:var(--orange)"><strong>${cost90}</strong></td>
+            <td>${r.net_95?'$'+r.net_95.toFixed(2):'—'}/cwt</td>
+            <td style="color:var(--orange)"><strong>${cost95}</strong></td>
           </tr>`;}).join('')}
         </tbody>
       </table></div>
@@ -5300,22 +5306,19 @@ function saveLRPManual() {
   const eev = parseFloat(document.getElementById('lrp-eev')?.value)||null;
   const period = parseInt(document.getElementById('lrp-period')?.value)||26;
 
-  const steers_wt2 = [90,95,97,100].map(pct=>({
-    coverage_pct: pct,
-    coverage_price: parseFloat(document.getElementById(`lrp-s2-${pct}-price`)?.value)||null,
-    net_premium_cwt: parseFloat(document.getElementById(`lrp-s2-${pct}-net`)?.value)||null,
-  })).filter(r=>r.coverage_price);
+  const steers_by_weight = [5,6,7,8,9].map(wt=>({
+    wt,
+    net_90: parseFloat(document.getElementById(`lrp-s-${wt}-90`)?.value)||null,
+    net_95: parseFloat(document.getElementById(`lrp-s-${wt}-95`)?.value)||null,
+  })).filter(r=>r.net_90||r.net_95);
 
-  const heifers_wt2 = [90,95,97,100].map(pct=>({
-    coverage_pct: pct,
-    coverage_price: parseFloat(document.getElementById(`lrp-h2-${pct}-price`)?.value)||null,
-    net_premium_cwt: parseFloat(document.getElementById(`lrp-h2-${pct}-net`)?.value)||null,
-  })).filter(r=>r.coverage_price);
+  const heifers_by_weight = [5,6,7,8,9].map(wt=>({
+    wt,
+    net_90: parseFloat(document.getElementById(`lrp-h-${wt}-90`)?.value)||null,
+    net_95: parseFloat(document.getElementById(`lrp-h-${wt}-95`)?.value)||null,
+  })).filter(r=>r.net_90||r.net_95);
 
-  const data = {date:today, period_weeks:period, expected_ending_value:eev, steers_wt2, heifers_wt2,
-    target_weight: parseFloat(document.getElementById('lrp-target-wt')?.value)||null,
-    head_count: parseInt(document.getElementById('lrp-head')?.value)||null,
-  };
+  const data = {date:today, period_weeks:period, expected_ending_value:eev, steers_by_weight, heifers_by_weight};
   localStorage.setItem('ct_lrp_'+today, JSON.stringify(data));
   window._lrpData = data;
   alert('✅ LRP rates saved for today');
