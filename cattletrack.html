@@ -5208,17 +5208,15 @@ Return ONLY a JSON object, no other text:
   }
 
   const weights = [
-    {key:'steers_wt1', label:'Steers — Under 6 cwt (Light)', desc:'500-599 lb target'},
-    {key:'steers_wt2', label:'Steers — 6-10 cwt (Heavy)', desc:'600-900 lb target'},
-    {key:'heifers_wt1', label:'Heifers — Under 6 cwt (Light)', desc:'500-599 lb target'},
-    {key:'heifers_wt2', label:'Heifers — 6-10 cwt (Heavy)', desc:'600-900 lb target'},
+    {key:'steers_wt2', label:'Steers — Weight 2 (600-1000 lb target)', desc:'Most common for wheat pasture stockers'},
+    {key:'heifers_wt2', label:'Heifers — Weight 2 (600-1000 lb target)', desc:''},
   ];
 
   // Manual entry form always shown
   const manualSection = `
     <div class="card" style="margin-bottom:10px">
-      <div class="card-title">Manual LRP Entry</div>
-      <div style="font-size:12px;color:var(--gray);margin-bottom:10px">Enter rates from your agent's daily quote. These save for today.</div>
+      <div class="card-title">Enter Today's LRP Rates</div>
+      <div style="font-size:12px;color:var(--gray);margin-bottom:10px">Enter the rates from your agent's daily quote. Saves for today.</div>
       <div class="form-row">
         <div class="form-group"><label>Expected Ending Value ($/cwt)</label><input type="number" id="lrp-eev" placeholder="285.00" inputmode="decimal" value="${lrpData?.expected_ending_value||''}"></div>
         <div class="form-group"><label>Insurance Period</label>
@@ -5230,26 +5228,28 @@ Return ONLY a JSON object, no other text:
           </select>
         </div>
       </div>
-      <div style="font-size:12px;font-weight:600;color:var(--orange);margin:10px 0 6px">Steers — 6-9 cwt (most common for wheat stocker)</div>
-      <div id="lrp-manual-rows">
-        ${[90,95,97,100].map(pct=>`
-        <div class="form-row" style="margin-bottom:4px">
-          <div class="form-group"><label>${pct}% Coverage</label>
-            <input type="number" id="lrp-s2-${pct}-price" placeholder="Coverage price" inputmode="decimal" value="${lrpData?.steers_wt2?.find(r=>r.coverage_pct===pct)?.coverage_price||''}">
-          </div>
-          <div class="form-group"><label>Net Premium ($/cwt)</label>
-            <input type="number" id="lrp-s2-${pct}-net" placeholder="Net premium" inputmode="decimal" step="0.01" value="${lrpData?.steers_wt2?.find(r=>r.coverage_pct===pct)?.net_premium_cwt||''}">
-          </div>
-        </div>`).join('')}
+      <div class="form-row">
+        <div class="form-group"><label>Target Sale Weight (cwt)</label><input type="number" id="lrp-target-wt" placeholder="7.5" step="0.5" inputmode="decimal" value="${lrpData?.target_weight||''}"></div>
+        <div class="form-group"><label>Head Count</label><input type="number" id="lrp-head" placeholder="100" inputmode="numeric" value="${lrpData?.head_count||''}"></div>
       </div>
-      <div style="font-size:12px;font-weight:600;color:var(--orange);margin:10px 0 6px">Heifers — 6-9 cwt</div>
+      <div style="font-size:12px;font-weight:600;color:var(--orange);margin:10px 0 6px">Steers</div>
       ${[90,95,97,100].map(pct=>`
       <div class="form-row" style="margin-bottom:4px">
-        <div class="form-group"><label>${pct}% Coverage</label>
-          <input type="number" id="lrp-h2-${pct}-price" placeholder="Coverage price" inputmode="decimal" value="${lrpData?.heifers_wt2?.find(r=>r.coverage_pct===pct)?.coverage_price||''}">
+        <div class="form-group"><label>${pct}% Coverage Price ($/cwt)</label>
+          <input type="number" id="lrp-s2-${pct}-price" placeholder="0.00" inputmode="decimal" step="0.01" value="${lrpData?.steers_wt2?.find(r=>r.coverage_pct===pct)?.coverage_price||''}">
         </div>
         <div class="form-group"><label>Net Premium ($/cwt)</label>
-          <input type="number" id="lrp-h2-${pct}-net" placeholder="Net premium" inputmode="decimal" step="0.01" value="${lrpData?.heifers_wt2?.find(r=>r.coverage_pct===pct)?.net_premium_cwt||''}">
+          <input type="number" id="lrp-s2-${pct}-net" placeholder="0.00" inputmode="decimal" step="0.01" value="${lrpData?.steers_wt2?.find(r=>r.coverage_pct===pct)?.net_premium_cwt||''}">
+        </div>
+      </div>`).join('')}
+      <div style="font-size:12px;font-weight:600;color:var(--orange);margin:10px 0 6px">Heifers</div>
+      ${[90,95,97,100].map(pct=>`
+      <div class="form-row" style="margin-bottom:4px">
+        <div class="form-group"><label>${pct}% Coverage Price ($/cwt)</label>
+          <input type="number" id="lrp-h2-${pct}-price" placeholder="0.00" inputmode="decimal" step="0.01" value="${lrpData?.heifers_wt2?.find(r=>r.coverage_pct===pct)?.coverage_price||''}">
+        </div>
+        <div class="form-group"><label>Net Premium ($/cwt)</label>
+          <input type="number" id="lrp-h2-${pct}-net" placeholder="0.00" inputmode="decimal" step="0.01" value="${lrpData?.heifers_wt2?.find(r=>r.coverage_pct===pct)?.net_premium_cwt||''}">
         </div>
       </div>`).join('')}
       <button class="btn btn-primary" onclick="saveLRPManual()">Save Today's Rates</button>
@@ -5273,16 +5273,16 @@ Return ONLY a JSON object, no other text:
       <div class="card-title">${w.label}</div>
       <div style="font-size:11px;color:var(--gray);margin-bottom:8px">${w.desc}</div>
       <div class="table-wrap"><table>
-        <thead><tr><th>Coverage</th><th>Coverage Price</th><th>Gross Premium</th><th style="color:var(--green)">Net Premium*</th><th>Protection</th></tr></thead>
-        <tbody>${(lrpData[w.key]||[]).map(r=>`
-          <tr>
+        <thead><tr><th>Coverage</th><th>Coverage Price</th><th>Net Premium/cwt</th><th>Cost/Head*</th></tr></thead>
+        <tbody>${(lrpData[w.key]||[]).map(r=>{
+          const tgtWt = parseFloat(lrpData.target_weight)||7.5;
+          const costPerHead = r.net_premium_cwt ? (r.net_premium_cwt * tgtWt).toFixed(2) : null;
+          return `<tr>
             <td><strong>${r.coverage_pct}%</strong></td>
             <td>$${parseFloat(r.coverage_price||0).toFixed(2)}/cwt</td>
-            <td>${r.premium_cwt?'$'+parseFloat(r.premium_cwt).toFixed(2)+'/cwt':'—'}</td>
-            <td style="color:var(--green)"><strong>${r.net_premium_cwt?'$'+parseFloat(r.net_premium_cwt).toFixed(2)+'/cwt':'—'}</strong></td>
-            <td style="font-size:11px;color:var(--gray)">${lrpData.expected_ending_value&&r.coverage_price?
-              'If price drops below $'+parseFloat(r.coverage_price).toFixed(2)+', you get paid the difference':'—'}</td>
-          </tr>`).join('')}
+            <td style="color:var(--green)"><strong>${r.net_premium_cwt?'$'+parseFloat(r.net_premium_cwt).toFixed(2):'—'}</strong></td>
+            <td style="color:var(--orange)"><strong>${costPerHead?'$'+costPerHead:'—'}</strong></td>
+          </tr>`;}).join('')}
         </tbody>
       </table></div>
     </div>`).join('')}
@@ -5311,7 +5311,10 @@ function saveLRPManual() {
     net_premium_cwt: parseFloat(document.getElementById(`lrp-h2-${pct}-net`)?.value)||null,
   })).filter(r=>r.coverage_price);
 
-  const data = {date:today, period_weeks:period, expected_ending_value:eev, steers_wt2, heifers_wt2};
+  const data = {date:today, period_weeks:period, expected_ending_value:eev, steers_wt2, heifers_wt2,
+    target_weight: parseFloat(document.getElementById('lrp-target-wt')?.value)||null,
+    head_count: parseInt(document.getElementById('lrp-head')?.value)||null,
+  };
   localStorage.setItem('ct_lrp_'+today, JSON.stringify(data));
   window._lrpData = data;
   alert('✅ LRP rates saved for today');
