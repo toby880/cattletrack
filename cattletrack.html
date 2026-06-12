@@ -396,7 +396,14 @@ tr:hover td{background:var(--bg)}
                 ${(cache.get('animals')||[]).filter(a=>['Cow','Heifer'].includes(a.sex)&&a.status!=='sold'&&a.status!=='dead').sort((a,b)=>a.tag.localeCompare(b.tag)).map(a=>`<option value="${a.tag}">${a.tag}${a.name?' — '+a.name:''}</option>`).join('')}
               </select>
             </div>
-            <div class="form-group"><label>Sire</label><input type="text" id="cv-sire" placeholder="Sire name or tag"></div>
+            <div class="form-group"><label>Sire</label>
+              <select id="cv-sire" style="width:100%">
+                <option value="">— Select Sire —</option>
+                ${[...new Set((cache.get('semen_inventory')||[]).map(s=>s.sire))].sort().map(s=>`<option value="${s}">${s}</option>`).join('')}
+                <option value="other">Other (type below)</option>
+              </select>
+              <input type="text" id="cv-sire-other" placeholder="Type sire name..." style="margin-top:6px;display:none">
+            </div>
           </div>
           <div class="form-row">
             <div class="form-group"><label>Birth Date</label><input type="date" id="cv-date"></div>
@@ -2070,6 +2077,9 @@ async function loadDashboard() {
 async function loadAnimals() {
   const {data} = await dbSelect('animals');
   cache.set('animals', data);
+  // Also cache semen inventory for sire dropdowns
+  const {data:semData} = await sb.from('semen_inventory').select('sire').eq('ranch_id',currentRanch.id);
+  if(semData) cache.set('semen_inventory', semData);
   renderAnimals(data);
 }
 
@@ -2369,16 +2379,37 @@ function showCalvingTab(tab) {
   document.getElementById('calving-records').style.display = tab==='records'?'block':'none';
   document.querySelectorAll('#page-calving .tab').forEach((b,i)=>b.classList.toggle('active',['log','records'][i]===tab));
   if(tab==='records') renderCalvingRecords();
+  // Load semen inventory into sire dropdown
+  if(tab==='log') {
+    const sireSelect = document.getElementById('cv-sire');
+    if(sireSelect && sireSelect.options.length <= 2) {
+      const sires = [...new Set((cache.get('semen_inventory')||[]).map(s=>s.sire))].sort();
+      sires.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s; opt.textContent = s;
+        sireSelect.insertBefore(opt, sireSelect.lastElementChild);
+      });
+    }
+    // Toggle other field
+    if(sireSelect) sireSelect.onchange = () => {
+      const other = document.getElementById('cv-sire-other');
+      if(other) other.style.display = sireSelect.value==='other'?'block':'none';
+    };
+  }
 }
 
 async function saveCalving() {
   const tag = document.getElementById('cv-tag').value.trim();
   const date = document.getElementById('cv-date').value;
   if(!tag||!date) { alert('Calf tag and birth date are required.'); return; }
+  const sireSelect = document.getElementById('cv-sire');
+  const sire = sireSelect?.value==='other'
+    ? document.getElementById('cv-sire-other')?.value?.trim()
+    : sireSelect?.value || '';
   const {error} = await dbInsert('calving_records', {
     calf_tag: tag,
-    dam_tag: document.getElementById('cv-dam').value.trim(),
-    sire_tag: document.getElementById('cv-sire').value.trim(),
+    dam_tag: document.getElementById('cv-dam').value,
+    sire_tag: sire,
     birth_date: date,
     sex: document.getElementById('cv-sex').value,
     calving_type: document.getElementById('cv-type').value,
@@ -2390,8 +2421,10 @@ async function saveCalving() {
     notes: document.getElementById('cv-notes').value.trim(),
   });
   if(error) { alert('Error saving: '+error.message); return; }
-  ['cv-tag','cv-sire','cv-weight','cv-location','cv-notes'].forEach(id=>document.getElementById(id).value='');
+  ['cv-tag','cv-sire-other','cv-weight','cv-location','cv-notes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('cv-dam').selectedIndex = 0;
+  document.getElementById('cv-sire').selectedIndex = 0;
+  if(document.getElementById('cv-sire-other')) document.getElementById('cv-sire-other').style.display='none';
   alert('✅ Calving record saved for '+tag);
 }
 
