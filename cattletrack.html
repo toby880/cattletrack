@@ -3940,6 +3940,47 @@ async function applyGroupAction() {
   loadAnimals();
 }
 
+function openAddAnimal() {
+  document.getElementById('add-animal-modal').classList.add('open');
+}
+
+function closeAddAnimal() {
+  document.getElementById('add-animal-modal').classList.remove('open');
+}
+
+function togglePurchaseFields() {
+  const isPurchased = document.getElementById('aa-acquisition')?.value === 'purchased';
+  document.getElementById('aa-price-wrap').style.display = isPurchased ? 'block' : 'none';
+  document.getElementById('aa-breeder-wrap').style.display = isPurchased ? 'block' : 'none';
+}
+
+async function saveNewAnimal() {
+  const tag = document.getElementById('aa-tag')?.value?.trim();
+  if(!tag){alert('Ear tag is required.');return;}
+  const data = {
+    tag,
+    name: document.getElementById('aa-name')?.value?.trim()||null,
+    reg_number: document.getElementById('aa-reg')?.value?.trim()||null,
+    sex: document.getElementById('aa-sex')?.value||null,
+    animal_type: document.getElementById('aa-type')?.value||'Registered',
+    dob: document.getElementById('aa-dob')?.value||null,
+    breed: document.getElementById('aa-breed')?.value||'Red Angus',
+    color: document.getElementById('aa-color')?.value?.trim()||null,
+    sire: document.getElementById('aa-sire')?.value?.trim()||null,
+    dam: document.getElementById('aa-dam')?.value?.trim()||null,
+    category: document.getElementById('aa-category')?.value?.trim()||null,
+    acquisition: document.getElementById('aa-acquisition')?.value||'raised',
+    purchase_price: parseFloat(document.getElementById('aa-price')?.value)||null,
+    purchased_from: document.getElementById('aa-breeder')?.value?.trim()||null,
+    status: document.getElementById('aa-status')?.value||'active',
+  };
+  const {error} = await dbInsert('animals', data);
+  if(error){alert('Error: '+error.message);return;}
+  alert('✅ '+tag+' added successfully');
+  closeAddAnimal();
+  loadAnimals();
+}
+
 async function saveMeasurement(tag) {
   const date = document.getElementById('meas-date')?.value;
   const bag = document.getElementById('meas-bag')?.value;
