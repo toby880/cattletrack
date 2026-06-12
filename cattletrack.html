@@ -226,6 +226,17 @@ tr:hover td{background:var(--bg)}
         <input type="password" id="signup-password" placeholder="Min 8 characters" autocomplete="new-password">
       </div>
       <div class="form-group">
+        <label>Primary Breed</label>
+        <select id="signup-breed">
+          <option value="red_angus">Red Angus</option>
+          <option value="black_angus">Black Angus</option>
+          <option value="hereford">Hereford</option>
+          <option value="simmental">Simmental</option>
+          <option value="composite">Composite / Commercial</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="form-group">
         <label>Plan</label>
         <select id="signup-plan">
           <option value="basic">Basic — $20/month (Calving, Weights, Health, Sales)</option>
@@ -1202,7 +1213,7 @@ async function signUp() {
   const {data, error} = await sb.auth.signUp({
     email, password,
     options: {
-      data: { ranch_name: ranch, full_name: name, plan: plan }
+      data: { ranch_name: ranch, full_name: name, plan: plan, breed: document.getElementById('signup-breed')?.value||'red_angus' }
     }
   });
 
@@ -2134,8 +2145,28 @@ async function showProfileTab(tab) {
 
   if(tab==='epds') {
     const {data: epds} = await sb.from('epds').select('*').eq('ranch_id', currentRanch.id).eq('animal_tag', tag).single();
-    const groups = {Growth:['bw','ww','yw','adg','dmi'],Maternal:['milk','mw','stay','hpg'],Carcass:['rea','fat','marbling'],Calving:['ced','cem'],Indexes:['hb','gm','pro'],Other:['me']};
-    const labels = {bw:'BW',ww:'WW',yw:'YW',adg:'ADG',dmi:'DMI',milk:'Milk',hpg:'HPG',cem:'CEM',mw:'MW',stay:'Stay',fat:'FAT',rea:'REA',marbling:'Marbling',ced:'CED',me:'ME',doc:'Doc',hb:'HerdBuilder',gm:'GridMaster',pro:'PROs',ced:'CED',ww:'WW',yw:'YW',radg:'RADG',dmi:'DMI',milk:'Milk',mw:'MW',mh:'MH',cem:'CEM',rea:'REA',fat:'FAT'};
+    const isAngus = currentRanch?.breed === 'black_angus';
+    const groups = isAngus ? {
+      Growth:['bw','ww','yw','adg','dmi','yh'],
+      Maternal:['milk','mw','mh','hpg','cem','teat_epd','uddr','fl'],
+      Carcass:['rea','fat','marbling','cw'],
+      Calving:['ced'],
+      Docility:['doc'],
+      Other:['sc','claw','angle','pap','hs','en'],
+      '$Values':['dollar_m','dollar_w','dollar_f','dollar_g','dollar_b','dollar_c'],
+    } : {Growth:['bw','ww','yw','adg','dmi'],Maternal:['milk','mw','stay','hpg'],Carcass:['rea','fat','marbling'],Calving:['ced','cem'],Indexes:['hb','gm','pro'],Other:['me']};
+    const labels = {
+      bw:'BW',ww:'WW',yw:'YW',adg:'ADG',dmi:'DMI',milk:'Milk',
+      hpg:'HPG',cem:'CEM',mw:'MW',mh:'MH',stay:'Stay',fat:'FAT',
+      rea:'REA',marbling:'Marbling',ced:'CED',me:'ME',
+      hb:'HerdBuilder',gm:'GridMaster',pro:'PROs',
+      // AAA specific
+      yh:'YH',sc:'SC',doc:'Docility',claw:'Claw',angle:'Angle',
+      pap:'PAP',hs:'Hair Shed',teat_epd:'Teat',uddr:'Udder',
+      fl:'Foot Length',en:'$EN',cw:'CW',
+      dollar_m:'$M',dollar_w:'$W',dollar_f:'$F',
+      dollar_g:'$G',dollar_b:'$B',dollar_c:'$C',
+    };
     let display = '';
     if(epds) {
       Object.entries(groups).forEach(([g,fields])=>{
@@ -4400,10 +4431,107 @@ async function importEPDs(event) {
   if(!text||!text.trim()){alert('File appears to be empty');return;}
   const firstLine=text.split(/\r?\n/).find(l=>l.trim());
   const isLeachman=firstLine&&firstLine.includes('LC $Profit');
+  const isAAA=firstLine&&(firstLine.includes('CED')&&firstLine.includes('Marb')&&firstLine.includes('Beef Value'));
   const isSEN=firstLine&&firstLine.length>300&&!isLeachman&&!firstLine.includes(',');
-  if(isLeachman){await importLeachmanCSV(text);}
+  if(isAAA){await importAAAFile(file);}
+  else if(isLeachman){await importLeachmanCSV(text);}
   else if(isSEN){await importSENFile(text);}
   else{await importEPDCSV(text);}
+}
+
+async function importAAAFile(file) {
+  // AAA EPD file is Excel format - parse using FileReader
+  const arrayBuffer = await file.arrayBuffer();
+
+  // Parse Excel manually - AAA files are simple enough to parse as CSV after reading
+  // Convert to text first - AAA exports as xlsx but also supports csv download
+  // Use a simple approach: read the file as text and find the data
+  const text = await file.text();
+  const lines = text.split(/\r?\n/).filter(l=>l.trim());
+
+  if(lines.length<2){
+    alert('Could not read AAA file. Please try downloading as CSV from the AAA website instead.');
+    return;
+  }
+
+  // Parse headers
+  const headers = lines[0].split('\t').map(h=>h.trim());
+  // If tab-separated didn't work try comma
+  const sep = headers.length > 5 ? '\t' : ',';
+  const hdrs = lines[0].split(sep).map(h=>h.replace(/"/g,'').trim());
+
+  const col = name => hdrs.findIndex(h=>h===name);
+
+  // Column indexes
+  const iReg=col('Reg No.'), iName=col('Name'), iTag=col('Tag');
+  const iCED=col('CED'), iBW=col('BW'), iWW=col('WW'), iYW=col('YW');
+  const iRADG=col('RADG'), iDMI=col('DMI'), iYH=col('YH'), iSC=col('SC');
+  const iDoc=col('Doc'), iClaw=col('Claw'), iAngle=col('Angle'), iPAP=col('PAP');
+  const iHS=col('HS'), iHP=col('HP'), iCEM=col('CEM'), iMilk=col('Milk');
+  const iTeat=col('Teat'), iUDDR=col('UDDR'), iFL=col('FL');
+  const iMW=col('MW'), iMH=col('MH'), iEN=col('$EN'), iCW=col('CW');
+  const iMarb=col('Marb'), iRE=col('RE'), iFat=col('Fat');
+  const iDollarM=col('Maternal Wean Calf Value($M)'), iDollarW=col('Wean Value($W)');
+  const iDollarF=col('Feedlot Value($F)'), iDollarG=col('Grid Value ($G)');
+  const iDollarB=col('Beef Value($B)'), iDollarC=col('Combined Index($C)');
+
+  console.log('AAA cols:', {iReg,iName,iTag,iCED,iBW,iWW,iYW,iDollarB});
+
+  const {data:freshAnimals}=await dbSelect('animals');
+  if(freshAnimals)cache.set('animals',freshAnimals);
+  const animals=cache.get('animals')||[];
+
+  let imported=0, skipped=0;
+
+  for(let i=1;i<lines.length;i++){
+    const vals=lines[i].split(sep).map(v=>v.replace(/"/g,'').trim());
+    if(vals.length<10)continue;
+
+    const tag=(vals[iTag]||'').trim();
+    const name=(vals[iName]||'').trim();
+    const reg=(vals[iReg]||'').trim();
+
+    if(!tag&&!reg)continue;
+
+    // Match animal by tag or reg number
+    const match=animals.find(a=>
+      a.tag===tag||a.tag===`AAA-${tag}`||
+      a.reg_number===reg||a.name===name
+    );
+
+    if(!match){skipped++;continue;}
+
+    const n=v=>{ const x=parseFloat(vals[v]); return isNaN(x)?null:x; };
+
+    const epds={
+      animal_tag:match.tag, ranch_id:currentRanch.id,
+      ced:n(iCED), bw:n(iBW), ww:n(iWW), yw:n(iYW),
+      adg:n(iRADG), dmi:n(iDMI), yh:n(iYH), sc:n(iSC),
+      doc:n(iDoc), claw:n(iClaw), angle:n(iAngle), pap:n(iPAP),
+      hs:n(iHS), hpg:n(iHP), cem:n(iCEM), milk:n(iMilk),
+      teat_epd:n(iTeat), uddr:n(iUDDR), fl:n(iFL),
+      mw:n(iMW), mh:n(iMH), en:n(iEN), cw:n(iCW),
+      marbling:n(iMarb), rea:n(iRE), fat:n(iFat),
+      dollar_m:n(iDollarM), dollar_w:n(iDollarW),
+      dollar_f:n(iDollarF), dollar_g:n(iDollarG),
+      dollar_b:n(iDollarB), dollar_c:n(iDollarC),
+    };
+
+    // Remove null values to avoid overwriting existing data
+    Object.keys(epds).forEach(k=>{ if(epds[k]===null) delete epds[k]; });
+
+    const {data:existing}=await sb.from('epds').select('id').eq('animal_tag',match.tag).eq('ranch_id',currentRanch.id);
+    let error;
+    if(existing&&existing.length>0){
+      ({error}=await sb.from('epds').update(epds).eq('animal_tag',match.tag).eq('ranch_id',currentRanch.id));
+    } else {
+      ({error}=await sb.from('epds').insert({...epds, animal_tag:match.tag, ranch_id:currentRanch.id}));
+    }
+    if(!error)imported++;else{console.error('AAA import error:',error);skipped++;}
+  }
+
+  alert(`✅ AAA EPDs imported for ${imported} animal(s).\n${skipped} skipped (no matching animal in your herd).`);
+  if(currentAnimal)showProfileTab('epds');
 }
 
 async function importLeachmanCSV(text) {
