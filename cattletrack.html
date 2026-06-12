@@ -5201,65 +5201,64 @@ Return ONLY a JSON object, no other text:
   ];
 
   // Manual entry form always shown
+  const weekOptions = [13,17,21,26,30,34,39,43,47,52];
   const manualSection = `
     <div class="card" style="margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <div class="card-title" style="margin-bottom:0">USDA RMA Calculator</div>
-        <a href="https://ewebapp.rma.usda.gov/apps/costestimator/" target="_blank" 
+        <a href="https://ewebapp.rma.usda.gov/apps/costestimator/" target="_blank"
           style="background:var(--orange);color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;font-family:inherit">
           Open RMA Calculator ↗
         </a>
       </div>
-      <div style="font-size:13px;color:var(--gray);line-height:1.5">
-        The USDA RMA Cost Estimator gives you official LRP quotes for any weight and coverage level. 
-        Open it, get your quotes, then enter them below.
-        <br><br>
-        <strong>Steps:</strong> Select "Livestock Risk Protection" → "Feeder Cattle" → enter your state, head count, and target weight → compare coverage levels.
-      </div>
+      <div style="font-size:13px;color:var(--gray)">Opens the official USDA LRP quote tool in a new tab.</div>
     </div>
 
-    <div class="card" style="margin-bottom:10px">
-      <div class="card-title">Enter Today's LRP Rates</div>
-      <div style="font-size:12px;color:var(--gray);margin-bottom:10px">Enter the rates from your agent or the RMA calculator. Saves for today.</div>
+    <div class="card">
+      <div class="card-title">Enter Today's LRP Quote</div>
+      <div style="font-size:12px;color:var(--gray);margin-bottom:12px">Enter from your agent's daily email. Valid until 8:25 AM CT tomorrow.</div>
       <div class="form-row">
-        <div class="form-group"><label>Expected Ending Value ($/cwt)</label><input type="number" id="lrp-eev" placeholder="285.00" inputmode="decimal" value="${lrpData?.expected_ending_value||''}"></div>
-        <div class="form-group"><label>Insurance Period</label>
-          <select id="lrp-period">
-            <option value="13">13 weeks</option><option value="17">17 weeks</option>
-            <option value="21">21 weeks</option><option value="26" selected>26 weeks</option>
-            <option value="30">30 weeks</option><option value="39">39 weeks</option>
-            <option value="52">52 weeks</option>
+        <div class="form-group"><label>Type</label>
+          <select id="lrp-type">
+            <option value="Feeder Cattle — Heifers Wt2">Feeder Cattle — Heifers Weight 2</option>
+            <option value="Feeder Cattle — Steers Wt2">Feeder Cattle — Steers Weight 2</option>
+            <option value="Feeder Cattle — Heifers Wt1">Feeder Cattle — Heifers Weight 1</option>
+            <option value="Feeder Cattle — Steers Wt1">Feeder Cattle — Steers Weight 1</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Target CWT</label>
+          <select id="lrp-target-cwt">
+            ${[5,6,7,8,9,10].map(w=>`<option value="${w}" ${w===9?'selected':''}>${w} cwt</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Head Count</label><input type="number" id="lrp-head" placeholder="50" inputmode="numeric" value="${lrpData?.head_count||''}"></div>
+        <div class="form-group"><label>Coverage %</label>
+          <select id="lrp-coverage">
+            <option value="100">100%</option>
+            <option value="95">95%</option>
+            <option value="90">90%</option>
           </select>
         </div>
       </div>
 
-      <div style="font-size:12px;font-weight:600;color:var(--orange);margin:10px 0 6px">Steers — by Target Sale Weight</div>
-      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:6px;margin-bottom:4px">
-        <div style="font-size:11px;color:var(--gray);font-weight:600">Target Weight</div>
-        <div style="font-size:11px;color:var(--gray);font-weight:600">90% Net Premium</div>
-        <div style="font-size:11px;color:var(--gray);font-weight:600">95% Net Premium</div>
+      <div style="display:grid;grid-template-columns:60px 1fr 1fr 1fr;gap:6px;margin:10px 0 4px">
+        <div style="font-size:11px;color:var(--gray);font-weight:600">Weeks</div>
+        <div style="font-size:11px;color:var(--gray);font-weight:600">End Date</div>
+        <div style="font-size:11px;color:var(--gray);font-weight:600">Expected Value</div>
+        <div style="font-size:11px;color:var(--gray);font-weight:600">Premium/cwt</div>
       </div>
-      ${[5,6,7,8,9].map(wt=>`
-      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:6px;margin-bottom:6px;align-items:center">
-        <div style="font-size:13px;font-weight:600">${wt} cwt (${wt*100} lb)</div>
-        <input type="number" id="lrp-s-${wt}-90" placeholder="$/cwt" inputmode="decimal" step="0.01" style="padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit" value="${lrpData?.steers_by_weight?.find(r=>r.wt===wt)?.net_90||''}">
-        <input type="number" id="lrp-s-${wt}-95" placeholder="$/cwt" inputmode="decimal" step="0.01" style="padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit" value="${lrpData?.steers_by_weight?.find(r=>r.wt===wt)?.net_95||''}">
-      </div>`).join('')}
-
-      <div style="font-size:12px;font-weight:600;color:var(--orange);margin:12px 0 6px">Heifers — by Target Sale Weight</div>
-      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:6px;margin-bottom:4px">
-        <div style="font-size:11px;color:var(--gray);font-weight:600">Target Weight</div>
-        <div style="font-size:11px;color:var(--gray);font-weight:600">90% Net Premium</div>
-        <div style="font-size:11px;color:var(--gray);font-weight:600">95% Net Premium</div>
-      </div>
-      ${[5,6,7,8,9].map(wt=>`
-      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:6px;margin-bottom:6px;align-items:center">
-        <div style="font-size:13px;font-weight:600">${wt} cwt (${wt*100} lb)</div>
-        <input type="number" id="lrp-h-${wt}-90" placeholder="$/cwt" inputmode="decimal" step="0.01" style="padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit" value="${lrpData?.heifers_by_weight?.find(r=>r.wt===wt)?.net_90||''}">
-        <input type="number" id="lrp-h-${wt}-95" placeholder="$/cwt" inputmode="decimal" step="0.01" style="padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit" value="${lrpData?.heifers_by_weight?.find(r=>r.wt===wt)?.net_95||''}">
-      </div>`).join('')}
-
-      <button class="btn btn-primary" style="margin-top:8px" onclick="saveLRPManual()">Save Today's Rates</button>
+      ${weekOptions.map(w=>{
+        const saved = lrpData?.rows?.find(r=>r.weeks===w)||{};
+        return `<div style="display:grid;grid-template-columns:60px 1fr 1fr 1fr;gap:6px;margin-bottom:6px;align-items:center">
+          <div style="font-size:13px;font-weight:600;color:var(--orange)">${w}wk</div>
+          <input type="date" id="lrp-${w}-date" style="padding:6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;width:100%" value="${saved.end_date||''}">
+          <input type="number" id="lrp-${w}-ev" placeholder="0.00" step="0.01" inputmode="decimal" style="padding:6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;width:100%" value="${saved.expected_value||''}">
+          <input type="number" id="lrp-${w}-prem" placeholder="0.00" step="0.01" inputmode="decimal" style="padding:6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;width:100%" value="${saved.premium_cwt||''}">
+        </div>`;
+      }).join('')}
+      <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="saveLRPManual()">Save Today's Rates</button>
     </div>`;
 
   // Display fetched or saved data
@@ -5275,24 +5274,29 @@ Return ONLY a JSON object, no other text:
       <div style="font-size:28px;font-weight:800;color:var(--orange)">$${parseFloat(lrpData.expected_ending_value).toFixed(2)}/cwt</div>
       <div style="font-size:11px;color:var(--gray)">CME Feeder Cattle Index basis</div>
     </div>` : ''}
-    ${weights.filter(w=>lrpData[w.key]?.length).map(w=>`
+    ${lrpData.rows?.length ? `
     <div class="card" style="margin-bottom:10px">
-      <div class="card-title">${w.label}</div>
+      <div class="card-title">${lrpData.type||'Feeder Cattle'}</div>
+      <div style="font-size:12px;color:var(--gray);margin-bottom:8px">${lrpData.head_count||50} head · ${lrpData.target_cwt||9} cwt · ${lrpData.coverage_pct||100}% coverage · ${lrpData.date}</div>
       <div class="table-wrap"><table>
-        <thead><tr><th>Target Weight</th><th>90% Net Premium</th><th>90% Cost/Head</th><th>95% Net Premium</th><th>95% Cost/Head</th></tr></thead>
-        <tbody>${(lrpData[w.key]||[]).map(r=>{
-          const cost90 = r.net_90 ? '$'+(r.net_90*r.wt).toFixed(2) : '—';
-          const cost95 = r.net_95 ? '$'+(r.net_95*r.wt).toFixed(2) : '—';
+        <thead><tr><th>Weeks</th><th>End Date</th><th>Exp. Value</th><th>Premium/cwt</th><th>Cost/Head</th><th>Total Cost</th></tr></thead>
+        <tbody>${(lrpData.rows||[]).map(r=>{
+          const cwt = lrpData.target_cwt||9;
+          const head = lrpData.head_count||50;
+          const costHead = r.premium_cwt ? (r.premium_cwt*cwt).toFixed(2) : null;
+          const totalCost = costHead ? (parseFloat(costHead)*head).toFixed(0) : null;
           return `<tr>
-            <td><strong>${r.wt} cwt</strong></td>
-            <td>${r.net_90?'$'+r.net_90.toFixed(2):'—'}/cwt</td>
-            <td style="color:var(--orange)"><strong>${cost90}</strong></td>
-            <td>${r.net_95?'$'+r.net_95.toFixed(2):'—'}/cwt</td>
-            <td style="color:var(--orange)"><strong>${cost95}</strong></td>
+            <td><strong>${r.weeks}wk</strong></td>
+            <td style="font-size:12px">${r.end_date||'—'}</td>
+            <td>${r.expected_value?'$'+r.expected_value.toFixed(2):'—'}</td>
+            <td style="color:var(--green)">${r.premium_cwt?'$'+r.premium_cwt.toFixed(2):'—'}</td>
+            <td style="color:var(--orange)"><strong>${costHead?'$'+costHead:'—'}</strong></td>
+            <td style="color:var(--gray)">${totalCost?'$'+parseInt(totalCost).toLocaleString():'—'}</td>
           </tr>`;}).join('')}
         </tbody>
       </table></div>
-    </div>`).join('')}
+      <div style="font-size:11px;color:var(--gray-lt);padding-top:8px">Cost/Head = Premium/cwt × ${lrpData.target_cwt||9} cwt. Must purchase before 8:25 AM CT next day.</div>
+    </div>` : ''}
     ${lrpData.notes?`<div class="card"><div class="card-title">Market Notes</div><div style="font-size:13px;line-height:1.6">${lrpData.notes}</div></div>`:''}
     <div style="font-size:11px;color:var(--gray-lt);padding:8px;text-align:center">*Net premium after ~73.5% federal subsidy. Must be purchased through a licensed agent by 8:25 AM CT the following day.</div>
     <button class="btn btn-primary" style="width:100%;margin-top:4px" onclick="showMarketsTab('calculator')">⚡ Use in Sell Calculator →</button>` :
@@ -5303,22 +5307,25 @@ Return ONLY a JSON object, no other text:
 
 function saveLRPManual() {
   const today = new Date().toISOString().split('T')[0];
-  const eev = parseFloat(document.getElementById('lrp-eev')?.value)||null;
-  const period = parseInt(document.getElementById('lrp-period')?.value)||26;
+  const weekOptions = [13,17,21,26,30,34,39,43,47,52];
+  const rows = weekOptions.map(w=>({
+    weeks: w,
+    end_date: document.getElementById(`lrp-${w}-date`)?.value||null,
+    expected_value: parseFloat(document.getElementById(`lrp-${w}-ev`)?.value)||null,
+    coverage_price: parseFloat(document.getElementById(`lrp-${w}-cov`)?.value)||null,
+    premium_cwt: parseFloat(document.getElementById(`lrp-${w}-prem`)?.value)||null,
+  })).filter(r=>r.expected_value||r.premium_cwt);
 
-  const steers_by_weight = [5,6,7,8,9].map(wt=>({
-    wt,
-    net_90: parseFloat(document.getElementById(`lrp-s-${wt}-90`)?.value)||null,
-    net_95: parseFloat(document.getElementById(`lrp-s-${wt}-95`)?.value)||null,
-  })).filter(r=>r.net_90||r.net_95);
+  if(!rows.length){alert('Enter at least one row of data.');return;}
 
-  const heifers_by_weight = [5,6,7,8,9].map(wt=>({
-    wt,
-    net_90: parseFloat(document.getElementById(`lrp-h-${wt}-90`)?.value)||null,
-    net_95: parseFloat(document.getElementById(`lrp-h-${wt}-95`)?.value)||null,
-  })).filter(r=>r.net_90||r.net_95);
-
-  const data = {date:today, period_weeks:period, expected_ending_value:eev, steers_by_weight, heifers_by_weight};
+  const data = {
+    date: today,
+    type: document.getElementById('lrp-type')?.value||'',
+    target_cwt: parseInt(document.getElementById('lrp-target-cwt')?.value)||9,
+    head_count: parseInt(document.getElementById('lrp-head')?.value)||null,
+    coverage_pct: parseInt(document.getElementById('lrp-coverage')?.value)||100,
+    rows,
+  };
   localStorage.setItem('ct_lrp_'+today, JSON.stringify(data));
   window._lrpData = data;
   alert('✅ LRP rates saved for today');
