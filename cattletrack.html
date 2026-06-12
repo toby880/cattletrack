@@ -344,10 +344,17 @@ tr:hover td{background:var(--bg)}
         <input type="text" id="animal-search" placeholder="Search tag, name, breed..." oninput="renderAnimals()" style="flex:1;font-size:14px">
         <select id="animal-filter" onchange="renderAnimals()" style="width:110px;font-size:13px;padding:8px 10px">
           <option value="">All</option>
+          <option value="Cow">Cows</option>
+          <option value="Heifer">Heifers</option>
+          <option value="Bull">Bulls</option>
+          <option value="Steer">Steers</option>
           <option value="Registered">Registered</option>
           <option value="Commercial">Commercial</option>
           <option value="active">Active</option>
           <option value="sold">Sold</option>
+        </select>
+        <select id="animal-pasture-filter" onchange="renderAnimals()" style="width:110px;font-size:13px;padding:8px 10px">
+          <option value="">All Pastures</option>
         </select>
       </div>
       <div id="animal-cards"><div class="loading"><div class="spinner"></div>Loading...</div></div>
@@ -2081,12 +2088,27 @@ function renderAnimals(data) {
   const animals = data || cache.get('animals') || [];
   const q = document.getElementById('animal-search')?.value?.toLowerCase() || '';
   const f = document.getElementById('animal-filter')?.value || '';
+  const pf = document.getElementById('animal-pasture-filter')?.value || '';
+
+  // Populate pasture dropdown dynamically
+  const pastureSelect = document.getElementById('animal-pasture-filter');
+  if(pastureSelect && pastureSelect.options.length <= 1) {
+    const pastures = [...new Set(animals.map(a=>a.location).filter(Boolean))].sort();
+    pastures.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p; opt.textContent = p;
+      pastureSelect.appendChild(opt);
+    });
+  }
+
   let filtered = animals;
   if(q) filtered = filtered.filter(a => Object.values(a).some(v=>String(v||'').toLowerCase().includes(q)));
   if(f==='Registered') filtered = filtered.filter(a=>a.animal_type==='Registered');
-  if(f==='Commercial') filtered = filtered.filter(a=>a.animal_type==='Commercial');
-  if(f==='active') filtered = filtered.filter(a=>a.status==='active'||a.status==='donor');
-  if(f==='sold') filtered = filtered.filter(a=>a.status==='sold');
+  else if(f==='Commercial') filtered = filtered.filter(a=>a.animal_type==='Commercial');
+  else if(f==='active') filtered = filtered.filter(a=>a.status==='active'||a.status==='donor');
+  else if(f==='sold') filtered = filtered.filter(a=>a.status==='sold');
+  else if(f) filtered = filtered.filter(a=>a.sex===f);
+  if(pf) filtered = filtered.filter(a=>(a.location||'')=== pf);
   const container = document.getElementById('animal-cards');
   if(!filtered.length) { container.innerHTML='<div class="empty"><div class="empty-icon">🐄</div><p>No animals found. Tap "+ Add" to add your first animal.</p></div>'; return; }
   const typeColor = {Registered:'badge-orange', Commercial:'badge-gray'};
