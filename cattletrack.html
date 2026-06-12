@@ -301,6 +301,7 @@ tr:hover td{background:var(--bg)}
     <button class="nav-btn" onclick="showPage('sales')">Sales</button>
     <button class="nav-btn" onclick="showPage('calendar')">Calendar</button>
     <button class="nav-btn" onclick="showPage('inventory')">Inventory</button>
+    <button class="nav-btn" onclick="showPage('stockers')">Stockers</button>
     <button class="nav-btn" onclick="showPage('reports')">Reports</button>
   </nav>
 
@@ -726,6 +727,18 @@ tr:hover td{background:var(--bg)}
 
     <!-- REPORTS -->
     <!-- INVENTORY -->
+    <!-- STOCKERS -->
+    <div class="page" id="page-stockers">
+      <div class="section-header">
+        <div class="section-title">Stockers</div>
+        <button class="btn btn-primary btn-sm" onclick="openNewStockerGroup()">+ New Group</button>
+      </div>
+      <div id="stocker-list-view">
+        <div class="loading"><div class="spinner"></div>Loading...</div>
+      </div>
+      <div id="stocker-detail-view" style="display:none"></div>
+    </div>
+
     <div class="page" id="page-inventory">
       <div class="tab-bar">
         <button class="tab active" onclick="showInventoryTab('medications')">Medications</button>
@@ -921,6 +934,70 @@ tr:hover td{background:var(--bg)}
       <button class="btn btn-secondary" onclick="closeAddAnimal()" style="flex:1">Cancel</button>
       <button class="btn btn-primary" onclick="saveNewAnimal()" style="flex:2">Add Animal</button>
     </div>
+  </div>
+</div>
+
+<!-- NEW STOCKER GROUP MODAL -->
+<div class="modal-overlay" id="new-stocker-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="modal-title" style="margin-bottom:0">New Stocker Group</div>
+      <button onclick="document.getElementById('new-stocker-modal').classList.remove('open')" style="background:var(--bg2);border:none;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer;font-family:inherit">Cancel</button>
+    </div>
+    <div class="form-group"><label>Group Name</label><input type="text" id="sg2-name" placeholder="e.g. Smith Stockers — Fall 2026"></div>
+    <div class="card-title" style="margin:12px 0 8px;font-size:12px;color:var(--orange);text-transform:uppercase;letter-spacing:1px">Owner Info</div>
+    <div class="form-row">
+      <div class="form-group"><label>Owner Name</label><input type="text" id="sg2-owner" placeholder="Owner's name"></div>
+      <div class="form-group"><label>Owner Phone</label><input type="tel" id="sg2-phone" placeholder="(555) 555-5555"></div>
+    </div>
+    <div class="form-group"><label>Owner Email</label><input type="email" id="sg2-email" placeholder="owner@email.com"></div>
+    <div class="card-title" style="margin:12px 0 8px;font-size:12px;color:var(--orange);text-transform:uppercase;letter-spacing:1px">Arrival Info</div>
+    <div class="form-row">
+      <div class="form-group"><label>Arrival Date</label><input type="date" id="sg2-arrival-date" value="${new Date().toISOString().split('T')[0]}"></div>
+      <div class="form-group"><label>Head Count</label><input type="number" id="sg2-head-count" placeholder="0" inputmode="numeric"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Total Arrival Weight (lbs)</label><input type="number" id="sg2-total-weight" placeholder="0" inputmode="numeric" oninput="calcStockerAvg()"></div>
+      <div class="form-group"><label>Avg Weight/Head</label><input type="number" id="sg2-avg-weight" placeholder="0" inputmode="numeric" readonly style="background:var(--bg2)"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Price/lb ($)</label><input type="number" id="sg2-price-lb" placeholder="0.00" inputmode="decimal" oninput="calcStockerCost()"></div>
+      <div class="form-group"><label>Total Cost ($)</label><input type="number" id="sg2-cost-basis" placeholder="0.00" inputmode="decimal" readonly style="background:var(--bg2)"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Pasture</label><input type="text" id="sg2-pasture" placeholder="e.g. North Wheat"></div>
+      <div class="form-group"><label>Sex</label>
+        <select id="sg2-sex"><option value="Steer">Steers</option><option value="Heifer">Heifers</option><option value="Mixed">Mixed</option></select>
+      </div>
+    </div>
+    <div class="card-title" style="margin:12px 0 8px;font-size:12px;color:var(--orange);text-transform:uppercase;letter-spacing:1px">Ear Tags</div>
+    <div class="form-group">
+      <label>Tag Entry Method</label>
+      <select id="sg2-tag-method" onchange="toggleStockerTagMethod()">
+        <option value="series">Series (e.g. 1-150)</option>
+        <option value="manual">Enter individually</option>
+        <option value="none">Add tags later</option>
+      </select>
+    </div>
+    <div id="sg2-series-fields">
+      <div class="form-row">
+        <div class="form-group"><label>Start Tag #</label><input type="text" id="sg2-tag-start" placeholder="e.g. 1 or W001"></div>
+        <div class="form-group"><label>End Tag #</label><input type="text" id="sg2-tag-end" placeholder="e.g. 150"></div>
+      </div>
+      <div class="form-group"><label>Tag Prefix (optional)</label><input type="text" id="sg2-tag-prefix" placeholder="e.g. W, S, or leave blank"></div>
+    </div>
+    <div id="sg2-manual-fields" style="display:none">
+      <div class="form-group"><label>Tags (comma separated)</label><textarea id="sg2-tags-manual" placeholder="101, 102, 103..." style="min-height:60px"></textarea></div>
+    </div>
+    <div class="form-group" style="margin-top:8px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="sg2-share-owner" style="width:18px;height:18px;accent-color:var(--orange)">
+        Share performance data with owner (read-only portal)
+      </label>
+    </div>
+    <div class="form-group"><label>Notes</label><textarea id="sg2-notes" placeholder="Brand, origin, any notes..."></textarea></div>
+    <button class="btn btn-primary" onclick="saveNewStockerGroup()">Create Stocker Group</button>
   </div>
 </div>
 
@@ -1427,6 +1504,7 @@ function showPage(name) {
   if(name==='sales') { showSalesTab('record'); }
   if(name==='calendar') loadCalendar();
   if(name==='inventory') showInventoryTab('medications');
+  if(name==='stockers') loadStockerGroups();
   if(name==='reports') { setTimeout(()=>{ showReportsTab('builder'); updateReportColumns(); }, 50); }
   if(name==='settings') loadSettings();
 }
@@ -4907,6 +4985,577 @@ async function importEPDCSV(text) {
 }
 
 
+
+// ── STOCKERS ───────────────────────────────────────────────────────────────
+async function showPage_stockers() {
+  await loadStockerGroups();
+}
+
+async function loadStockerGroups() {
+  const {data:groups} = await sb.from('stocker_groups').select('*')
+    .eq('ranch_id', currentRanch.id)
+    .order('created_at', {ascending:false});
+
+  const listView = document.getElementById('stocker-list-view');
+  const today = new Date();
+
+  if(!groups||!groups.length) {
+    listView.innerHTML = `<div class="empty"><div class="empty-icon">🌾</div>
+      <p>No stocker groups yet.<br>Tap "+ New Group" to receive your first load.</p></div>`;
+    return;
+  }
+
+  // Get health events for all groups to calculate death loss and pulls
+  const groupIds = groups.map(g=>g.id);
+  const {data:healthAll} = await sb.from('stocker_health').select('*').eq('ranch_id', currentRanch.id).in('group_id', groupIds);
+  const {data:weightsAll} = await sb.from('stocker_weights').select('*').eq('ranch_id', currentRanch.id).in('group_id', groupIds);
+  const {data:animalsAll} = await sb.from('stocker_animals').select('*').eq('ranch_id', currentRanch.id).in('group_id', groupIds);
+
+  const activeGroups = groups.filter(g=>g.status==='active');
+  const closedGroups = groups.filter(g=>g.status!=='active');
+
+  listView.innerHTML = `
+    ${activeGroups.length ? `
+    <div style="font-size:11px;font-weight:600;color:var(--orange);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Active Groups (${activeGroups.length})</div>
+    ${activeGroups.map(g=>renderStockerCard(g, healthAll, weightsAll, animalsAll, today)).join('')}` : ''}
+    ${closedGroups.length ? `
+    <div style="font-size:11px;font-weight:600;color:var(--gray);text-transform:uppercase;letter-spacing:1px;margin:16px 0 8px">Closed Groups (${closedGroups.length})</div>
+    ${closedGroups.map(g=>renderStockerCard(g, healthAll, weightsAll, animalsAll, today)).join('')}` : ''}`;
+}
+
+function renderStockerCard(g, healthAll, weightsAll, animalsAll, today) {
+  const health = (healthAll||[]).filter(h=>h.group_id===g.id);
+  const weights = (weightsAll||[]).filter(w=>w.group_id===g.id);
+  const animals = (animalsAll||[]).filter(a=>a.group_id===g.id);
+
+  const deaths = animals.filter(a=>a.status==='dead').length || health.filter(h=>h.event_type==='death').length;
+  const pulls = animals.filter(a=>a.status==='pulled').length || health.filter(h=>h.diagnosis&&h.outcome!=='dead').length;
+  const currentHead = (g.head_count||0) - deaths;
+
+  // Calculate ADG from most recent weight
+  const latestWeight = weights.sort((a,b)=>new Date(b.weight_date)-new Date(a.weight_date))[0];
+  let adg = null;
+  if(latestWeight && g.arrival_date && g.arrival_avg_weight) {
+    const days = Math.round((new Date(latestWeight.weight_date) - new Date(g.arrival_date))/86400000);
+    if(days > 0) adg = ((latestWeight.avg_weight - g.arrival_avg_weight) / days).toFixed(2);
+  }
+
+  const daysOnFeed = g.arrival_date ? Math.round((today - new Date(g.arrival_date))/86400000) : 0;
+  const healthCostPerHead = health.reduce((s,h)=>(h.cost_per_head||0)*( h.head_count||1)+s, 0) / Math.max(1, g.head_count||1);
+
+  return `
+    <div onclick="openStockerDetail('${g.id}')" style="background:var(--white);border:1px solid ${g.status==='active'?'var(--border)':'var(--bg2)'};border-radius:12px;padding:14px;margin-bottom:10px;cursor:pointer">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div>
+          <div style="font-weight:700;font-size:15px">${g.name}</div>
+          <div style="font-size:12px;color:var(--gray)">${g.owner_name||'—'} · ${g.pasture||'—'} · Arrived ${g.arrival_date||'—'}</div>
+        </div>
+        <span class="badge ${g.status==='active'?'badge-green':'badge-gray'}">${g.status}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+        <div style="background:var(--bg2);border-radius:8px;padding:8px;text-align:center">
+          <div style="font-size:18px;font-weight:700">${currentHead}</div>
+          <div style="font-size:10px;color:var(--gray)">Head</div>
+        </div>
+        <div style="background:var(--bg2);border-radius:8px;padding:8px;text-align:center">
+          <div style="font-size:18px;font-weight:700">${daysOnFeed}</div>
+          <div style="font-size:10px;color:var(--gray)">Days</div>
+        </div>
+        <div style="background:var(--bg2);border-radius:8px;padding:8px;text-align:center">
+          <div style="font-size:18px;font-weight:700;color:${deaths>0?'var(--red)':'var(--dark)'}">${deaths}</div>
+          <div style="font-size:10px;color:var(--gray)">Death Loss</div>
+        </div>
+        <div style="background:var(--bg2);border-radius:8px;padding:8px;text-align:center">
+          <div style="font-size:18px;font-weight:700">${adg||'—'}</div>
+          <div style="font-size:10px;color:var(--gray)">ADG</div>
+        </div>
+      </div>
+      ${pulls>0||deaths>0?`<div style="font-size:12px;color:var(--gray);margin-top:8px">${pulls} pulled · ${deaths} death${deaths!==1?'s':''} · Health cost $${healthCostPerHead.toFixed(2)}/hd</div>`:''}
+    </div>`;
+}
+
+async function openStockerDetail(groupId) {
+  const {data:groups} = await sb.from('stocker_groups').select('*').eq('id',groupId);
+  const g = groups?.[0]; if(!g) return;
+
+  const [{data:health},{data:weights},{data:animals}] = await Promise.all([
+    sb.from('stocker_health').select('*').eq('group_id',groupId).order('event_date',{ascending:false}),
+    sb.from('stocker_weights').select('*').eq('group_id',groupId).order('weight_date',{ascending:false}),
+    sb.from('stocker_animals').select('*').eq('group_id',groupId).order('ear_tag'),
+  ]);
+
+  document.getElementById('stocker-list-view').style.display='none';
+  document.querySelector('#page-stockers .section-header').style.display='none';
+  const detail = document.getElementById('stocker-detail-view');
+  detail.style.display='block';
+
+  const today = new Date();
+  const daysOnFeed = g.arrival_date ? Math.round((today-new Date(g.arrival_date))/86400000) : 0;
+  const deaths = (animals||[]).filter(a=>a.status==='dead').length;
+  const pulled = (animals||[]).filter(a=>a.status==='pulled').length;
+  const currentHead = (g.head_count||0) - deaths;
+  const totalHealthCost = (health||[]).reduce((s,h)=>s+(h.cost_per_head||0)*(h.head_count||1),0);
+  const healthCostPerHead = currentHead>0 ? totalHealthCost/currentHead : 0;
+
+  // ADG calculation
+  const latestWt = (weights||[])[0];
+  let adg=null, projectedSaleWt=null;
+  if(latestWt&&g.arrival_avg_weight&&g.arrival_date){
+    const days=Math.round((new Date(latestWt.weight_date)-new Date(g.arrival_date))/86400000);
+    if(days>0){adg=((latestWt.avg_weight-g.arrival_avg_weight)/days).toFixed(2);}
+  }
+
+  const today2 = new Date().toISOString().split('T')[0];
+
+  detail.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <button onclick="closeStockerDetail()" style="background:var(--bg2);border:none;border-radius:8px;padding:8px 14px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">← Back</button>
+      <div style="flex:1"><div style="font-size:17px;font-weight:700">${g.name}</div>
+      <div style="font-size:12px;color:var(--gray)">${g.owner_name||'—'} · ${g.pasture||'—'}</div></div>
+      <span class="badge ${g.status==='active'?'badge-green':'badge-gray'}">${g.status}</span>
+    </div>
+
+    <!-- Summary Cards -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
+      <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:24px;font-weight:800">${currentHead}</div>
+        <div style="font-size:11px;color:var(--gray)">Current Head</div>
+      </div>
+      <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:24px;font-weight:800">${daysOnFeed}</div>
+        <div style="font-size:11px;color:var(--gray)">Days on Feed</div>
+      </div>
+      <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:24px;font-weight:800;color:${deaths>0?'var(--red)':'var(--green)'}">${deaths}</div>
+        <div style="font-size:11px;color:var(--gray)">Death Loss</div>
+      </div>
+      <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:24px;font-weight:800">${adg||'—'}</div>
+        <div style="font-size:11px;color:var(--gray)">ADG (lbs/day)</div>
+      </div>
+    </div>
+
+    <!-- Financial Summary -->
+    <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:600;color:var(--orange);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">💰 Financial Summary</div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid var(--border)"><span style="color:var(--gray)">Arrival Weight Avg</span><strong>${g.arrival_avg_weight||'—'} lbs</strong></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid var(--border)"><span style="color:var(--gray)">Purchase Price/lb</span><strong>$${g.price_per_lb||'—'}</strong></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid var(--border)"><span style="color:var(--gray)">Total Cost Basis</span><strong>$${g.cost_basis?.toLocaleString()||'—'}</strong></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid var(--border)"><span style="color:var(--gray)">Health Cost/Head</span><strong style="color:${healthCostPerHead>30?'var(--red)':'var(--dark)'}">$${healthCostPerHead.toFixed(2)}</strong></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0"><span style="color:var(--gray)">Total Health Cost</span><strong>$${totalHealthCost.toFixed(2)}</strong></div>
+    </div>
+
+    <!-- Tab bar -->
+    <div class="tab-bar" style="margin-bottom:12px" id="stocker-detail-tabs">
+      <button class="tab active" onclick="showStockerTab('health','${g.id}')">Health</button>
+      <button class="tab" onclick="showStockerTab('weights','${g.id}')">Weights</button>
+      <button class="tab" onclick="showStockerTab('animals','${g.id}')">Animals</button>
+      <button class="tab" onclick="showStockerTab('close','${g.id}')">Close Out</button>
+    </div>
+    <div id="stocker-tab-content"></div>`;
+
+  // Load health tab by default
+  renderStockerHealthTab(g.id, health||[], today2);
+}
+
+function showStockerTab(tab, groupId) {
+  document.querySelectorAll('#stocker-detail-tabs .tab').forEach((b,i)=>b.classList.toggle('active',['health','weights','animals','close'][i]===tab));
+  sb.from('stocker_health').select('*').eq('group_id',groupId).order('event_date',{ascending:false}).then(({data})=>{
+    sb.from('stocker_weights').select('*').eq('group_id',groupId).order('weight_date',{ascending:false}).then(({data:wts})=>{
+      sb.from('stocker_animals').select('*').eq('group_id',groupId).order('ear_tag').then(({data:anm})=>{
+        const today = new Date().toISOString().split('T')[0];
+        if(tab==='health') renderStockerHealthTab(groupId, data||[], today);
+        else if(tab==='weights') renderStockerWeightsTab(groupId, wts||[], data||[]);
+        else if(tab==='animals') renderStockerAnimalsTab(groupId, anm||[]);
+        else if(tab==='close') renderStockerCloseTab(groupId);
+      });
+    });
+  });
+}
+
+function renderStockerHealthTab(groupId, health, today) {
+  const content = document.getElementById('stocker-tab-content');
+  content.innerHTML = `
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">Log Health Event</div>
+      <div class="form-row">
+        <div class="form-group"><label>Date</label><input type="date" id="sh-date" value="${today}"></div>
+        <div class="form-group"><label>Event Type</label>
+          <select id="sh-type">
+            <option value="treatment">Treatment / Pull</option>
+            <option value="vaccination">Vaccination (whole group)</option>
+            <option value="death">Death Loss</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><label>Animal Tag (leave blank for whole group)</label><input type="text" id="sh-tag" placeholder="Tag # or blank for group"></div>
+      <div class="form-group"><label>Product / Drug</label>
+        <select id="sh-product-select" onchange="stockerAutofillDrug()" style="margin-bottom:6px">
+          <option value="">— Select from drug list —</option>
+          <optgroup label="Antibiotics">
+            <option value="Draxxin|28|SQ">Draxxin — 28d</option>
+            <option value="Excenel|4|SQ">Excenel — 4d</option>
+            <option value="Nuflor|36|SQ">Nuflor — 36d</option>
+            <option value="LA-200|28|SQ">LA-200 — 28d</option>
+            <option value="Baytril 100|28|SQ">Baytril 100 — 28d</option>
+            <option value="Micotil|42|SQ">Micotil — 42d</option>
+            <option value="Zuprevo|21|SQ">Zuprevo — 21d</option>
+          </optgroup>
+          <optgroup label="Anti-inflammatory">
+            <option value="Banamine|4|IV">Banamine — 4d</option>
+            <option value="Meloxicam|0|oral">Meloxicam — 0d</option>
+          </optgroup>
+          <optgroup label="Vaccines">
+            <option value="Bovishield Gold 5|0|SQ">Bovishield Gold 5</option>
+            <option value="Vista Once SQ|0|SQ">Vista Once SQ</option>
+            <option value="Pyramid 5|0|SQ">Pyramid 5</option>
+          </optgroup>
+          <optgroup label="Dewormers">
+            <option value="Ivermectin Pour-On|48|topical">Ivermectin Pour-On — 48d</option>
+            <option value="Dectomax Pour-On|45|topical">Dectomax Pour-On — 45d</option>
+            <option value="Safe-Guard|8|oral">Safe-Guard — 8d</option>
+          </optgroup>
+        </select>
+        <input type="text" id="sh-product" placeholder="Or type product name">
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Head Count Treated</label><input type="number" id="sh-head" value="1" inputmode="numeric"></div>
+        <div class="form-group"><label>Withdrawal Days</label><input type="number" id="sh-withdrawal" placeholder="0" inputmode="numeric"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Cost per Head ($)</label><input type="number" id="sh-cost" placeholder="0.00" inputmode="decimal"></div>
+        <div class="form-group"><label>Diagnosis</label><input type="text" id="sh-diagnosis" placeholder="BRD, Pinkeye..."></div>
+      </div>
+      <div class="form-group"><label>Outcome</label>
+        <select id="sh-outcome"><option value="treated">Treated / In hospital pen</option><option value="recovered">Recovered / Back to group</option><option value="chronic">Chronic</option><option value="dead">Died</option></select>
+      </div>
+      <div class="form-group"><label>Treated By</label><input type="text" id="sh-by" placeholder="Name"></div>
+      <div class="form-group"><label>Notes</label><input type="text" id="sh-notes" placeholder="Observations..."></div>
+      <button class="btn btn-primary" onclick="saveStockerHealth('${groupId}')">Save Health Event</button>
+    </div>
+    <div class="card">
+      <div class="card-title">Health History (${health.length})</div>
+      ${health.length ? health.map(h=>`
+        <div style="padding:8px 0;border-bottom:1px solid var(--border)">
+          <div style="display:flex;justify-content:space-between">
+            <strong>${h.product||h.event_type}</strong>
+            <span class="badge ${h.outcome==='dead'?'badge-red':h.outcome==='recovered'?'badge-green':'badge-orange'}" style="font-size:10px">${h.outcome||h.event_type}</span>
+          </div>
+          <div style="font-size:12px;color:var(--gray)">${h.event_date} · ${h.head_count||1} head${h.animal_tag?' · Tag: '+h.animal_tag:' · whole group'}${h.diagnosis?' · '+h.diagnosis:''}${h.cost_per_head?' · $'+h.cost_per_head+'/hd':''}</div>
+        </div>`).join('') :
+      '<div style="text-align:center;color:var(--gray-lt);padding:20px;font-size:13px">No health events recorded</div>'}
+    </div>`;
+}
+
+function stockerAutofillDrug() {
+  const sel = document.getElementById('sh-product-select');
+  const val = sel.value;
+  if(!val) return;
+  const [name, days, route] = val.split('|');
+  document.getElementById('sh-product').value = name;
+  document.getElementById('sh-withdrawal').value = days||'0';
+}
+
+async function saveStockerHealth(groupId) {
+  const date = document.getElementById('sh-date')?.value;
+  const product = document.getElementById('sh-product')?.value?.trim() || document.getElementById('sh-product-select')?.value?.split('|')[0] || '';
+  if(!date||!product){alert('Date and product required.');return;}
+  const outcome = document.getElementById('sh-outcome')?.value;
+  const animalTag = document.getElementById('sh-tag')?.value?.trim()||null;
+  const headCount = parseInt(document.getElementById('sh-head')?.value)||1;
+
+  const {error} = await dbInsert('stocker_health', {
+    group_id: groupId,
+    animal_tag: animalTag,
+    event_date: date,
+    event_type: document.getElementById('sh-type')?.value,
+    product,
+    withdrawal_days: parseInt(document.getElementById('sh-withdrawal')?.value)||0,
+    cost_per_head: parseFloat(document.getElementById('sh-cost')?.value)||null,
+    head_count: headCount,
+    diagnosis: document.getElementById('sh-diagnosis')?.value?.trim()||null,
+    outcome,
+    treated_by: document.getElementById('sh-by')?.value?.trim()||null,
+    notes: document.getElementById('sh-notes')?.value?.trim()||null,
+  });
+  if(error){alert('Error: '+error.message);return;}
+
+  // If death, update animal status
+  if(outcome==='dead' && animalTag) {
+    await sb.from('stocker_animals').update({status:'dead', death_date:date}).eq('group_id',groupId).eq('ear_tag',animalTag);
+  } else if(outcome==='treated' && animalTag) {
+    await sb.from('stocker_animals').update({status:'pulled'}).eq('group_id',groupId).eq('ear_tag',animalTag);
+  } else if(outcome==='recovered' && animalTag) {
+    await sb.from('stocker_animals').update({status:'active'}).eq('group_id',groupId).eq('ear_tag',animalTag);
+  }
+
+  alert(`✅ Health event saved`);
+  openStockerDetail(groupId);
+}
+
+function renderStockerWeightsTab(groupId, weights, health) {
+  const today = new Date().toISOString().split('T')[0];
+  const content = document.getElementById('stocker-tab-content');
+  content.innerHTML = `
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">Log Weight</div>
+      <div class="form-row">
+        <div class="form-group"><label>Date</label><input type="date" id="sw-date" value="${today}"></div>
+        <div class="form-group"><label>Head Count Weighed</label><input type="number" id="sw-head" placeholder="0" inputmode="numeric"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Total Weight (lbs)</label><input type="number" id="sw-total" placeholder="0" inputmode="numeric" oninput="calcStockerWeightAvg()"></div>
+        <div class="form-group"><label>Avg Weight/Head</label><input type="number" id="sw-avg" placeholder="0" readonly style="background:var(--bg2)"></div>
+      </div>
+      <div class="form-group"><label>Notes</label><input type="text" id="sw-notes" placeholder="Scale ticket #, conditions..."></div>
+      <button class="btn btn-primary" onclick="saveStockerWeight('${groupId}')">Save Weight</button>
+    </div>
+    <div class="card">
+      <div class="card-title">Weight History</div>
+      ${weights.length ? `
+      <div class="table-wrap"><table>
+        <thead><tr><th>Date</th><th>Head</th><th>Avg Wt</th><th>Total</th><th>Notes</th></tr></thead>
+        <tbody>${weights.map(w=>`<tr>
+          <td>${w.weight_date}</td><td>${w.head_count}</td>
+          <td><strong>${w.avg_weight} lbs</strong></td>
+          <td>${w.total_weight?.toLocaleString()} lbs</td>
+          <td style="font-size:12px;color:var(--gray)">${w.notes||'—'}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>` :
+      '<div style="text-align:center;color:var(--gray-lt);padding:20px;font-size:13px">No weights recorded yet</div>'}
+    </div>`;
+}
+
+function calcStockerWeightAvg() {
+  const total = parseFloat(document.getElementById('sw-total')?.value)||0;
+  const head = parseInt(document.getElementById('sw-head')?.value)||0;
+  if(total>0&&head>0) document.getElementById('sw-avg').value = (total/head).toFixed(1);
+}
+
+async function saveStockerWeight(groupId) {
+  const date = document.getElementById('sw-date')?.value;
+  const head = parseInt(document.getElementById('sw-head')?.value)||0;
+  const total = parseFloat(document.getElementById('sw-total')?.value)||0;
+  if(!date||!head||!total){alert('Date, head count, and weight required.');return;}
+  const avg = parseFloat((total/head).toFixed(1));
+  const {error} = await dbInsert('stocker_weights',{
+    group_id:groupId, weight_date:date,
+    head_count:head, total_weight:total, avg_weight:avg,
+    notes:document.getElementById('sw-notes')?.value?.trim()||null,
+  });
+  if(error){alert('Error: '+error.message);return;}
+  alert('✅ Weight saved');
+  openStockerDetail(groupId);
+}
+
+function renderStockerAnimalsTab(groupId, animals) {
+  const content = document.getElementById('stocker-tab-content');
+  const statusColor = {active:'badge-green',pulled:'badge-orange',dead:'badge-red',sold:'badge-gray'};
+  const active = animals.filter(a=>a.status==='active').length;
+  const pulled = animals.filter(a=>a.status==='pulled').length;
+  const dead = animals.filter(a=>a.status==='dead').length;
+
+  content.innerHTML = `
+    <div style="display:flex;gap:12px;margin-bottom:12px">
+      <div style="background:var(--white);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center;flex:1">
+        <div style="font-size:20px;font-weight:700;color:var(--green)">${active}</div>
+        <div style="font-size:11px;color:var(--gray)">Active</div>
+      </div>
+      <div style="background:var(--white);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center;flex:1">
+        <div style="font-size:20px;font-weight:700;color:var(--orange)">${pulled}</div>
+        <div style="font-size:11px;color:var(--gray)">Hospital Pen</div>
+      </div>
+      <div style="background:var(--white);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center;flex:1">
+        <div style="font-size:20px;font-weight:700;color:var(--red)">${dead}</div>
+        <div style="font-size:11px;color:var(--gray)">Dead</div>
+      </div>
+    </div>
+    ${animals.length ? `
+    <div class="card">
+      <div class="card-title">All Animals (${animals.length})</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Tag</th><th>Sex</th><th>Arrival Wt</th><th>Status</th></tr></thead>
+        <tbody>${animals.map(a=>`<tr>
+          <td><strong>${a.ear_tag}</strong></td>
+          <td>${a.sex||'—'}</td>
+          <td>${a.arrival_weight?a.arrival_weight+' lbs':'—'}</td>
+          <td><span class="badge ${statusColor[a.status]||'badge-gray'}" style="font-size:10px">${a.status}</span></td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+    </div>` :
+    '<div class="card"><div style="text-align:center;color:var(--gray-lt);padding:20px;font-size:13px">No individual animals recorded for this group</div></div>'}`;
+}
+
+function renderStockerCloseTab(groupId) {
+  const today = new Date().toISOString().split('T')[0];
+  const content = document.getElementById('stocker-tab-content');
+  content.innerHTML = `
+    <div class="card">
+      <div class="card-title">Close Out Group</div>
+      <div class="form-row">
+        <div class="form-group"><label>Sale Date</label><input type="date" id="sc-date" value="${today}"></div>
+        <div class="form-group"><label>Head Sold</label><input type="number" id="sc-head" placeholder="0" inputmode="numeric"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Total Sale Weight (lbs)</label><input type="number" id="sc-total-wt" placeholder="0" inputmode="numeric" oninput="calcCloseoutAvg()"></div>
+        <div class="form-group"><label>Avg Sale Weight</label><input type="number" id="sc-avg-wt" placeholder="0" readonly style="background:var(--bg2)"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Sale Price/lb ($)</label><input type="number" id="sc-price" placeholder="0.00" inputmode="decimal"></div>
+        <div class="form-group"><label>Total Sale ($)</label><input type="number" id="sc-total-sale" placeholder="0.00" readonly style="background:var(--bg2)"></div>
+      </div>
+      <div class="form-group"><label>Notes</label><textarea id="sc-notes" placeholder="Buyer, market, any notes..."></textarea></div>
+      <button class="btn btn-primary" onclick="closeStockerGroup('${groupId}')">Close Out Group</button>
+    </div>`;
+
+  // Wire up calculations
+  ['sc-total-wt','sc-head','sc-price'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', calcCloseoutAvg);
+  });
+}
+
+function calcCloseoutAvg() {
+  const total = parseFloat(document.getElementById('sc-total-wt')?.value)||0;
+  const head = parseInt(document.getElementById('sc-head')?.value)||0;
+  const price = parseFloat(document.getElementById('sc-price')?.value)||0;
+  if(total>0&&head>0) document.getElementById('sc-avg-wt').value = (total/head).toFixed(1);
+  if(total>0&&price>0) document.getElementById('sc-total-sale').value = (total*price).toFixed(2);
+}
+
+async function closeStockerGroup(groupId) {
+  const date = document.getElementById('sc-date')?.value;
+  const head = parseInt(document.getElementById('sc-head')?.value)||0;
+  const totalWt = parseFloat(document.getElementById('sc-total-wt')?.value)||0;
+  const price = parseFloat(document.getElementById('sc-price')?.value)||0;
+  if(!date||!head||!totalWt||!price){alert('All fields required to close out.');return;}
+  if(!confirm(`Close out this group?\n\n${head} head sold @ $${price}/lb\nTotal: $${(totalWt*price).toFixed(2)}`)) return;
+
+  const {error} = await sb.from('stocker_groups').update({
+    status:'sold', sale_date:date,
+    sale_weight_total:totalWt,
+    sale_avg_weight:parseFloat((totalWt/head).toFixed(1)),
+    sale_price_per_lb:price,
+    notes: document.getElementById('sc-notes')?.value?.trim()||null,
+    updated_at: new Date().toISOString(),
+  }).eq('id',groupId);
+
+  if(error){alert('Error: '+error.message);return;}
+  alert('✅ Group closed out successfully!');
+  closeStockerDetail();
+}
+
+function closeStockerDetail() {
+  document.getElementById('stocker-detail-view').style.display='none';
+  document.getElementById('stocker-detail-view').innerHTML='';
+  document.getElementById('stocker-list-view').style.display='block';
+  document.querySelector('#page-stockers .section-header').style.display='flex';
+  loadStockerGroups();
+}
+
+function openNewStockerGroup() {
+  document.getElementById('new-stocker-modal').classList.add('open');
+  // Set today's date
+  document.getElementById('sg2-arrival-date').value = new Date().toISOString().split('T')[0];
+}
+
+function toggleStockerTagMethod() {
+  const method = document.getElementById('sg2-tag-method')?.value;
+  document.getElementById('sg2-series-fields').style.display = method==='series'?'block':'none';
+  document.getElementById('sg2-manual-fields').style.display = method==='manual'?'block':'none';
+}
+
+function calcStockerAvg() {
+  const total = parseFloat(document.getElementById('sg2-total-weight')?.value)||0;
+  const head = parseInt(document.getElementById('sg2-head-count')?.value)||0;
+  if(total>0&&head>0) {
+    document.getElementById('sg2-avg-weight').value = (total/head).toFixed(1);
+    calcStockerCost();
+  }
+}
+
+function calcStockerCost() {
+  const totalWt = parseFloat(document.getElementById('sg2-total-weight')?.value)||0;
+  const price = parseFloat(document.getElementById('sg2-price-lb')?.value)||0;
+  if(totalWt>0&&price>0) document.getElementById('sg2-cost-basis').value = (totalWt*price).toFixed(2);
+}
+
+async function saveNewStockerGroup() {
+  const name = document.getElementById('sg2-name')?.value?.trim();
+  const headCount = parseInt(document.getElementById('sg2-head-count')?.value)||0;
+  const arrivalDate = document.getElementById('sg2-arrival-date')?.value;
+  if(!name){alert('Group name is required.');return;}
+
+  const totalWt = parseFloat(document.getElementById('sg2-total-weight')?.value)||null;
+  const avgWt = headCount>0&&totalWt ? parseFloat((totalWt/headCount).toFixed(1)) : null;
+  const priceLb = parseFloat(document.getElementById('sg2-price-lb')?.value)||null;
+  const costBasis = totalWt&&priceLb ? parseFloat((totalWt*priceLb).toFixed(2)) : null;
+  const shareOwner = document.getElementById('sg2-share-owner')?.checked;
+  const ownerToken = shareOwner ? Math.random().toString(36).substring(2,15) : null;
+
+  const {data:grpData, error} = await dbInsert('stocker_groups', {
+    name,
+    owner_name: document.getElementById('sg2-owner')?.value?.trim()||null,
+    owner_email: document.getElementById('sg2-email')?.value?.trim()||null,
+    owner_phone: document.getElementById('sg2-phone')?.value?.trim()||null,
+    arrival_date: arrivalDate||null,
+    head_count: headCount||null,
+    arrival_weight_total: totalWt,
+    arrival_avg_weight: avgWt,
+    price_per_lb: priceLb,
+    cost_basis: costBasis,
+    pasture: document.getElementById('sg2-pasture')?.value?.trim()||null,
+    status: 'active',
+    share_with_owner: shareOwner,
+    owner_access_token: ownerToken,
+    notes: document.getElementById('sg2-notes')?.value?.trim()||null,
+  });
+
+  if(error){alert('Error: '+error.message);return;}
+
+  const groupId = grpData?.[0]?.id;
+
+  // Generate animal records from tag series
+  if(groupId) {
+    const method = document.getElementById('sg2-tag-method')?.value;
+    const sex = document.getElementById('sg2-sex')?.value;
+    const animalRecords = [];
+
+    if(method==='series') {
+      const prefix = document.getElementById('sg2-tag-prefix')?.value?.trim()||'';
+      const start = document.getElementById('sg2-tag-start')?.value?.trim();
+      const end = document.getElementById('sg2-tag-end')?.value?.trim();
+      const startNum = parseInt(start);
+      const endNum = parseInt(end);
+      if(!isNaN(startNum)&&!isNaN(endNum)&&endNum>=startNum) {
+        for(let i=startNum;i<=endNum;i++) {
+          animalRecords.push({
+            ranch_id: currentRanch.id,
+            group_id: groupId,
+            ear_tag: prefix+i,
+            sex: sex==='Mixed'?null:sex,
+            status: 'active',
+          });
+        }
+      }
+    } else if(method==='manual') {
+      const tags = (document.getElementById('sg2-tags-manual')?.value||'').split(',').map(t=>t.trim()).filter(Boolean);
+      tags.forEach(tag=>animalRecords.push({ranch_id:currentRanch.id,group_id:groupId,ear_tag:tag,sex:sex==='Mixed'?null:sex,status:'active'}));
+    }
+
+    if(animalRecords.length>0) {
+      // Insert in batches of 100
+      for(let i=0;i<animalRecords.length;i+=100) {
+        await sb.from('stocker_animals').insert(animalRecords.slice(i,i+100));
+      }
+    }
+  }
+
+  document.getElementById('new-stocker-modal').classList.remove('open');
+  alert(`✅ Stocker group "${name}" created!${grpData?.[0]?.id?' Opening group details...':''}`);
+  if(groupId) openStockerDetail(groupId);
+  else loadStockerGroups();
+}
 
 function loadSettings() {
   document.getElementById('set-ranch-name').value=currentRanch.name||'';
