@@ -2145,7 +2145,7 @@ async function showProfileTab(tab) {
 
   if(tab==='epds') {
     const {data: epds} = await sb.from('epds').select('*').eq('ranch_id', currentRanch.id).eq('animal_tag', tag).single();
-    const isAngus = currentRanch?.breed === 'black_angus';
+    const isAngus = currentRanch?.breed === 'black_angus' || currentAnimal?.breed === 'Black Angus';
     const groups = isAngus ? {
       Growth:['bw','ww','yw','adg','dmi','yh'],
       Maternal:['milk','mw','mh','hpg','cem','teat_epd','uddr','fl'],
@@ -4481,29 +4481,35 @@ async function importEPDs(event) {
 }
 
 async function importAAAFile(file) {
-  // AAA EPD file is Excel format - parse using FileReader
+  // AAA EPD file is Excel format - use SheetJS to parse
   const arrayBuffer = await file.arrayBuffer();
+  let rows = [];
+  let headers = [];
 
-  // Parse Excel manually - AAA files are simple enough to parse as CSV after reading
-  // Convert to text first - AAA exports as xlsx but also supports csv download
-  // Use a simple approach: read the file as text and find the data
-  const text = await file.text();
-  const lines = text.split(/\r?\n/).filter(l=>l.trim());
-
-  if(lines.length<2){
-    alert('Could not read AAA file. Please try downloading as CSV from the AAA website instead.');
+  try {
+    // Try SheetJS if available
+    if(typeof XLSX !== 'undefined') {
+      const wb = XLSX.read(arrayBuffer, {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(ws, {header:1});
+      headers = data[0].map(h=>String(h||'').trim());
+      rows = data.slice(1);
+    } else {
+      // Fallback: try reading as CSV text
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).filter(l=>l.trim());
+      const sep = lines[0].includes('\t') ? '\t' : ',';
+      headers = lines[0].split(sep).map(h=>h.replace(/"/g,'').trim());
+      rows = lines.slice(1).map(l=>l.split(sep).map(v=>v.replace(/"/g,'').trim()));
+    }
+  } catch(e) {
+    alert('Could not read AAA file: '+e.message+'\n\nTry downloading as CSV from the AAA website instead.');
     return;
   }
 
-  // Parse headers
-  const headers = lines[0].split('\t').map(h=>h.trim());
-  // If tab-separated didn't work try comma
-  const sep = headers.length > 5 ? '\t' : ',';
-  const hdrs = lines[0].split(sep).map(h=>h.replace(/"/g,'').trim());
+  if(!headers.length){alert('No data found in file.');return;}
 
-  const col = name => hdrs.findIndex(h=>h===name);
-
-  // Column indexes
+  const col = name => headers.indexOf(name);
   const iReg=col('Reg No.'), iName=col('Name'), iTag=col('Tag');
   const iCED=col('CED'), iBW=col('BW'), iWW=col('WW'), iYW=col('YW');
   const iRADG=col('RADG'), iDMI=col('DMI'), iYH=col('YH'), iSC=col('SC');
@@ -4516,33 +4522,28 @@ async function importAAAFile(file) {
   const iDollarF=col('Feedlot Value($F)'), iDollarG=col('Grid Value ($G)');
   const iDollarB=col('Beef Value($B)'), iDollarC=col('Combined Index($C)');
 
-  console.log('AAA cols:', {iReg,iName,iTag,iCED,iBW,iWW,iYW,iDollarB});
-
   const {data:freshAnimals}=await dbSelect('animals');
   if(freshAnimals)cache.set('animals',freshAnimals);
   const animals=cache.get('animals')||[];
 
   let imported=0, skipped=0;
 
-  for(let i=1;i<lines.length;i++){
-    const vals=lines[i].split(sep).map(v=>v.replace(/"/g,'').trim());
-    if(vals.length<10)continue;
+  for(const vals of rows) {
+    if(!vals||vals.length<10)continue;
+    const tag=String(vals[iTag]||'').trim();
+    const name=String(vals[iName]||'').trim();
+    const reg=String(vals[iReg]||'').trim();
+    if(!tag&&!reg&&!name)continue;
 
-    const tag=(vals[iTag]||'').trim();
-    const name=(vals[iName]||'').trim();
-    const reg=(vals[iReg]||'').trim();
-
-    if(!tag&&!reg)continue;
-
-    // Match animal by tag or reg number
     const match=animals.find(a=>
-      a.tag===tag||a.tag===`AAA-${tag}`||
-      a.reg_number===reg||a.name===name
+      (tag && (a.tag===tag||a.tag===tag.replace(/\s+/g,'')||a.tag===`AAA-${tag.trim()}`)) ||
+      (reg && a.reg_number===reg) ||
+      (name && a.name&&a.name.toUpperCase()===name.toUpperCase())
     );
 
     if(!match){skipped++;continue;}
 
-    const n=v=>{ const x=parseFloat(vals[v]); return isNaN(x)?null:x; };
+    const n=i=>{ if(i<0||i>=vals.length)return null; const x=parseFloat(vals[i]); return isNaN(x)?null:x; };
 
     const epds={
       animal_tag:match.tag, ranch_id:currentRanch.id,
@@ -4558,7 +4559,6 @@ async function importAAAFile(file) {
       dollar_b:n(iDollarB), dollar_c:n(iDollarC),
     };
 
-    // Remove null values to avoid overwriting existing data
     Object.keys(epds).forEach(k=>{ if(epds[k]===null) delete epds[k]; });
 
     const {data:existing}=await sb.from('epds').select('id').eq('animal_tag',match.tag).eq('ranch_id',currentRanch.id);
@@ -4566,7 +4566,7 @@ async function importAAAFile(file) {
     if(existing&&existing.length>0){
       ({error}=await sb.from('epds').update(epds).eq('animal_tag',match.tag).eq('ranch_id',currentRanch.id));
     } else {
-      ({error}=await sb.from('epds').insert({...epds, animal_tag:match.tag, ranch_id:currentRanch.id}));
+      ({error}=await sb.from('epds').insert({...epds}));
     }
     if(!error)imported++;else{console.error('AAA import error:',error);skipped++;}
   }
