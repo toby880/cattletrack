@@ -4531,15 +4531,15 @@ async function importAAAFile(file) {
 
   for(const vals of rows) {
     if(!vals||vals.length<10)continue;
-    const tag=String(vals[iTag]||'').trim();
+    const tag=String(vals[iTag]||'').trim().replace(/\s+/g,'');
     const name=String(vals[iName]||'').trim();
     const reg=String(vals[iReg]||'').trim();
     if(!tag&&!reg&&!name)continue;
 
     const match=animals.find(a=>
-      (tag && (a.tag===tag||a.tag===tag.replace(/\s+/g,'')||a.tag===`AAA-${tag.trim()}`)) ||
-      (reg && a.reg_number===reg) ||
-      (name && a.name&&a.name.toUpperCase()===name.toUpperCase())
+      (tag && (a.tag===tag||a.tag===tag.replace(/\s+/g,''))) ||
+      (reg && (a.reg_number===reg||a.reg_number===String(parseInt(reg)))) ||
+      (name && a.name&&a.name.trim().toUpperCase()===name.trim().toUpperCase())
     );
 
     if(!match){skipped++;continue;}
