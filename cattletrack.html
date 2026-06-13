@@ -338,6 +338,7 @@ tr:hover td{background:var(--bg)}
       <div class="section-header">
         <div class="section-title">Animals</div>
         <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" onclick="openHerdImport()">📥 Import</button>
           <button class="btn btn-secondary btn-sm" onclick="openGroupAction()">Group Action</button>
           <button class="btn btn-primary btn-sm" onclick="openAddAnimal()">+ Add</button>
         </div>
@@ -957,6 +958,68 @@ tr:hover td{background:var(--bg)}
       <button class="btn btn-secondary" onclick="closeAddAnimal()" style="flex:1">Cancel</button>
       <button class="btn btn-primary" onclick="saveNewAnimal()" style="flex:2">Add Animal</button>
     </div>
+  </div>
+</div>
+
+<!-- HERD IMPORT MODAL -->
+<div class="modal-overlay" id="herd-import-modal">
+  <div class="modal" style="max-height:90vh;overflow-y:auto">
+    <div class="modal-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="modal-title" style="margin-bottom:0">Import Herd</div>
+      <button onclick="document.getElementById('herd-import-modal').classList.remove('open')" style="background:var(--bg2);border:none;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer;font-family:inherit">Cancel</button>
+    </div>
+
+    <div id="herd-import-step1">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+        <div onclick="selectImportMethod('template')" id="import-opt-template" style="border:2px solid var(--orange);border-radius:10px;padding:14px;cursor:pointer;text-align:center">
+          <div style="font-size:24px;margin-bottom:6px">📋</div>
+          <div style="font-weight:700;font-size:14px">Use Template</div>
+          <div style="font-size:12px;color:var(--gray);margin-top:4px">Download our Excel template, fill it in, upload it</div>
+        </div>
+        <div onclick="selectImportMethod('smart')" id="import-opt-smart" style="border:2px solid var(--border);border-radius:10px;padding:14px;cursor:pointer;text-align:center">
+          <div style="font-size:24px;margin-bottom:6px">🤖</div>
+          <div style="font-weight:700;font-size:14px">Smart Import</div>
+          <div style="font-size:12px;color:var(--gray);margin-top:4px">Upload any spreadsheet — AI maps your columns automatically</div>
+        </div>
+      </div>
+
+      <div id="import-template-section">
+        <div class="card" style="margin-bottom:10px">
+          <div class="card-title">Step 1 — Download Template</div>
+          <div style="font-size:13px;color:var(--gray);margin-bottom:10px">Download the CattleTrack import template, fill in your animals, then upload it below. Works with Excel or Google Sheets.</div>
+          <button class="btn btn-secondary" onclick="downloadImportTemplate()" style="width:100%">⬇️ Download Excel Template</button>
+        </div>
+        <div class="card">
+          <div class="card-title">Step 2 — Upload Completed Template</div>
+          <div class="form-group"><label>Upload your filled template (.xlsx or .csv)</label>
+            <input type="file" id="template-import-file" accept=".xlsx,.xls,.csv" style="font-size:13px" onchange="previewHerdImport(this.files[0],'template')">
+          </div>
+        </div>
+      </div>
+
+      <div id="import-smart-section" style="display:none">
+        <div class="card">
+          <div class="card-title">🤖 Smart Import — Upload Any Spreadsheet</div>
+          <div style="font-size:13px;color:var(--gray);margin-bottom:10px">Works with CattleMax exports, your own Excel files, or any CSV. Claude AI will automatically map your columns to the right fields and show you a preview before importing.</div>
+          <div style="background:var(--bg2);border-radius:8px;padding:10px;margin-bottom:10px;font-size:12px;color:var(--gray)">
+            ✅ CattleMax CSV export<br>
+            ✅ Your own Excel spreadsheet<br>
+            ✅ Any CSV with animal data<br>
+            ✅ Columns in any order
+          </div>
+          <div class="form-group"><label>Upload your spreadsheet (.xlsx, .xls, or .csv)</label>
+            <input type="file" id="smart-import-file" accept=".xlsx,.xls,.csv" style="font-size:13px" onchange="previewHerdImport(this.files[0],'smart')">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Preview Step -->
+    <div id="herd-import-step2" style="display:none">
+      <div id="import-preview-content"></div>
+    </div>
+
   </div>
 </div>
 
@@ -5181,6 +5244,167 @@ async function importEPDCSV(text) {
 }
 
 
+
+// ── HERD IMPORT ────────────────────────────────────────────────────────────
+function openHerdImport() {
+  document.getElementById('herd-import-modal').classList.add('open');
+  document.getElementById('herd-import-step1').style.display='block';
+  document.getElementById('herd-import-step2').style.display='none';
+  selectImportMethod('template');
+}
+
+function selectImportMethod(method) {
+  document.getElementById('import-opt-template').style.borderColor = method==='template'?'var(--orange)':'var(--border)';
+  document.getElementById('import-opt-smart').style.borderColor = method==='smart'?'var(--orange)':'var(--border)';
+  document.getElementById('import-template-section').style.display = method==='template'?'block':'none';
+  document.getElementById('import-smart-section').style.display = method==='smart'?'block':'none';
+}
+
+function downloadImportTemplate() {
+  const headers = ['Tag','Name','Registration Number','Sex','Animal Type','Date of Birth (YYYY-MM-DD)','Breed','Color','Sire Tag','Dam Tag','Pasture/Location','Status','Purchase Price','Purchased From','Notes'];
+  const ex1 = ['H2R-K253','H2R MISS KANSAS K253','1234567','Cow','Registered','2019-02-15','Red Angus','Red','H2R-G600','H2R-J120','North Pasture','active','','',''];
+  const ex2 = ['101','','','Cow','Commercial','2020-03-01','Black Angus','Black','','','Home Pasture','active','1850','Jones Ranch','Purchased fall 2020'];
+  const csv = [headers,ex1,ex2].map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
+  const blob = new Blob([csv],{type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download='CattleTrack_Import_Template.csv';
+  a.click(); URL.revokeObjectURL(url);
+}
+
+async function previewHerdImport(file, method) {
+  if(!file) return;
+  const preview = document.getElementById('import-preview-content');
+  document.getElementById('herd-import-step1').style.display='none';
+  document.getElementById('herd-import-step2').style.display='block';
+  preview.innerHTML = '<div class="loading"><div class="spinner"></div>Reading your file...</div>';
+
+  let rows=[], headers=[];
+  try {
+    if(file.name.endsWith('.csv')||file.name.endsWith('.txt')) {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).filter(l=>l.trim());
+      const sep = lines[0].includes('\t')?'\t':',';
+      headers = lines[0].split(sep).map(h=>h.replace(/^"|"$/g,'').trim());
+      rows = lines.slice(1).map(l=>l.split(sep).map(v=>v.replace(/^"|"$/g,'').trim()));
+    } else {
+      const ab = await file.arrayBuffer();
+      const wb = XLSX.read(ab,{type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(ws,{header:1});
+      headers = data[0].map(h=>String(h||'').trim());
+      rows = data.slice(1).filter(r=>r.some(v=>v));
+    }
+  } catch(e) {
+    preview.innerHTML = `<div class="alert alert-danger">Error reading file: ${e.message}</div>
+      <button class="btn btn-secondary" onclick="document.getElementById('herd-import-step1').style.display='block';document.getElementById('herd-import-step2').style.display='none'">← Back</button>`;
+    return;
+  }
+  window._importRows = rows;
+  window._importHeaders = headers;
+  if(method==='smart') await smartMapColumns(headers, rows, preview);
+  else templateMapColumns(headers, rows, preview);
+}
+
+function templateMapColumns(headers, rows, preview) {
+  const fieldMap = {'tag':'tag','name':'name','registration number':'reg_number','sex':'sex','animal type':'animal_type','date of birth':'dob','breed':'breed','color':'color','sire tag':'sire','dam tag':'dam','pasture/location':'location','status':'status','purchase price':'purchase_price','purchased from':'purchased_from','notes':'notes'};
+  const colMap = {};
+  headers.forEach((h,i)=>{ const key=h.toLowerCase().replace(/[^a-z0-9 ]/g,'').trim(); if(fieldMap[key]) colMap[fieldMap[key]]=i; });
+  showImportPreview(headers, rows, colMap, preview);
+}
+
+async function smartMapColumns(headers, rows, preview) {
+  preview.innerHTML = '<div class="loading"><div class="spinner"></div>AI is mapping your columns...</div>';
+  try {
+    const sampleRows = rows.slice(0,3).map(r=>headers.reduce((obj,h,i)=>({...obj,[h]:r[i]}),{}));
+    const response = await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:500,messages:[{role:'user',content:`Cattle spreadsheet columns: ${JSON.stringify(headers)}\nSample: ${JSON.stringify(sampleRows)}\nMap to: tag, name, reg_number, sex, animal_type, dob, breed, color, sire, dam, location, status, purchase_price, purchased_from, notes\nReturn ONLY JSON like: {"tag":0,"name":1,"reg_number":null,...} where number is 0-based column index.`}]})
+    });
+    const data = await response.json();
+    const text = data.content?.filter(c=>c.type==='text').map(c=>c.text).join('')||'';
+    const m = text.match(/\{[\s\S]*\}/);
+    if(m) showImportPreview(headers, rows, JSON.parse(m[0]), preview);
+    else showImportPreview(headers, rows, {}, preview);
+  } catch(e) { showImportPreview(headers, rows, {}, preview); }
+}
+
+function showImportPreview(headers, rows, colMap, preview) {
+  const fields = ['tag','name','reg_number','sex','animal_type','dob','breed','color','sire','dam','location','status','purchase_price','purchased_from','notes'];
+  const labels = {tag:'Tag*',name:'Name',reg_number:'Reg #',sex:'Sex*',animal_type:'Type',dob:'DOB',breed:'Breed',color:'Color',sire:'Sire',dam:'Dam',location:'Pasture',status:'Status',purchase_price:'Price',purchased_from:'Source',notes:'Notes'};
+  const previewAnimals = rows.slice(0,5).map(row=>{
+    const a={};
+    fields.forEach(f=>{ if(colMap[f]!=null) a[f]=String(row[colMap[f]]||'').trim(); });
+    return a;
+  });
+  preview.innerHTML = `
+    <button onclick="document.getElementById('herd-import-step1').style.display='block';document.getElementById('herd-import-step2').style.display='none'"
+      style="background:var(--bg2);border:none;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer;font-family:inherit;margin-bottom:12px">← Back</button>
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">Column Mapping</div>
+      <div style="font-size:12px;color:var(--gray);margin-bottom:10px">Adjust any that look wrong:</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        ${fields.map(f=>`<div style="display:flex;align-items:center;gap:6px;font-size:12px">
+          <span style="color:var(--gray);width:70px;flex-shrink:0">${labels[f]}</span>
+          <select id="col-${f}" style="flex:1;padding:4px;font-size:11px;border:1px solid var(--border);border-radius:4px;font-family:inherit">
+            <option value="">— skip —</option>
+            ${headers.map((h,i)=>`<option value="${i}" ${colMap[f]===i?'selected':''}>${h}</option>`).join('')}
+          </select>
+        </div>`).join('')}
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">Preview — first 5 of ${rows.length} animals</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Tag</th><th>Name</th><th>Sex</th><th>DOB</th><th>Breed</th><th>Pasture</th></tr></thead>
+        <tbody>${previewAnimals.map(a=>`<tr><td><strong>${a.tag||'—'}</strong></td><td>${a.name||'—'}</td><td>${a.sex||'—'}</td><td>${a.dob||'—'}</td><td>${a.breed||'—'}</td><td>${a.location||'—'}</td></tr>`).join('')}</tbody>
+      </table></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Default Status</label>
+        <select id="import-default-status"><option value="active">Active</option><option value="sold">Sold</option></select>
+      </div>
+      <div class="form-group"><label>Duplicates</label>
+        <select id="import-skip-dupes"><option value="skip">Skip duplicates</option><option value="update">Update existing</option></select>
+      </div>
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="runHerdImport()">✅ Import ${rows.length} Animals</button>`;
+}
+
+async function runHerdImport() {
+  const fields = ['tag','name','reg_number','sex','animal_type','dob','breed','color','sire','dam','location','status','purchase_price','purchased_from','notes'];
+  const colMap = {};
+  fields.forEach(f=>{ const v=document.getElementById('col-'+f)?.value; if(v!=='') colMap[f]=parseInt(v); });
+  if(colMap.tag==null){alert('Tag column is required.');return;}
+
+  const skipDupes = document.getElementById('import-skip-dupes')?.value==='skip';
+  const defaultStatus = document.getElementById('import-default-status')?.value||'active';
+  const existingTags = new Set((cache.get('animals')||[]).map(a=>a.tag));
+  const rows = window._importRows||[];
+
+  document.getElementById('import-preview-content').innerHTML='<div class="loading"><div class="spinner"></div>Importing animals...</div>';
+
+  let imported=0,skipped=0,updated=0,errors=0;
+  for(const row of rows) {
+    const tag = String(row[colMap.tag]||'').trim();
+    if(!tag) continue;
+    const isDupe = existingTags.has(tag);
+    if(isDupe&&skipDupes){skipped++;continue;}
+    const animal = {};
+    fields.forEach(f=>{ if(colMap[f]!=null) { const v=String(row[colMap[f]]||'').trim(); if(v) animal[f]=f==='purchase_price'?parseFloat(v)||null:v; } });
+    animal.tag=tag; animal.status=animal.status||defaultStatus;
+    if(isDupe&&!skipDupes) {
+      const {error}=await sb.from('animals').update(animal).eq('tag',tag).eq('ranch_id',currentRanch.id);
+      if(!error)updated++;else errors++;
+    } else {
+      const {error}=await dbInsert('animals',animal);
+      if(!error)imported++;else errors++;
+    }
+  }
+  await loadAnimals();
+  document.getElementById('herd-import-modal').classList.remove('open');
+  alert(`✅ Import complete!\n${imported} added · ${updated} updated · ${skipped} skipped · ${errors} errors`);
+}
 
 // ── MARKETS ────────────────────────────────────────────────────────────────
 let marketDataCache = null;
