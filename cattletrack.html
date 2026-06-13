@@ -505,7 +505,9 @@ tr:hover td{background:var(--bg)}
       <div id="health-log">
         <div class="card">
           <div class="card-title">Health / Treatment Event</div>
-          <div class="form-group"><label>Animal Tag</label><input type="text" id="h-animal" placeholder="Tag # or ID" autocomplete="off"></div>
+          <div class="form-group"><label>Animal Tag</label>
+            <select id="h-animal" style="width:100%"><option value="">— Select Animal —</option></select>
+          </div>
           <div class="form-row">
             <div class="form-group"><label>Date</label><input type="date" id="h-date"></div>
             <div class="form-group"><label>Event Type</label>
@@ -2631,6 +2633,7 @@ function autofillDrug() {
 
 async function saveHealth() {
   const date = document.getElementById('h-date').value;
+  const animal = document.getElementById('h-animal').value.trim();
   if(!animal||!date){alert('Animal tag and date are required.');return;}
   const wd = parseInt(document.getElementById('h-withdrawal').value)||0;
   const {error} = await dbInsert('health_events',{
