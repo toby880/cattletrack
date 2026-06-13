@@ -881,6 +881,34 @@ tr:hover td{background:var(--bg)}
         <div class="form-group"><label>Address</label><input type="text" id="set-address" placeholder="Ranch address"></div>
         <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
       </div>
+
+      <!-- TEAM MANAGEMENT -->
+      <div class="card" style="margin-bottom:10px">
+        <div class="card-title">Team Access</div>
+        <div style="font-size:13px;color:var(--gray);margin-bottom:12px">Invite ranch hands, family members, or employees to access your account. Available on Elite plan.</div>
+        <div id="team-members-list" style="margin-bottom:12px"></div>
+        <div class="form-row">
+          <div class="form-group"><label>Email Address</label><input type="email" id="invite-email" placeholder="employee@email.com"></div>
+          <div class="form-group"><label>Role</label>
+            <select id="invite-role">
+              <option value="staff">Staff — Log events only</option>
+              <option value="manager">Manager — Full access except settings</option>
+              <option value="readonly">Read Only — View only</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group"><label>Permissions</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px">
+            ${['Calving','Health','Weights','Breeding','EPDs','Sales','Stockers','Reports'].map(p=>`
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+              <input type="checkbox" class="invite-perm" value="${p.toLowerCase()}" checked style="accent-color:var(--orange)"> ${p}
+            </label>`).join('')}
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="sendInvite()">Send Invite</button>
+        <div id="invite-pending-list" style="margin-top:12px"></div>
+      </div>
+
       <div class="card">
         <div class="card-title">Account</div>
         <div id="set-plan-info" style="font-size:13px;color:var(--gray);margin-bottom:12px"></div>
@@ -1466,6 +1494,12 @@ document.addEventListener('click', e => {
 
 async function loadUserSession(user) {
   currentUser = user;
+
+  // Check for pending invite and accept it first
+  if(localStorage.getItem('ct_invite_token')) {
+    await acceptPendingInvite(user.id);
+  }
+
   const {data: profile} = await sb.from('profiles').select('*, ranches(*)').eq('id', user.id).single();
   if(profile?.ranches) {
     currentRanch = profile.ranches;
@@ -6511,12 +6545,135 @@ function loadSettings() {
   document.getElementById('set-address').value=currentRanch.address||'';
   const isActive = currentRanch.subscription_active;
   const trialEnd = currentRanch.trial_ends_at ? new Date(currentRanch.trial_ends_at) : null;
-  const daysLeft = trialEnd ? Math.ceil((trialEnd - new Date()) / 86400000) : null;
-  const statusText = isActive ? '✅ Active subscription' : trialEnd ? (daysLeft > 0 ? `🕐 Free trial — ${daysLeft} days remaining` : '⚠️ Trial expired') : '⚠️ No active subscription';
-  document.getElementById('set-plan-info').innerHTML = `
-    <div style="margin-bottom:6px"><strong>Plan:</strong> ${currentRanch.plan?.toUpperCase()||'BASIC'}</div>
-    <div style="margin-bottom:6px"><strong>Status:</strong> ${statusText}</div>
-    <div><strong>Account:</strong> ${currentUser.email}</div>`;
+  const daysLeft = trialEnd ? Math.max(0,Math.ceil((trialEnd-new Date())/86400000)) : null;
+  document.getElementById('set-plan-info').innerHTML = isActive
+    ? `<span style="color:var(--green)">✅ Active — ${currentRanch.plan||'basic'} plan</span>`
+    : `<span style="color:var(--orange)">⏳ Free trial — ${daysLeft} days remaining</span>`;
+  loadTeamMembers();
+}
+
+async function loadTeamMembers() {
+  const [profilesRes, invitesRes] = await Promise.all([
+    sb.from('profiles').select('*').eq('ranch_id', currentRanch.id),
+    sb.from('invites').select('*').eq('ranch_id', currentRanch.id).eq('accepted', false),
+  ]);
+
+  const profiles = profilesRes.data || [];
+  const pendingInvites = invitesRes.data || [];
+
+  const membersList = document.getElementById('team-members-list');
+  const roleColors = {owner:'var(--orange)',manager:'var(--green)',staff:'var(--gray)',readonly:'var(--gray)'};
+
+  membersList.innerHTML = profiles.length ? `
+    <div style="font-size:12px;font-weight:600;color:var(--gray);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Current Members (${profiles.length})</div>
+    ${profiles.map(p=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div>
+        <div style="font-size:13px;font-weight:600">${p.full_name||'Unknown'}</div>
+        <div style="font-size:11px;color:var(--gray)">${p.role||'staff'}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="badge" style="background:${roleColors[p.role]||'var(--gray)'};color:white;font-size:10px">${p.role||'staff'}</span>
+        ${p.role!=='owner'?`<button onclick="removeMember('${p.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px">Remove</button>`:''}
+      </div>
+    </div>`).join('')}` : '';
+
+  const pendingList = document.getElementById('invite-pending-list');
+  pendingList.innerHTML = pendingInvites.length ? `
+    <div style="font-size:12px;font-weight:600;color:var(--gray);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Pending Invites (${pendingInvites.length})</div>
+    ${pendingInvites.map(inv=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div>
+        <div style="font-size:13px">${inv.email}</div>
+        <div style="font-size:11px;color:var(--gray)">${inv.role} · expires ${new Date(inv.expires_at).toLocaleDateString()}</div>
+      </div>
+      <button onclick="cancelInvite('${inv.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px">Cancel</button>
+    </div>`).join('')}` : '';
+}
+
+async function sendInvite() {
+  const email = document.getElementById('invite-email')?.value?.trim();
+  const role = document.getElementById('invite-role')?.value;
+  if(!email){alert('Email is required.');return;}
+  if(!email.includes('@')){alert('Enter a valid email address.');return;}
+
+  // Check plan — only Elite can have multiple users
+  if(currentRanch.plan!=='elite'&&currentRanch.subscription_active) {
+    alert('Multi-user access requires the Elite plan. Please upgrade to invite team members.');
+    return;
+  }
+
+  const perms = {};
+  document.querySelectorAll('.invite-perm').forEach(cb=>{ perms[cb.value]=cb.checked; });
+
+  const token = Math.random().toString(36).substring(2,15)+Math.random().toString(36).substring(2,15);
+  const {error} = await sb.from('invites').insert({
+    ranch_id: currentRanch.id,
+    email,
+    role,
+    token,
+    accepted: false,
+    expires_at: new Date(Date.now()+7*24*3600*1000).toISOString(),
+  });
+
+  if(error){alert('Error: '+error.message);return;}
+
+  // Generate invite link
+  const inviteLink = `${window.location.origin}${window.location.pathname}?invite=${token}`;
+
+  alert(`✅ Invite created!\n\nSend this link to ${email}:\n\n${inviteLink}\n\nThe link expires in 7 days.`);
+  document.getElementById('invite-email').value='';
+  loadTeamMembers();
+}
+
+async function cancelInvite(inviteId) {
+  if(!confirm('Cancel this invite?')) return;
+  await sb.from('invites').delete().eq('id', inviteId);
+  loadTeamMembers();
+}
+
+async function removeMember(profileId) {
+  if(!confirm('Remove this team member? They will lose access immediately.')) return;
+  await sb.from('profiles').delete().eq('id', profileId);
+  loadTeamMembers();
+}
+
+// Handle invite acceptance on load
+async function checkForInvite() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('invite');
+  if(!token) return false;
+
+  const {data:invite} = await sb.from('invites').select('*').eq('token',token).single();
+  if(!invite){alert('This invite link is invalid or has expired.');return false;}
+  if(new Date(invite.expires_at)<new Date()){alert('This invite has expired. Ask the ranch owner to send a new one.');return false;}
+
+  // Store token for after signup/login
+  localStorage.setItem('ct_invite_token', token);
+  localStorage.setItem('ct_invite_ranch', invite.ranch_id);
+  localStorage.setItem('ct_invite_role', invite.role);
+  localStorage.setItem('ct_invite_email', invite.email);
+
+  // Show invite banner
+  const banner = document.createElement('div');
+  banner.style.cssText='background:var(--orange);color:white;padding:12px;text-align:center;font-size:14px;font-weight:600';
+  banner.textContent=`You've been invited to join a ranch on CattleTrack Analytics. Sign up or log in to accept.`;
+  document.body.prepend(banner);
+  return true;
+}
+
+async function acceptPendingInvite(userId) {
+  const token = localStorage.getItem('ct_invite_token');
+  const ranchId = localStorage.getItem('ct_invite_ranch');
+  const role = localStorage.getItem('ct_invite_role');
+  if(!token||!ranchId) return;
+
+  // Update profile to link to the invited ranch
+  await sb.from('profiles').update({ranch_id: ranchId, role}).eq('id', userId);
+  // Mark invite as accepted
+  await sb.from('invites').update({accepted:true}).eq('token', token);
+  // Clear stored invite
+  ['ct_invite_token','ct_invite_ranch','ct_invite_role','ct_invite_email'].forEach(k=>localStorage.removeItem(k));
 }
 
 async function saveSettings() {
@@ -6534,6 +6691,8 @@ async function saveSettings() {
 
 // ── INIT ───────────────────────────────────────────────────────────────────
 async function init() {
+  // Check for invite link in URL
+  await checkForInvite();
   // Check for existing session
   const {data:{session}}=await sb.auth.getSession();
   if(session?.user) {
