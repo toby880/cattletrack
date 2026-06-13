@@ -499,6 +499,7 @@ tr:hover td{background:var(--bg)}
     <div class="page" id="page-health">
       <div class="tab-bar">
         <button class="tab active" onclick="showHealthTab('log')">Log Event</button>
+        <button class="tab" onclick="showHealthTab('group')">Group Treatment</button>
         <button class="tab" onclick="showHealthTab('history')">History</button>
         <button class="tab" onclick="showHealthTab('withdrawal')">Withdrawal</button>
       </div>
@@ -634,6 +635,7 @@ tr:hover td{background:var(--bg)}
           <div class="empty" id="health-empty"><div class="empty-icon">💉</div><p>No health records yet.</p></div>
         </div>
       </div>
+      <div id="health-group" style="display:none"></div>
       <div id="health-withdrawal" style="display:none">
         <div class="card">
           <div class="card-title">Animals in Withdrawal</div>
@@ -2611,10 +2613,14 @@ async function renderWeights() {
 
 // ── HEALTH ─────────────────────────────────────────────────────────────────
 function showHealthTab(tab) {
-  ['log','history','withdrawal'].forEach(t=>{document.getElementById('health-'+t).style.display=t===tab?'block':'none';});
-  document.querySelectorAll('#page-health .tab').forEach((b,i)=>b.classList.toggle('active',['log','history','withdrawal'][i]===tab));
+  ['log','group','history','withdrawal'].forEach(t=>{
+    const el = document.getElementById('health-'+t);
+    if(el) el.style.display=t===tab?'block':'none';
+  });
+  document.querySelectorAll('#page-health .tab').forEach((b,i)=>b.classList.toggle('active',['log','group','history','withdrawal'][i]===tab));
   if(tab==='history') renderHealth();
   if(tab==='withdrawal') renderWithdrawal();
+  if(tab==='group') renderGroupTreatment();
 }
 
 function autofillDrug() {
@@ -2629,6 +2635,162 @@ function autofillDrug() {
   document.getElementById('h-product').value = name;
   document.getElementById('h-withdrawal').value = days || '0';
   if(route) document.getElementById('h-route').value = route;
+}
+
+function renderGroupTreatment() {
+  const today = new Date().toISOString().split('T')[0];
+  const animals = (cache.get('animals')||[])
+    .filter(a=>a.status!=='sold'&&a.status!=='dead')
+    .sort((a,b)=>a.tag.localeCompare(b.tag));
+
+  const container = document.getElementById('health-group');
+  container.innerHTML = `
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">Group Treatment</div>
+      <div style="font-size:13px;color:var(--gray);margin-bottom:12px">Log one treatment for multiple animals at once — all get the same product and date.</div>
+
+      <div class="form-row">
+        <div class="form-group"><label>Date</label><input type="date" id="gt-date" value="${today}"></div>
+        <div class="form-group"><label>Event Type</label>
+          <select id="gt-type">
+            <option value="vaccination">Vaccination</option>
+            <option value="treatment">Treatment</option>
+            <option value="pour-on">Pour-On</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><label>Product</label>
+        <select id="gt-product-select" onchange="autofillGroupDrug()" style="margin-bottom:6px">
+          <option value="">— Select from drug list —</option>
+          <optgroup label="Antibiotics">
+            <option value="Draxxin|28|SQ">Draxxin — 28d WD</option>
+            <option value="Excenel|4|SQ">Excenel — 4d WD</option>
+            <option value="Nuflor|36|SQ">Nuflor — 36d WD</option>
+            <option value="LA-200|28|SQ">LA-200 — 28d WD</option>
+            <option value="Baytril 100|28|SQ">Baytril 100 — 28d WD</option>
+          </optgroup>
+          <optgroup label="Vaccines">
+            <option value="Bovishield Gold 5|0|SQ">Bovishield Gold 5</option>
+            <option value="Vista Once SQ|0|SQ">Vista Once SQ</option>
+            <option value="Pyramid 5|0|SQ">Pyramid 5</option>
+            <option value="Bovi-Shield Gold FP5|0|SQ">Bovi-Shield Gold FP5</option>
+          </optgroup>
+          <optgroup label="Dewormers">
+            <option value="Ivermectin Pour-On|48|topical">Ivermectin Pour-On — 48d WD</option>
+            <option value="Dectomax Pour-On|45|topical">Dectomax Pour-On — 45d WD</option>
+            <option value="Safe-Guard|8|oral">Safe-Guard — 8d WD</option>
+          </optgroup>
+          <optgroup label="Other">
+            <option value="Vitamin AD|0|IM">Vitamin AD</option>
+            <option value="MuSe|0|SQ">MuSe</option>
+          </optgroup>
+        </select>
+        <input type="text" id="gt-product" placeholder="Or type product name">
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Dosage</label><input type="text" id="gt-dosage" placeholder="e.g. 2ml/100lb"></div>
+        <div class="form-group"><label>Route</label>
+          <select id="gt-route"><option value="SQ">SQ</option><option value="IM">IM</option><option value="IV">IV</option><option value="oral">Oral</option><option value="topical">Topical</option></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Withdrawal Days</label><input type="number" id="gt-withdrawal" placeholder="0" inputmode="numeric"></div>
+        <div class="form-group"><label>Cost/Head ($)</label><input type="number" id="gt-cost" placeholder="0.00" inputmode="decimal"></div>
+      </div>
+      <div class="form-group"><label>Treated By</label><input type="text" id="gt-by" placeholder="Name"></div>
+      <div class="form-group"><label>Notes</label><input type="text" id="gt-notes" placeholder="Any observations..."></div>
+    </div>
+
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">Select Animals</div>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <button onclick="selectAllGroupAnimals(true)" style="background:var(--bg2);border:none;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;font-family:inherit">Select All</button>
+        <button onclick="selectAllGroupAnimals(false)" style="background:var(--bg2);border:none;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;font-family:inherit">Clear All</button>
+        <input type="text" id="gt-search" placeholder="Search..." style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit" oninput="filterGroupAnimals()">
+      </div>
+      <div id="gt-animal-list" style="max-height:300px;overflow-y:auto">
+        ${animals.map(a=>`
+        <label style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer" class="gt-animal-row">
+          <input type="checkbox" class="gt-check" value="${a.tag}" style="width:18px;height:18px;accent-color:var(--orange)">
+          <div>
+            <div style="font-size:13px;font-weight:600">${a.tag}${a.name?' — '+a.name:''}</div>
+            <div style="font-size:11px;color:var(--gray)">${a.sex||''}${a.location?' · '+a.location:''}</div>
+          </div>
+        </label>`).join('')}
+      </div>
+    </div>
+
+    <div id="gt-selected-count" style="font-size:13px;color:var(--gray);margin-bottom:8px;text-align:center">0 animals selected</div>
+    <button class="btn btn-primary" style="width:100%" onclick="saveGroupTreatment()">Save Group Treatment</button>`;
+
+  // Wire up checkbox counter
+  document.querySelectorAll('.gt-check').forEach(cb=>{
+    cb.addEventListener('change', updateGroupCount);
+  });
+}
+
+function autofillGroupDrug() {
+  const sel = document.getElementById('gt-product-select');
+  const val = sel.value;
+  if(!val) return;
+  const [name, days, route] = val.split('|');
+  document.getElementById('gt-product').value = name;
+  document.getElementById('gt-withdrawal').value = days||'0';
+  document.getElementById('gt-route').value = route||'SQ';
+}
+
+function updateGroupCount() {
+  const checked = document.querySelectorAll('.gt-check:checked').length;
+  document.getElementById('gt-selected-count').textContent = `${checked} animal${checked!==1?'s':''} selected`;
+}
+
+function selectAllGroupAnimals(select) {
+  document.querySelectorAll('.gt-check').forEach(cb=>{
+    const row = cb.closest('.gt-animal-row');
+    if(row.style.display!=='none') cb.checked = select;
+  });
+  updateGroupCount();
+}
+
+function filterGroupAnimals() {
+  const q = document.getElementById('gt-search')?.value?.toLowerCase()||'';
+  document.querySelectorAll('.gt-animal-row').forEach(row=>{
+    row.style.display = !q||row.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+async function saveGroupTreatment() {
+  const date = document.getElementById('gt-date')?.value;
+  const product = document.getElementById('gt-product')?.value?.trim();
+  const selectedTags = [...document.querySelectorAll('.gt-check:checked')].map(cb=>cb.value);
+
+  if(!date){alert('Date is required.');return;}
+  if(!product){alert('Product is required.');return;}
+  if(!selectedTags.length){alert('Select at least one animal.');return;}
+
+  const wd = parseInt(document.getElementById('gt-withdrawal')?.value)||0;
+  const cost = parseFloat(document.getElementById('gt-cost')?.value)||null;
+
+  let saved = 0;
+  for(const tag of selectedTags) {
+    const {error} = await dbInsert('health_events',{
+      animal_tag: tag,
+      event_date: date,
+      event_type: document.getElementById('gt-type')?.value,
+      product,
+      dosage: document.getElementById('gt-dosage')?.value?.trim()||null,
+      route: document.getElementById('gt-route')?.value||null,
+      cost,
+      withdrawal_days: wd,
+      treated_by: document.getElementById('gt-by')?.value?.trim()||null,
+      notes: document.getElementById('gt-notes')?.value?.trim()||null,
+    });
+    if(!error) saved++;
+  }
+
+  alert(`✅ Treatment saved for ${saved} of ${selectedTags.length} animals${wd>0?' · Withdrawal: '+wd+'d':''}`);
+  renderGroupTreatment();
 }
 
 function populateHealthAnimalDropdown() {
