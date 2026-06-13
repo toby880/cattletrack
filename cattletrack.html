@@ -1519,7 +1519,7 @@ function showPage(name) {
   if(name==='animals') loadAnimals();
   if(name==='calving') { showCalvingTab('log'); }
   if(name==='weights') { showWeightsTab('log'); }
-  if(name==='health') { showHealthTab('log'); }
+  if(name==='health') { showHealthTab('log'); populateHealthAnimalDropdown(); }
   if(name==='breeding') showBreedingTab('semen');
   if(name==='pastures') loadPastures();
   if(name==='sales') { showSalesTab('record'); }
@@ -2631,6 +2631,16 @@ function autofillDrug() {
   if(route) document.getElementById('h-route').value = route;
 }
 
+function populateHealthAnimalDropdown() {
+  const sel = document.getElementById('h-animal');
+  if(!sel) return;
+  const animals = (cache.get('animals')||[])
+    .filter(a=>a.status!=='sold'&&a.status!=='dead')
+    .sort((a,b)=>a.tag.localeCompare(b.tag));
+  sel.innerHTML = '<option value="">— Select Animal —</option>' +
+    animals.map(a=>`<option value="${a.tag}">${a.tag}${a.name?' — '+a.name:''}</option>`).join('');
+}
+
 async function saveHealth() {
   const date = document.getElementById('h-date').value;
   const animal = document.getElementById('h-animal').value.trim();
@@ -2648,7 +2658,8 @@ async function saveHealth() {
     notes:document.getElementById('h-notes').value.trim(),
   });
   if(error){alert('Error: '+error.message);return;}
-  ['h-animal','h-product','h-dosage','h-cost','h-withdrawal','h-by','h-notes'].forEach(id=>document.getElementById(id).value='');
+  ['h-product','h-dosage','h-cost','h-withdrawal','h-by','h-notes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('h-animal').selectedIndex=0;
   document.getElementById('h-product-select').value='';
   document.getElementById('h-route').value='';
   alert(`✅ Health event saved for ${animal}${wd>0?' · Withdrawal: '+wd+'d':''}`);
