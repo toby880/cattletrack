@@ -2280,6 +2280,9 @@ async function loadAnimals() {
   // Also cache semen inventory for sire dropdowns
   const {data:semData} = await sb.from('semen_inventory').select('sire').eq('ranch_id',currentRanch.id);
   if(semData) cache.set('semen_inventory', semData);
+  // Cache medication inventory for cost auto-fill
+  const {data:invData} = await sb.from('inventory').select('name,cost_per_unit,category').eq('ranch_id',currentRanch.id).eq('category','medication');
+  if(invData) cache.set('inventory', invData);
   renderAnimals(data);
 }
 
@@ -2732,6 +2735,13 @@ function autofillDrug() {
   document.getElementById('h-product').value = name;
   document.getElementById('h-withdrawal').value = days || '0';
   if(route) document.getElementById('h-route').value = route;
+
+  // Look up cost from inventory
+  const inventory = cache.get('inventory')||[];
+  const match = inventory.find(i=>i.name&&i.name.toLowerCase().includes(name.toLowerCase()));
+  if(match?.cost_per_unit) {
+    document.getElementById('h-cost').value = match.cost_per_unit.toFixed(2);
+  }
 }
 
 function renderGroupTreatment() {
@@ -2835,6 +2845,13 @@ function autofillGroupDrug() {
   document.getElementById('gt-product').value = name;
   document.getElementById('gt-withdrawal').value = days||'0';
   document.getElementById('gt-route').value = route||'SQ';
+
+  // Look up cost from inventory
+  const inventory = cache.get('inventory')||[];
+  const match = inventory.find(i=>i.name&&i.name.toLowerCase().includes(name.toLowerCase()));
+  if(match?.cost_per_unit) {
+    document.getElementById('gt-cost').value = match.cost_per_unit.toFixed(2);
+  }
 }
 
 function updateGroupCount() {
