@@ -1459,7 +1459,7 @@ function showTrialExpired() {
       <div style="font-size:15px;color:rgba(255,255,255,0.6);max-width:320px;line-height:1.6;margin-bottom:32px">
         Your 30-day free trial of CattleTrack Analytics has expired. Contact us to activate your subscription and keep access to your data.
       </div>
-      <a href="mailto:toby@hendersonredangus.com?subject=CattleTrack Subscription — ${currentRanch?.name||''}&body=Hi, I'd like to activate my CattleTrack Analytics subscription for ${currentRanch?.name||'my ranch'}." 
+      <a href="mailto:info@cattletrackanalytics.com?subject=CattleTrack Subscription — ${currentRanch?.name||''}&body=Hi, I'd like to activate my CattleTrack Analytics subscription for ${currentRanch?.name||'my ranch'}." 
          style="background:var(--orange);color:white;padding:16px 32px;border-radius:10px;font-size:16px;font-weight:700;text-decoration:none;display:inline-block;margin-bottom:16px">
         Contact Us to Subscribe
       </a>
@@ -1497,7 +1497,7 @@ function showApp() {
         app.insertBefore(banner, header);
       }
       const urgency = daysLeft <= 7 ? '⚠️' : '🕐';
-      banner.innerHTML = `${urgency} Free trial: <strong>${daysLeft} day${daysLeft!==1?'s':''} remaining</strong> · <a href="mailto:toby@hendersonredangus.com?subject=CattleTrack Subscription — ${currentRanch.name}" style="color:white;text-decoration:underline">Subscribe to keep access</a>`;
+      banner.innerHTML = `${urgency} Free trial: <strong>${daysLeft} day${daysLeft!==1?'s':''} remaining</strong> · <a href="mailto:info@cattletrackanalytics.com?subject=CattleTrack Subscription — ${currentRanch.name}" style="color:white;text-decoration:underline">Subscribe to keep access</a>`;
     }
   }
 
