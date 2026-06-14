@@ -1085,6 +1085,37 @@ tr:hover td{background:var(--bg)}
         <select id="sg2-sex"><option value="Steer">Steers</option><option value="Heifer">Heifers</option><option value="Mixed">Mixed</option></select>
       </div>
     </div>
+
+    <div class="card-title" style="margin:12px 0 8px;font-size:12px;color:var(--orange);text-transform:uppercase;letter-spacing:1px">Billing & Care Fees</div>
+    <div class="form-row">
+      <div class="form-group"><label>Grazing Fee ($/head/month)</label><input type="number" id="sg2-graze-fee" placeholder="0.00" inputmode="decimal" step="0.01"></div>
+      <div class="form-group"><label>Care Fee ($/head/month)</label><input type="number" id="sg2-care-fee" placeholder="0.00" inputmode="decimal" step="0.01">
+        <div style="font-size:11px;color:var(--gray);margin-top:3px">For management/daily care beyond grazing</div>
+      </div>
+    </div>
+    <div class="form-group"><label>Medicine Policy</label>
+      <select id="sg2-med-policy" onchange="toggleMedPolicy()">
+        <option value="owner_supplies">Owner supplies medicine — no charge to owner</option>
+        <option value="bill_cost">Farmer supplies — bill owner at cost</option>
+        <option value="bill_markup">Farmer supplies — bill owner at marked up rate</option>
+        <option value="flat_rate">Flat doctoring fee per head treated</option>
+      </select>
+    </div>
+    <div id="sg2-markup-field" style="display:none">
+      <div class="form-row">
+        <div class="form-group"><label>Medicine Markup %</label><input type="number" id="sg2-med-markup" placeholder="20" inputmode="numeric">
+          <div style="font-size:11px;color:var(--gray);margin-top:3px">e.g. 20 = bill owner 20% above your cost</div>
+        </div>
+        <div class="form-group"></div>
+      </div>
+    </div>
+    <div id="sg2-flatrate-field" style="display:none">
+      <div class="form-row">
+        <div class="form-group"><label>Flat Doctoring Fee ($/head treated)</label><input type="number" id="sg2-doc-fee" placeholder="0.00" inputmode="decimal" step="0.01"></div>
+        <div class="form-group"></div>
+      </div>
+    </div>
+
     <div class="card-title" style="margin:12px 0 8px;font-size:12px;color:var(--orange);text-transform:uppercase;letter-spacing:1px">Ear Tags</div>
     <div class="form-group">
       <label>Tag Entry Method</label>
@@ -6388,28 +6419,76 @@ function renderStockerAnimalsTab(groupId, animals) {
 function renderStockerCloseTab(groupId) {
   const today = new Date().toISOString().split('T')[0];
   const content = document.getElementById('stocker-tab-content');
-  content.innerHTML = `
-    <div class="card">
-      <div class="card-title">Close Out Group</div>
-      <div class="form-row">
-        <div class="form-group"><label>Sale Date</label><input type="date" id="sc-date" value="${today}"></div>
-        <div class="form-group"><label>Head Sold</label><input type="number" id="sc-head" placeholder="0" inputmode="numeric"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label>Total Sale Weight (lbs)</label><input type="number" id="sc-total-wt" placeholder="0" inputmode="numeric" oninput="calcCloseoutAvg()"></div>
-        <div class="form-group"><label>Avg Sale Weight</label><input type="number" id="sc-avg-wt" placeholder="0" readonly style="background:var(--bg2)"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label>Sale Price/lb ($)</label><input type="number" id="sc-price" placeholder="0.00" inputmode="decimal"></div>
-        <div class="form-group"><label>Total Sale ($)</label><input type="number" id="sc-total-sale" placeholder="0.00" readonly style="background:var(--bg2)"></div>
-      </div>
-      <div class="form-group"><label>Notes</label><textarea id="sc-notes" placeholder="Buyer, market, any notes..."></textarea></div>
-      <button class="btn btn-primary" onclick="closeStockerGroup('${groupId}')">Close Out Group</button>
-    </div>`;
 
-  // Wire up calculations
-  ['sc-total-wt','sc-head','sc-price'].forEach(id => {
-    document.getElementById(id)?.addEventListener('input', calcCloseoutAvg);
+  // Get group data for fee calculations
+  sb.from('stocker_groups').select('*').eq('id',groupId).single().then(({data:g})=>{
+    if(!g) return;
+
+    const arrivalDate = g.arrival_date ? new Date(g.arrival_date) : null;
+    const daysOnFeed = arrivalDate ? Math.round((new Date()-arrivalDate)/86400000) : 0;
+    const monthsOnFeed = daysOnFeed/30.44;
+    const currentHead = g.head_count||0;
+
+    const grazingTotal = g.grazing_fee ? (g.grazing_fee * currentHead * monthsOnFeed).toFixed(2) : null;
+    const careTotal = g.care_fee ? (g.care_fee * currentHead * monthsOnFeed).toFixed(2) : null;
+
+    const medPolicyLabel = {
+      'owner_supplies': 'Owner supplies medicine',
+      'bill_cost': 'Bill owner at cost',
+      'bill_markup': `Bill owner at cost + ${g.med_markup_pct||0}% markup`,
+      'flat_rate': `Flat rate $${g.doc_fee||0}/head treated`,
+    }[g.med_policy||'owner_supplies'];
+
+    content.innerHTML = `
+      <div class="card" style="margin-bottom:10px">
+        <div class="card-title">Fee Summary</div>
+        <div style="font-size:12px;color:var(--gray);margin-bottom:10px">${currentHead} head · ${daysOnFeed} days (${monthsOnFeed.toFixed(1)} months)</div>
+        ${g.grazing_fee ? `<div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid var(--border)">
+          <span style="color:var(--gray)">Grazing fee ($${g.grazing_fee}/hd/mo × ${currentHead} hd × ${monthsOnFeed.toFixed(1)} mo)</span>
+          <strong>$${parseFloat(grazingTotal).toLocaleString()}</strong>
+        </div>` : ''}
+        ${g.care_fee ? `<div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid var(--border)">
+          <span style="color:var(--gray)">Care fee ($${g.care_fee}/hd/mo × ${currentHead} hd × ${monthsOnFeed.toFixed(1)} mo)</span>
+          <strong>$${parseFloat(careTotal).toLocaleString()}</strong>
+        </div>` : ''}
+        <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0">
+          <span style="color:var(--gray)">Medicine policy</span>
+          <strong>${medPolicyLabel}</strong>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Close Out</div>
+        <div class="form-row">
+          <div class="form-group"><label>Sale Date</label><input type="date" id="sc-date" value="${today}"></div>
+          <div class="form-group"><label>Head Sold</label><input type="number" id="sc-head" placeholder="${currentHead}" inputmode="numeric" value="${currentHead}"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Total Sale Weight (lbs)</label><input type="number" id="sc-total-wt" placeholder="0" inputmode="numeric" oninput="calcCloseoutAvg()"></div>
+          <div class="form-group"><label>Avg Sale Weight</label><input type="number" id="sc-avg-wt" placeholder="0" readonly style="background:var(--bg2)"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Sale Price/lb ($)</label><input type="number" id="sc-price" placeholder="0.00" inputmode="decimal" oninput="calcCloseoutAvg()"></div>
+          <div class="form-group"><label>Gross Sale ($)</label><input type="number" id="sc-total-sale" placeholder="0.00" readonly style="background:var(--bg2)"></div>
+        </div>
+        ${g.med_policy==='bill_cost'||g.med_policy==='bill_markup' ? `
+        <div class="form-group"><label>Total Medicine Cost to Farmer ($)</label>
+          <input type="number" id="sc-med-cost" placeholder="0.00" inputmode="decimal" oninput="calcCloseoutAvg()">
+          <div style="font-size:11px;color:var(--gray);margin-top:3px">Bill owner ${g.med_policy==='bill_markup'?'at cost + '+g.med_markup_pct+'% markup':'at cost'}</div>
+        </div>` : ''}
+        ${g.med_policy==='flat_rate' ? `
+        <div class="form-group"><label>Total Head Treated</label>
+          <input type="number" id="sc-head-treated" placeholder="0" inputmode="numeric" oninput="calcCloseoutAvg()">
+          <div style="font-size:11px;color:var(--gray);margin-top:3px">$${g.doc_fee}/head treated = total doctoring charge</div>
+        </div>` : ''}
+        <div class="form-group"><label>Notes / Buyer</label><textarea id="sc-notes" placeholder="Buyer, market, any notes..."></textarea></div>
+        <button class="btn btn-primary" onclick="closeStockerGroup('${groupId}',${JSON.stringify({grazing_fee:g.grazing_fee,care_fee:g.care_fee,med_policy:g.med_policy,med_markup_pct:g.med_markup_pct,doc_fee:g.doc_fee,months:monthsOnFeed})})">Close Out Group</button>
+      </div>`;
+
+    // Wire up calculations
+    ['sc-total-wt','sc-head','sc-price','sc-med-cost','sc-head-treated'].forEach(id => {
+      document.getElementById(id)?.addEventListener('input', ()=>calcCloseoutFull(g, monthsOnFeed));
+    });
   });
 }
 
@@ -6421,25 +6500,58 @@ function calcCloseoutAvg() {
   if(total>0&&price>0) document.getElementById('sc-total-sale').value = (total*price).toFixed(2);
 }
 
-async function closeStockerGroup(groupId) {
+function calcCloseoutFull(g, months) {
+  calcCloseoutAvg();
+}
+
+async function closeStockerGroup(groupId, billing) {
   const date = document.getElementById('sc-date')?.value;
   const head = parseInt(document.getElementById('sc-head')?.value)||0;
   const totalWt = parseFloat(document.getElementById('sc-total-wt')?.value)||0;
   const price = parseFloat(document.getElementById('sc-price')?.value)||0;
-  if(!date||!head||!totalWt||!price){alert('All fields required to close out.');return;}
-  if(!confirm(`Close out this group?\n\n${head} head sold @ $${price}/lb\nTotal: $${(totalWt*price).toFixed(2)}`)) return;
+  if(!date||!head||!totalWt||!price){alert('Sale date, head count, weight and price are required.');return;}
+
+  const grossSale = totalWt * price;
+  const avgWt = parseFloat((totalWt/head).toFixed(1));
+
+  // Calculate fees
+  let grazingCharge = 0, careCharge = 0, medCharge = 0;
+  if(billing) {
+    if(billing.grazing_fee) grazingCharge = billing.grazing_fee * head * billing.months;
+    if(billing.care_fee) careCharge = billing.care_fee * head * billing.months;
+    if(billing.med_policy==='bill_cost') {
+      medCharge = parseFloat(document.getElementById('sc-med-cost')?.value)||0;
+    } else if(billing.med_policy==='bill_markup') {
+      const cost = parseFloat(document.getElementById('sc-med-cost')?.value)||0;
+      medCharge = cost * (1 + (billing.med_markup_pct||0)/100);
+    } else if(billing.med_policy==='flat_rate') {
+      const treated = parseInt(document.getElementById('sc-head-treated')?.value)||0;
+      medCharge = treated * (billing.doc_fee||0);
+    }
+  }
+
+  const totalCharges = grazingCharge + careCharge + medCharge;
+  const netToOwner = grossSale - totalCharges;
+
+  const confirmMsg = `Close out this group?\n\nGross Sale: $${grossSale.toLocaleString('en-US',{minimumFractionDigits:2})}\n${grazingCharge?'Grazing: -$'+grazingCharge.toFixed(2)+'\n':''}${careCharge?'Care: -$'+careCharge.toFixed(2)+'\n':''}${medCharge?'Medicine: -$'+medCharge.toFixed(2)+'\n':''}Net to Owner: $${netToOwner.toLocaleString('en-US',{minimumFractionDigits:2})}`;
+
+  if(!confirm(confirmMsg)) return;
 
   const {error} = await sb.from('stocker_groups').update({
     status:'sold', sale_date:date,
     sale_weight_total:totalWt,
-    sale_avg_weight:parseFloat((totalWt/head).toFixed(1)),
+    sale_avg_weight:avgWt,
     sale_price_per_lb:price,
+    grazing_charge:grazingCharge||null,
+    care_charge:careCharge||null,
+    med_charge:medCharge||null,
+    net_to_owner:netToOwner||null,
     notes: document.getElementById('sc-notes')?.value?.trim()||null,
     updated_at: new Date().toISOString(),
   }).eq('id',groupId);
 
   if(error){alert('Error: '+error.message);return;}
-  alert('✅ Group closed out successfully!');
+  alert(`✅ Group closed out!\n\nNet to owner: $${netToOwner.toLocaleString('en-US',{minimumFractionDigits:2})}`);
   closeStockerDetail();
 }
 
@@ -6455,6 +6567,12 @@ function openNewStockerGroup() {
   document.getElementById('new-stocker-modal').classList.add('open');
   // Set today's date
   document.getElementById('sg2-arrival-date').value = new Date().toISOString().split('T')[0];
+}
+
+function toggleMedPolicy() {
+  const policy = document.getElementById('sg2-med-policy')?.value;
+  document.getElementById('sg2-markup-field').style.display = policy==='bill_markup'?'block':'none';
+  document.getElementById('sg2-flatrate-field').style.display = policy==='flat_rate'?'block':'none';
 }
 
 function toggleStockerTagMethod() {
@@ -6506,6 +6624,11 @@ async function saveNewStockerGroup() {
     status: 'active',
     share_with_owner: shareOwner,
     owner_access_token: ownerToken,
+    grazing_fee: parseFloat(document.getElementById('sg2-graze-fee')?.value)||null,
+    care_fee: parseFloat(document.getElementById('sg2-care-fee')?.value)||null,
+    med_policy: document.getElementById('sg2-med-policy')?.value||'owner_supplies',
+    med_markup_pct: parseFloat(document.getElementById('sg2-med-markup')?.value)||null,
+    doc_fee: parseFloat(document.getElementById('sg2-doc-fee')?.value)||null,
     notes: document.getElementById('sg2-notes')?.value?.trim()||null,
   });
 
