@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CattleTrack Stockers — Wheat Pasture Cattle Tracking</title>
+<meta name="description" content="Simple stocker cattle tracking for wheat pasture operations. Track loads, health events, ADG, and share performance with cattle owners. $20/month.">
+<style>
+  :root {
+    --orange: #E8751A;
+    --orange-lt: #F5A623;
+    --dark: #1a1a1a;
+    --gray: #6b7280;
+    --gray-lt: #9ca3af;
+    --bg: #f8f7f5;
+    --white: #ffffff;
+    --green: #16a34a;
+    --border: #e5e7eb;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--dark); line-height: 1.6; }
+
+  /* NAV */
+  nav { background: var(--dark); padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; }
+  .nav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+  .nav-logo span { color: white; font-size: 18px; font-weight: 800; }
+  .nav-logo small { color: var(--orange); font-size: 11px; font-weight: 600; letter-spacing: 2px; display: block; line-height: 1; }
+  .nav-links { display: flex; gap: 20px; align-items: center; }
+  .nav-links a { color: rgba(255,255,255,0.7); text-decoration: none; font-size: 14px; }
+  .nav-links a:hover { color: white; }
+  .btn-nav { background: var(--orange); color: white !important; padding: 8px 18px; border-radius: 8px; font-weight: 600; font-size: 14px; }
+
+  /* HERO */
+  .hero { background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); padding: 80px 24px; text-align: center; position: relative; overflow: hidden; }
+  .hero::before { content: '🌾'; position: absolute; font-size: 300px; opacity: 0.03; top: -50px; right: -50px; }
+  .hero-badge { display: inline-block; background: rgba(232,117,26,0.2); color: var(--orange-lt); border: 1px solid rgba(232,117,26,0.3); padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; margin-bottom: 20px; }
+  .hero h1 { font-size: clamp(32px, 5vw, 56px); font-weight: 800; color: white; line-height: 1.15; margin-bottom: 20px; max-width: 800px; margin-left: auto; margin-right: auto; }
+  .hero h1 span { color: var(--orange-lt); }
+  .hero p { font-size: 18px; color: rgba(255,255,255,0.7); max-width: 600px; margin: 0 auto 36px; }
+  .hero-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn-primary { background: var(--orange); color: white; padding: 14px 28px; border-radius: 10px; font-size: 16px; font-weight: 700; text-decoration: none; display: inline-block; transition: background 0.15s; }
+  .btn-primary:hover { background: #C8621A; }
+  .btn-secondary { background: rgba(255,255,255,0.1); color: white; padding: 14px 28px; border-radius: 10px; font-size: 16px; font-weight: 700; text-decoration: none; display: inline-block; border: 1px solid rgba(255,255,255,0.2); }
+  .hero-price { margin-top: 24px; color: rgba(255,255,255,0.5); font-size: 14px; }
+  .hero-price strong { color: white; }
+
+  /* PAIN POINTS */
+  .pain { background: var(--white); padding: 60px 24px; text-align: center; }
+  .pain h2 { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
+  .pain p { color: var(--gray); margin-bottom: 40px; font-size: 16px; }
+  .pain-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; max-width: 900px; margin: 0 auto; }
+  .pain-card { background: #fef3eb; border: 1px solid #fde1c4; border-radius: 12px; padding: 20px; text-align: left; }
+  .pain-card .icon { font-size: 28px; margin-bottom: 10px; }
+  .pain-card h3 { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+  .pain-card p { font-size: 13px; color: var(--gray); line-height: 1.5; }
+
+  /* FEATURES */
+  .features { padding: 60px 24px; max-width: 1100px; margin: 0 auto; }
+  .features h2 { font-size: 32px; font-weight: 800; text-align: center; margin-bottom: 8px; }
+  .features .sub { text-align: center; color: var(--gray); margin-bottom: 48px; font-size: 16px; }
+  .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+  .feature-card { background: var(--white); border: 1px solid var(--border); border-radius: 14px; padding: 24px; }
+  .feature-card .icon { font-size: 32px; margin-bottom: 14px; }
+  .feature-card h3 { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+  .feature-card p { font-size: 14px; color: var(--gray); line-height: 1.6; }
+  .feature-card ul { margin-top: 10px; padding-left: 18px; }
+  .feature-card ul li { font-size: 13px; color: var(--gray); padding: 3px 0; }
+
+  /* OWNER PORTAL HIGHLIGHT */
+  .portal { background: linear-gradient(135deg, var(--orange) 0%, #C8621A 100%); padding: 60px 24px; text-align: center; }
+  .portal h2 { font-size: 32px; font-weight: 800; color: white; margin-bottom: 16px; }
+  .portal p { font-size: 17px; color: rgba(255,255,255,0.85); max-width: 600px; margin: 0 auto 32px; line-height: 1.6; }
+  .portal-phone { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25); border-radius: 16px; padding: 24px; max-width: 400px; margin: 0 auto 32px; text-align: left; }
+  .portal-phone .phone-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.15); font-size: 14px; color: white; }
+  .portal-phone .phone-row:last-child { border-bottom: none; }
+  .portal-phone .phone-label { opacity: 0.7; }
+  .portal-phone .phone-value { font-weight: 700; }
+  .portal-phone .green { color: #86efac; }
+  .portal-phone .red { color: #fca5a5; }
+
+  /* HOW IT WORKS */
+  .how { background: var(--white); padding: 60px 24px; }
+  .how h2 { font-size: 32px; font-weight: 800; text-align: center; margin-bottom: 48px; }
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 24px; max-width: 900px; margin: 0 auto; }
+  .step { text-align: center; padding: 24px; }
+  .step-num { width: 48px; height: 48px; background: var(--orange); color: white; border-radius: 50%; font-size: 20px; font-weight: 800; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
+  .step h3 { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+  .step p { font-size: 13px; color: var(--gray); line-height: 1.5; }
+
+  /* MARKETS */
+  .markets { padding: 60px 24px; max-width: 900px; margin: 0 auto; text-align: center; }
+  .markets h2 { font-size: 32px; font-weight: 800; margin-bottom: 8px; }
+  .markets p { color: var(--gray); margin-bottom: 40px; font-size: 16px; }
+  .market-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+  .market-card { background: var(--white); border: 1px solid var(--border); border-radius: 12px; padding: 20px; text-align: center; }
+  .market-card .icon { font-size: 32px; margin-bottom: 10px; }
+  .market-card h3 { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+  .market-card p { font-size: 13px; color: var(--gray); }
+
+  /* PRICING */
+  .pricing { background: var(--bg); padding: 60px 24px; text-align: center; }
+  .pricing h2 { font-size: 32px; font-weight: 800; margin-bottom: 8px; }
+  .pricing p { color: var(--gray); margin-bottom: 40px; font-size: 16px; }
+  .price-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; max-width: 700px; margin: 0 auto; }
+  .price-card { background: var(--white); border: 2px solid var(--border); border-radius: 16px; padding: 28px; text-align: left; }
+  .price-card.featured { border-color: var(--orange); box-shadow: 0 8px 32px rgba(232,117,26,0.15); }
+  .price-badge { background: var(--orange); color: white; font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 20px; display: inline-block; margin-bottom: 12px; }
+  .price-name { font-size: 13px; font-weight: 700; color: var(--gray); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  .price-amount { font-size: 42px; font-weight: 800; line-height: 1; margin-bottom: 4px; }
+  .price-amount span { font-size: 16px; color: var(--gray); font-weight: 400; }
+  .price-desc { font-size: 13px; color: var(--gray); margin: 12px 0 20px; line-height: 1.5; }
+  .price-features { list-style: none; margin-bottom: 24px; }
+  .price-features li { font-size: 13px; padding: 6px 0; border-bottom: 1px solid var(--border); padding-left: 20px; position: relative; }
+  .price-features li::before { content: '✓'; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+  .price-cta { display: block; text-align: center; padding: 13px; border-radius: 8px; font-size: 15px; font-weight: 700; text-decoration: none; background: var(--orange); color: white; }
+
+  /* CTA */
+  .cta { background: var(--dark); padding: 80px 24px; text-align: center; }
+  .cta h2 { font-size: 36px; font-weight: 800; color: white; margin-bottom: 16px; }
+  .cta p { color: rgba(255,255,255,0.7); font-size: 17px; margin-bottom: 32px; }
+  .cta-sub { margin-top: 20px; color: rgba(255,255,255,0.4); font-size: 14px; }
+
+  /* FOOTER */
+  footer { background: #111; padding: 24px; text-align: center; color: rgba(255,255,255,0.4); font-size: 13px; }
+  footer a { color: rgba(255,255,255,0.4); text-decoration: none; margin: 0 12px; }
+
+  @media(max-width: 600px) {
+    .nav-links { display: none; }
+    .hero { padding: 50px 20px; }
+    .hero-btns { flex-direction: column; align-items: center; }
+    .btn-primary, .btn-secondary { width: 100%; max-width: 300px; text-align: center; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="/" class="nav-logo">
+    <svg width="28" height="28" viewBox="0 0 40 40">
+      <rect x="2" y="22" width="7" height="16" fill="#E8751A" rx="2" opacity="0.6"/>
+      <rect x="11" y="15" width="7" height="23" fill="#E8751A" rx="2" opacity="0.75"/>
+      <rect x="20" y="8" width="7" height="30" fill="#F5A623" rx="2" opacity="0.9"/>
+      <rect x="29" y="0" width="7" height="38" fill="#F5A623" rx="2"/>
+      <polygon points="32.5,-4 37,4 28,4" fill="#F5A623"/>
+    </svg>
+    <div>
+      <span>CattleTrack</span>
+      <small>STOCKERS</small>
+    </div>
+  </a>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#portal">Owner Portal</a>
+    <a href="#pricing">Pricing</a>
+    <a href="/">Full Platform</a>
+    <a href="cattletrack.html" class="btn-nav">Start Free Trial</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-badge">🌾 Built for Wheat Pasture Operations</div>
+  <h1>Stop Taking Calls.<br><span>Let the App Answer.</span></h1>
+  <p>Track every load of stocker cattle — health pulls, death loss, ADG, and cost of gain. Give cattle owners a live view so they stop calling you three times a week.</p>
+  <div class="hero-btns">
+    <a href="cattletrack.html" class="btn-primary">Start Free Trial — 30 Days Free</a>
+    <a href="#features" class="btn-secondary">See How It Works</a>
+  </div>
+  <div class="hero-price">No credit card required · <strong>$20/month</strong> after trial · Cancel anytime</div>
+</div>
+
+<!-- PAIN POINTS -->
+<div class="pain">
+  <h2>Sound familiar?</h2>
+  <p>Every wheat farmer running outside cattle deals with the same headaches.</p>
+  <div class="pain-grid">
+    <div class="pain-card">
+      <div class="icon">📱</div>
+      <h3>"How are my cattle doing?"</h3>
+      <p>The cattle owner calls or texts every few days asking for an update. You're in the field and have to stop what you're doing to answer.</p>
+    </div>
+    <div class="pain-card">
+      <div class="icon">📋</div>
+      <h3>Paper records and memory</h3>
+      <p>Death loss, pulls, treatments — all written on a notepad or remembered in your head. Come settlement time you're scrambling.</p>
+    </div>
+    <div class="pain-card">
+      <div class="icon">💊</div>
+      <h3>Health cost tracking</h3>
+      <p>You know you've spent money on treatments but can't tell the owner exactly what you spent or why until you dig through receipts.</p>
+    </div>
+    <div class="pain-card">
+      <div class="icon">⚖️</div>
+      <h3>ADG and close out math</h3>
+      <p>Calculating cost of gain, value of gain, and whether it was worth holding another 30 days — it's all done in your head or not at all.</p>
+    </div>
+  </div>
+</div>
+
+<!-- FEATURES -->
+<div class="features" id="features">
+  <h2>Everything you need to run stockers right</h2>
+  <p class="sub">Built specifically for wheat pasture and backgrounding operations — not adapted from a generic cattle app.</p>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <div class="icon">🚛</div>
+      <h3>Load Receiving</h3>
+      <p>Record every load as it comes in — owner info, head count, arrival weight from the scale ticket, purchase price, and cost basis. Ear tags entered as a series (1-150) or individually.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">💊</div>
+      <h3>Health Tracking</h3>
+      <p>Log pulls, treatments, and death loss per animal or for the whole group. Built-in drug database with automatic withdrawal day tracking.</p>
+      <ul>
+        <li>Individual or group treatments</li>
+        <li>Diagnosis and outcome tracking</li>
+        <li>Hospital pen status</li>
+        <li>Cost per head calculated</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <div class="icon">⚖️</div>
+      <h3>Performance Tracking</h3>
+      <p>Log periodic weights and the app calculates ADG automatically. See days on feed, current head count, and projected sale weight at a glance.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">📊</div>
+      <h3>Markets & LRP</h3>
+      <p>Current Oklahoma cash prices, CME futures, and your daily LRP quote all in one place. The Sell Calculator tells you whether to sell now or hold another 30 days.</p>
+      <ul>
+        <li>Cost of gain vs value of gain</li>
+        <li>Break-even price calculator</li>
+        <li>LRP rate entry and cost per head</li>
+        <li>USDA RMA calculator link</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <div class="icon">💰</div>
+      <h3>Close Out</h3>
+      <p>Enter sale weight and price at close out. The app calculates total revenue, profit/loss per head, and total health costs — everything you need for settlement.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">📱</div>
+      <h3>Works Offline</h3>
+      <p>No signal in the pasture? No problem. Log health events and weights offline and everything syncs automatically when you get back in range.</p>
+    </div>
+  </div>
+</div>
+
+<!-- OWNER PORTAL -->
+<div class="portal" id="portal">
+  <h2>The feature cattle owners will love you for</h2>
+  <p>Give every cattle owner a private link to check on their cattle anytime — head count, current weight estimate, ADG, health events, and death loss. Updated in real time.</p>
+  <div class="portal-phone">
+    <div style="font-size:12px;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">Smith Cattle — Load #3 · Live View</div>
+    <div class="phone-row"><span class="phone-label">Current Head</span><span class="phone-value">147</span></div>
+    <div class="phone-row"><span class="phone-label">Days on Feed</span><span class="phone-value">52 days</span></div>
+    <div class="phone-row"><span class="phone-label">Est. Current Weight</span><span class="phone-value">831 lbs</span></div>
+    <div class="phone-row"><span class="phone-label">ADG</span><span class="phone-value class="green"">2.8 lbs/day</span></div>
+    <div class="phone-row"><span class="phone-label">Death Loss</span><span class="phone-value red">2 head</span></div>
+    <div class="phone-row"><span class="phone-label">Health Cost/Head</span><span class="phone-value">$18.40</span></div>
+  </div>
+  <p style="font-size:15px">They see everything they need. They stop calling. You get back to farming.</p>
+  <a href="cattletrack.html" class="btn-secondary" style="background:white;color:var(--orange);display:inline-block;padding:14px 28px;border-radius:10px;font-weight:700;text-decoration:none">Start Free Trial →</a>
+</div>
+
+<!-- HOW IT WORKS -->
+<div class="how">
+  <h2>Up and running in 10 minutes</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <h3>Create your account</h3>
+      <p>Sign up free — no credit card. Takes 2 minutes.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <h3>Receive your first load</h3>
+      <p>Enter owner info, head count, arrival weight, and ear tag series. Done.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <h3>Share with the owner</h3>
+      <p>Send them their private link. They check it anytime — you stop getting calls.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <h3>Close out profitably</h3>
+      <p>Use the Sell Calculator to time your sale. Close out with one tap — full settlement summary ready.</p>
+    </div>
+  </div>
+</div>
+
+<!-- MARKETS SECTION -->
+<div class="markets">
+  <h2>Make smarter sell decisions</h2>
+  <p>CattleTrack Stockers pulls market data so you can decide when to sell with confidence — not just gut feel.</p>
+  <div class="market-cards">
+    <div class="market-card">
+      <div class="icon">💵</div>
+      <h3>Cash Prices</h3>
+      <p>Oklahoma cash feeder cattle prices updated daily</p>
+    </div>
+    <div class="market-card">
+      <div class="icon">📈</div>
+      <h3>CME Futures</h3>
+      <p>Live feeder cattle and live cattle futures quotes</p>
+    </div>
+    <div class="market-card">
+      <div class="icon">🛡️</div>
+      <h3>LRP Rates</h3>
+      <p>Enter your daily LRP quote and see cost per head instantly</p>
+    </div>
+    <div class="market-card">
+      <div class="icon">⚡</div>
+      <h3>Sell Calculator</h3>
+      <p>Sell now vs hold 30 days — the math done for you</p>
+    </div>
+  </div>
+</div>
+
+<!-- PRICING -->
+<div class="pricing" id="pricing">
+  <h2>Simple, flat pricing</h2>
+  <p>No per-head fees. No counting cattle. One price covers everything.</p>
+  <div class="price-cards">
+    <div class="price-card">
+      <div class="price-name">Standalone</div>
+      <div class="price-amount">$20<span>/month</span></div>
+      <div class="price-desc">For farmers running outside cattle who just need stocker tracking.</div>
+      <ul class="price-features">
+        <li>Unlimited stocker groups</li>
+        <li>Health & treatment tracking</li>
+        <li>ADG & weight tracking</li>
+        <li>Owner portal (read-only)</li>
+        <li>Markets & Sell Calculator</li>
+        <li>LRP rate tracking</li>
+        <li>Close out & settlement</li>
+        <li>Offline mode</li>
+      </ul>
+      <a href="cattletrack.html" class="price-cta">Start Free Trial</a>
+    </div>
+    <div class="price-card featured">
+      <div class="price-badge">BEST VALUE</div>
+      <div class="price-name">Add-On to Any Plan</div>
+      <div class="price-amount">$15<span>/month</span></div>
+      <div class="price-desc">Already using CattleTrack for your cow-calf operation? Add stockers for less.</div>
+      <ul class="price-features">
+        <li>Everything in Standalone</li>
+        <li>Integrated with your herd</li>
+        <li>Included free in Elite plan</li>
+      </ul>
+      <a href="/" class="price-cta" style="background:var(--dark)">View Full Platform</a>
+    </div>
+  </div>
+  <p style="margin-top:24px;font-size:13px;color:var(--gray)">30-day free trial · No credit card required · Cancel anytime</p>
+</div>
+
+<!-- CTA -->
+<div class="cta">
+  <h2>Ready to stop taking those calls?</h2>
+  <p>Start your free 30-day trial today. No credit card, no commitment.</p>
+  <a href="cattletrack.html" class="btn-primary" style="font-size:18px;padding:16px 36px">Start Free Trial →</a>
+  <div class="cta-sub">Questions? Email us at <a href="mailto:info@cattletrackanalytics.com" style="color:rgba(255,255,255,0.6)">info@cattletrackanalytics.com</a></div>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <a href="/">CattleTrack Analytics</a>
+  <a href="cattletrack.html">Sign In</a>
+  <a href="mailto:info@cattletrackanalytics.com">Contact</a>
+  <br><br>
+  © 2026 CattleTrack Analytics · Built by ranchers, for ranchers
+</footer>
+
+</body>
+</html>
