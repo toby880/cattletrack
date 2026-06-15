@@ -6175,6 +6175,7 @@ async function openStockerDetail(groupId) {
       <button onclick="closeStockerDetail()" style="background:var(--bg2);border:none;border-radius:8px;padding:8px 14px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">← Back</button>
       <div style="flex:1"><div style="font-size:17px;font-weight:700">${g.name}</div>
       <div style="font-size:12px;color:var(--gray)">${g.owner_name||'—'} · ${g.pasture||'—'}</div></div>
+      ${g.owner_access_token ? `<button onclick="shareOwnerPortal('${g.owner_access_token}','${g.name}')" style="background:var(--orange);color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">📤 Owner Portal</button>` : ''}
       <span class="badge ${g.status==='active'?'badge-green':'badge-gray'}">${g.status}</span>
     </div>
 
@@ -6213,6 +6214,7 @@ async function openStockerDetail(groupId) {
       <button class="tab active" onclick="showStockerTab('health','${g.id}')">Health</button>
       <button class="tab" onclick="showStockerTab('weights','${g.id}')">Weights</button>
       <button class="tab" onclick="showStockerTab('animals','${g.id}')">Animals</button>
+      <button class="tab" onclick="showStockerTab('portal','${g.id}')">Portal</button>
       <button class="tab" onclick="showStockerTab('close','${g.id}')">Close Out</button>
     </div>
     <div id="stocker-tab-content"></div>`;
@@ -6222,7 +6224,7 @@ async function openStockerDetail(groupId) {
 }
 
 function showStockerTab(tab, groupId) {
-  document.querySelectorAll('#stocker-detail-tabs .tab').forEach((b,i)=>b.classList.toggle('active',['health','weights','animals','close'][i]===tab));
+  document.querySelectorAll('#stocker-detail-tabs .tab').forEach((b,i)=>b.classList.toggle('active',['health','weights','animals','portal','close'][i]===tab));
   sb.from('stocker_health').select('*').eq('group_id',groupId).order('event_date',{ascending:false}).then(({data})=>{
     sb.from('stocker_weights').select('*').eq('group_id',groupId).order('weight_date',{ascending:false}).then(({data:wts})=>{
       sb.from('stocker_animals').select('*').eq('group_id',groupId).order('ear_tag').then(({data:anm})=>{
@@ -6230,6 +6232,7 @@ function showStockerTab(tab, groupId) {
         if(tab==='health') renderStockerHealthTab(groupId, data||[], today);
         else if(tab==='weights') renderStockerWeightsTab(groupId, wts||[], data||[]);
         else if(tab==='animals') renderStockerAnimalsTab(groupId, anm||[]);
+        else if(tab==='portal') renderStockerPortalTab(groupId);
         else if(tab==='close') renderStockerCloseTab(groupId);
       });
     });
@@ -6450,6 +6453,50 @@ function renderStockerAnimalsTab(groupId, animals) {
     '<div class="card"><div style="text-align:center;color:var(--gray-lt);padding:20px;font-size:13px">No individual animals recorded for this group</div></div>'}`;
 }
 
+async function renderStockerPortalTab(groupId) {
+  const content = document.getElementById('stocker-tab-content');
+  const {data:g} = await sb.from('stocker_groups').select('*').eq('id',groupId).single();
+  if(!g) return;
+
+  const portalUrl = g.owner_access_token ? `${window.location.origin}/portal.html?token=${g.owner_access_token}` : null;
+
+  content.innerHTML = `
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">Owner Portal</div>
+      <div style="font-size:13px;color:var(--gray);margin-bottom:16px;line-height:1.6">
+        Give the cattle owner a private link to view their cattle's performance in real time — head count, ADG, health events, death loss. No login required on their end.
+      </div>
+      ${portalUrl ? `
+      <div style="background:var(--bg2);border-radius:8px;padding:12px;margin-bottom:12px;word-break:break-all;font-size:12px;color:var(--gray)">${portalUrl}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="shareOwnerPortal('${g.owner_access_token}','${g.name}')">📤 Share Link</button>
+        <button class="btn btn-secondary" onclick="window.open('${portalUrl}','_blank')">👁 Preview Portal</button>
+        <button class="btn btn-secondary" onclick="disablePortal('${groupId}')">🔒 Disable Portal</button>
+      </div>` : `
+      <button class="btn btn-primary" onclick="enablePortal('${groupId}')">🔓 Enable Owner Portal</button>
+      <div style="font-size:12px;color:var(--gray);margin-top:8px">Generates a unique private link for the cattle owner</div>`}
+    </div>`;
+}
+
+async function enablePortal(groupId) {
+  const token = Math.random().toString(36).substring(2,15) + Math.random().toString(36).substring(2,15);
+  const {error} = await sb.from('stocker_groups').update({
+    share_with_owner: true,
+    owner_access_token: token,
+  }).eq('id', groupId);
+  if(error){alert('Error: '+error.message);return;}
+  // Refresh the detail view
+  openStockerDetail(groupId);
+  setTimeout(()=>showStockerTab('portal', groupId), 500);
+}
+
+async function disablePortal(groupId) {
+  if(!confirm('Disable the owner portal? The current link will stop working.')) return;
+  await sb.from('stocker_groups').update({share_with_owner:false}).eq('id',groupId);
+  openStockerDetail(groupId);
+  setTimeout(()=>showStockerTab('portal', groupId), 500);
+}
+
 function renderStockerCloseTab(groupId) {
   const today = new Date().toISOString().split('T')[0];
   const content = document.getElementById('stocker-tab-content');
@@ -6587,6 +6634,23 @@ async function closeStockerGroup(groupId, billing) {
   if(error){alert('Error: '+error.message);return;}
   alert(`✅ Group closed out!\n\nNet to owner: $${netToOwner.toLocaleString('en-US',{minimumFractionDigits:2})}`);
   closeStockerDetail();
+}
+
+function shareOwnerPortal(token, groupName) {
+  const url = `${window.location.origin}/portal.html?token=${token}`;
+  if(navigator.share) {
+    navigator.share({
+      title: `${groupName} — Cattle Performance`,
+      text: `Track your cattle's performance in real time`,
+      url,
+    });
+  } else {
+    navigator.clipboard.writeText(url).then(()=>{
+      alert(`✅ Owner portal link copied!\n\nSend this to ${groupName.split('—')[0].trim()}:\n\n${url}`);
+    }).catch(()=>{
+      prompt('Copy this link and send to the cattle owner:', url);
+    });
+  }
 }
 
 function closeStockerDetail() {
