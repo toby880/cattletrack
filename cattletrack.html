@@ -247,15 +247,20 @@ tr:hover td{background:var(--bg)}
       <div class="form-group">
         <label>Plan</label>
         <select id="signup-plan">
-          <option value="basic">Basic — $19/month (Calving, Weights, Health, Sales)</option>
-          <option value="basic_stockers">Basic + Stockers — $34/month</option>
-          <option value="pro">Pro — $39/month (+ Breeding, EPD Import, Sire Analysis)</option>
-          <option value="pro_stockers">Pro + Stockers — $54/month</option>
-          <option value="elite" selected>Elite — $59/month (+ ET, IVF, EPDs, Stockers included)</option>
-          <option value="stockers_only">Stockers Only — $20/month</option>
+          <option value="basic">Basic — FREE for 30 days, then $19/month</option>
+          <option value="basic_stockers">Basic + Stockers — FREE for 30 days, then $34/month</option>
+          <option value="pro">Pro — FREE for 30 days, then $39/month</option>
+          <option value="pro_stockers">Pro + Stockers — FREE for 30 days, then $54/month</option>
+          <option value="elite" selected>Elite — FREE for 30 days, then $59/month</option>
+          <option value="stockers_only">Stockers Only — FREE for 30 days, then $20/month</option>
         </select>
       </div>
-      <button class="btn btn-primary" id="signup-btn" onclick="signUp()">Create Account</button>
+      <div style="background:#1a3a1a;border-radius:8px;padding:10px;margin-bottom:12px;text-align:center">
+        <div style="color:#86efac;font-weight:700;font-size:14px">✅ 30-Day Free Trial</div>
+        <div style="color:rgba(255,255,255,0.6);font-size:12px;margin-top:3px">No credit card required · Cancel anytime</div>
+      </div>
+      </div>
+      <button class="btn btn-primary" id="signup-btn" onclick="signUp()" style="width:100%;font-size:16px;padding:14px">Start Free Trial →</button>
     </div>
 
     <!-- FORGOT PASSWORD -->
