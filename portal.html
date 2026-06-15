@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Cattle Performance — CattleTrack</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --orange: #E8751A;
+    --dark: #1a1a1a;
+    --gray: #6b7280;
+    --bg: #f8f7f5;
+    --white: #ffffff;
+    --green: #16a34a;
+    --red: #dc2626;
+    --amber: #d97706;
+    --border: #e5e7eb;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--dark); }
+
+  header { background: var(--dark); padding: 16px 20px; display: flex; align-items: center; gap: 12px; }
+  header svg { flex-shrink: 0; }
+  header div { flex: 1; }
+  header .title { color: white; font-size: 16px; font-weight: 800; }
+  header .sub { color: var(--orange); font-size: 11px; font-weight: 600; letter-spacing: 2px; }
+  header .live { background: var(--green); color: white; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
+
+  .container { max-width: 600px; margin: 0 auto; padding: 16px; }
+
+  .loading { text-align: center; padding: 60px 20px; color: var(--gray); }
+  .spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--orange); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .error { text-align: center; padding: 60px 20px; }
+  .error h2 { font-size: 20px; margin-bottom: 8px; }
+  .error p { color: var(--gray); font-size: 14px; }
+
+  .group-header { background: var(--dark); border-radius: 12px; padding: 20px; margin-bottom: 16px; color: white; }
+  .group-header h1 { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
+  .group-header p { color: rgba(255,255,255,0.6); font-size: 13px; }
+  .group-header .updated { color: rgba(255,255,255,0.4); font-size:11px; margin-top: 8px; }
+
+  .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px; }
+  .stat-card { background: var(--white); border: 1px solid var(--border); border-radius: 12px; padding: 16px; text-align: center; }
+  .stat-value { font-size: 28px; font-weight: 800; line-height: 1; margin-bottom: 4px; }
+  .stat-label { font-size: 11px; color: var(--gray); text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .card { background: var(--white); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+  .card-title { font-size: 12px; font-weight: 700; color: var(--orange); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+
+  .row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+  .row:last-child { border-bottom: none; }
+  .row-label { color: var(--gray); }
+  .row-value { font-weight: 600; }
+
+  .health-event { padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .health-event:last-child { border-bottom: none; }
+  .health-event .product { font-size: 14px; font-weight: 600; }
+  .health-event .meta { font-size: 12px; color: var(--gray); margin-top: 2px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; }
+  .badge-green { background: #dcfce7; color: var(--green); }
+  .badge-red { background: #fee2e2; color: var(--red); }
+  .badge-orange { background: #fef3eb; color: var(--orange); }
+
+  .weight-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .weight-row:last-child { border-bottom: none; }
+
+  footer { text-align: center; padding: 32px 20px; color: var(--gray); font-size: 12px; }
+  footer a { color: var(--orange); text-decoration: none; }
+
+  .disclaimer { background: #fef3eb; border: 1px solid #fde1c4; border-radius: 8px; padding: 12px; font-size: 12px; color: var(--gray); margin-bottom: 16px; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<header>
+  <svg width="32" height="32" viewBox="0 0 40 40">
+    <rect x="2" y="22" width="7" height="16" fill="#E8751A" rx="2" opacity="0.6"/>
+    <rect x="11" y="15" width="7" height="23" fill="#E8751A" rx="2" opacity="0.75"/>
+    <rect x="20" y="8" width="7" height="30" fill="#F5A623" rx="2" opacity="0.9"/>
+    <rect x="29" y="0" width="7" height="38" fill="#F5A623" rx="2"/>
+    <polygon points="32.5,-4 37,4 28,4" fill="#F5A623"/>
+  </svg>
+  <div>
+    <div class="title">CattleTrack</div>
+    <div class="sub">OWNER PORTAL</div>
+  </div>
+  <div class="live">● LIVE</div>
+</header>
+
+<div class="container">
+  <div id="content">
+    <div class="loading">
+      <div class="spinner"></div>
+      <p>Loading your cattle data...</p>
+    </div>
+  </div>
+</div>
+
+<footer>
+  Powered by <a href="https://cattletrackanalytics.com">CattleTrack Analytics</a><br>
+  Data is read-only. Contact your operator for questions.
+</footer>
+
+<script>
+const SUPABASE_URL = 'https://jtyjgfrgwugvcqouldwi.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0eWpnZnJnd3VndmNxb3VsZHdpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMjkyNzIsImV4cCI6MjA5NjYwNTI3Mn0.xeP2VXPcK4S2F4yh0BqSRlMGAXayY8ciPwqiCKa0FOA';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+async function loadPortal() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('token');
+  const content = document.getElementById('content');
+
+  if(!token) {
+    content.innerHTML = `<div class="error"><h2>Invalid Link</h2><p>This owner portal link is invalid. Please contact your cattle operator for a new link.</p></div>`;
+    return;
+  }
+
+  // Fetch group by token
+  const {data:groups, error:gErr} = await sb.from('stocker_groups')
+    .select('*')
+    .eq('owner_access_token', token)
+    .eq('share_with_owner', true);
+
+  if(gErr || !groups || !groups.length) {
+    content.innerHTML = `<div class="error"><h2>Not Found</h2><p>This portal link is no longer active. Please contact your cattle operator.</p></div>`;
+    return;
+  }
+
+  const g = groups[0];
+
+  // Fetch health, weights, animals
+  const [{data:health},{data:weights},{data:animals}] = await Promise.all([
+    sb.from('stocker_health').select('*').eq('group_id', g.id).order('event_date', {ascending:false}),
+    sb.from('stocker_weights').select('*').eq('group_id', g.id).order('weight_date', {ascending:false}),
+    sb.from('stocker_animals').select('*').eq('group_id', g.id).order('ear_tag'),
+  ]);
+
+  const today = new Date();
+  const daysOnFeed = g.arrival_date ? Math.round((today - new Date(g.arrival_date)) / 86400000) : 0;
+  const deaths = (animals||[]).filter(a=>a.status==='dead').length;
+  const pulled = (animals||[]).filter(a=>a.status==='pulled').length;
+  const currentHead = (g.head_count||0) - deaths;
+  const deathLossPct = g.head_count ? ((deaths/g.head_count)*100).toFixed(1) : 0;
+  const totalHealthCost = (health||[]).reduce((s,h)=>s+(h.cost_per_head||0)*(h.head_count||1), 0);
+
+  // ADG
+  const latestWt = (weights||[])[0];
+  let adg = null, estCurrentWt = null;
+  if(latestWt && g.arrival_avg_weight && g.arrival_date) {
+    const days = Math.round((new Date(latestWt.weight_date) - new Date(g.arrival_date)) / 86400000);
+    if(days > 0) {
+      adg = ((latestWt.avg_weight - g.arrival_avg_weight) / days).toFixed(2);
+      // Project current weight from last weigh date
+      const daysSinceWeigh = Math.round((today - new Date(latestWt.weight_date)) / 86400000);
+      estCurrentWt = Math.round(latestWt.avg_weight + (parseFloat(adg) * daysSinceWeigh));
+    }
+  }
+
+  const fmt$ = v => v ? '$'+parseFloat(v).toFixed(2) : '—';
+
+  content.innerHTML = `
+    <div class="group-header">
+      <h1>${g.name}</h1>
+      <p>${g.owner_name ? 'Owner: '+g.owner_name+' · ' : ''}${g.pasture||''}${g.pasture?' Pasture':''}</p>
+      <p>Arrived: ${g.arrival_date||'—'} · ${g.head_count||0} head received</p>
+      <div class="updated">Last updated: ${new Date().toLocaleDateString('en-US', {month:'long', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit'})}</div>
+    </div>
+
+    <!-- Key Stats -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">${currentHead}</div>
+        <div class="stat-label">Current Head</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${daysOnFeed}</div>
+        <div class="stat-label">Days on Feed</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:${adg&&parseFloat(adg)>=2.5?'var(--green)':adg&&parseFloat(adg)>=2?'var(--amber)':'var(--dark)'}">${adg||'—'}</div>
+        <div class="stat-label">ADG (lbs/day)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:${deaths>0?'var(--red)':'var(--green)'}">${deaths}</div>
+        <div class="stat-label">Death Loss</div>
+      </div>
+    </div>
+
+    <!-- Performance -->
+    <div class="card">
+      <div class="card-title">📊 Performance Summary</div>
+      <div class="row"><span class="row-label">Arrival avg weight</span><span class="row-value">${g.arrival_avg_weight||'—'} lbs</span></div>
+      ${latestWt ? `<div class="row"><span class="row-label">Last weigh (${latestWt.weight_date})</span><span class="row-value">${latestWt.avg_weight} lbs avg</span></div>` : ''}
+      ${estCurrentWt ? `<div class="row"><span class="row-label">Est. current weight</span><span class="row-value" style="color:var(--orange)">${estCurrentWt} lbs</span></div>` : ''}
+      ${adg ? `<div class="row"><span class="row-label">Average daily gain</span><span class="row-value">${adg} lbs/day</span></div>` : ''}
+      <div class="row"><span class="row-label">Days on feed</span><span class="row-value">${daysOnFeed} days</span></div>
+    </div>
+
+    <!-- Health Summary -->
+    <div class="card">
+      <div class="card-title">💊 Health Summary</div>
+      <div class="row"><span class="row-label">Currently in hospital pen</span><span class="row-value" style="color:${pulled>0?'var(--amber)':'var(--green)'}">${pulled} head</span></div>
+      <div class="row"><span class="row-label">Death loss</span><span class="row-value" style="color:${deaths>0?'var(--red)':'var(--green)'}">${deaths} head (${deathLossPct}%)</span></div>
+      <div class="row"><span class="row-label">Total treatments</span><span class="row-value">${(health||[]).filter(h=>h.event_type==='treatment').length}</span></div>
+      <div class="row"><span class="row-label">Health cost/head</span><span class="row-value">${currentHead>0?'$'+(totalHealthCost/currentHead).toFixed(2):'—'}</span></div>
+    </div>
+
+    <!-- Recent Health Events -->
+    ${(health||[]).length ? `
+    <div class="card">
+      <div class="card-title">🏥 Recent Health Events</div>
+      ${(health||[]).slice(0,8).map(h=>`
+      <div class="health-event">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div class="product">${h.product||h.event_type}</div>
+          <span class="badge ${h.outcome==='dead'?'badge-red':h.outcome==='recovered'?'badge-green':'badge-orange'}">${h.outcome||h.event_type}</span>
+        </div>
+        <div class="meta">${h.event_date}${h.head_count&&h.head_count>1?' · '+h.head_count+' head':h.animal_tag?' · Tag: '+h.animal_tag:' · group treatment'}${h.diagnosis?' · '+h.diagnosis:''}</div>
+      </div>`).join('')}
+      ${(health||[]).length > 8 ? `<div style="text-align:center;color:var(--gray);font-size:12px;padding-top:10px">+${(health||[]).length-8} more events on record</div>` : ''}
+    </div>` : ''}
+
+    <!-- Weight History -->
+    ${(weights||[]).length ? `
+    <div class="card">
+      <div class="card-title">⚖️ Weight History</div>
+      ${(weights||[]).slice(0,5).map(w=>`
+      <div class="weight-row">
+        <span>${w.weight_date}</span>
+        <span><strong>${w.avg_weight} lbs avg</strong> · ${w.head_count} head</span>
+      </div>`).join('')}
+    </div>` : ''}
+
+    <!-- Disclaimer -->
+    <div class="disclaimer">
+      ℹ️ This is a read-only view of your cattle's performance data. All information is provided by your cattle operator. Contact them directly with any questions or concerns.
+    </div>`;
+}
+
+loadPortal();
+</script>
+</body>
+</html>
