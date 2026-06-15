@@ -1665,7 +1665,9 @@ function showApp() {
 
   updateOnlineStatus();
   processOfflineQueue();
-  showPage('dashboard');
+  // Restore last visited page
+  const lastPage = localStorage.getItem('ct_last_page')||'dashboard';
+  showPage(lastPage);
 }
 
 // ── NAVIGATION ─────────────────────────────────────────────────────────────
@@ -1677,7 +1679,8 @@ function showPage(name) {
   document.querySelectorAll('.nav-btn').forEach(b => {
     if(b.onclick?.toString().includes("'"+name+"'")) b.classList.add('active');
   });
-  // Load page data
+  // Remember last page
+  localStorage.setItem('ct_last_page', name);
   if(name==='dashboard') loadDashboard();
   if(name==='insights') showInsightsTab('sire');
   if(name==='animals') loadAnimals();
