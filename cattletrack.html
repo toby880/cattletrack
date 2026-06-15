@@ -316,6 +316,7 @@ tr:hover td{background:var(--bg)}
     <button class="nav-btn" onclick="showPage('sales')">Sales</button>
     <button class="nav-btn" onclick="showPage('calendar')">Calendar</button>
     <button class="nav-btn" onclick="showPage('inventory')">Inventory</button>
+    <button class="nav-btn" onclick="showPage('pastures')">Pastures</button>
     <button class="nav-btn" onclick="showPage('stockers')">Stockers</button>
     <button class="nav-btn" onclick="showPage('markets')">Markets</button>
     <button class="nav-btn" onclick="showPage('reports')">Reports</button>
@@ -776,6 +777,21 @@ tr:hover td{background:var(--bg)}
         <div class="loading"><div class="spinner"></div>Loading...</div>
       </div>
       <div id="stocker-detail-view" style="display:none"></div>
+    </div>
+
+    <!-- PASTURES -->
+    <div class="page" id="page-pastures">
+      <div class="section-header">
+        <div class="section-title">Pastures & Fields</div>
+        <button class="btn btn-primary btn-sm" onclick="openNewPasture()">+ Add Pasture</button>
+      </div>
+      <div class="tab-bar">
+        <button class="tab active" onclick="showPastureTab('pastures')">Pastures</button>
+        <button class="tab" onclick="showPastureTab('treatments')">Treatments</button>
+        <button class="tab" onclick="showPastureTab('plantings')">Plantings</button>
+        <button class="tab" onclick="showPastureTab('hay')">Hay</button>
+      </div>
+      <div id="pasture-content"><div class="loading"><div class="spinner"></div>Loading...</div></div>
     </div>
 
     <div class="page" id="page-inventory">
@@ -1697,6 +1713,7 @@ function showPage(name) {
   if(name==='sales') { showSalesTab('record'); }
   if(name==='calendar') loadCalendar();
   if(name==='inventory') showInventoryTab('medications');
+  if(name==='pastures') showPastureTab('pastures');
   if(name==='stockers') loadStockerGroups();
   if(name==='markets') showMarketsTab('prices');
   if(name==='reports') { setTimeout(()=>{ showReportsTab('builder'); updateReportColumns(); }, 50); }
@@ -5368,6 +5385,317 @@ async function importEPDCSV(text) {
 }
 
 
+
+// ── PASTURES & FIELDS ──────────────────────────────────────────────────────
+let currentField = null;
+
+async function showPastureTab(tab) {
+  document.querySelectorAll('#page-pastures .tab-bar .tab').forEach((b,i)=>
+    b.classList.toggle('active',['pastures','treatments','plantings','hay'][i]===tab));
+  const content = document.getElementById('pasture-content');
+  if(tab==='pastures') await renderPastureList(content);
+  else if(tab==='treatments') await renderFieldTreatments(content);
+  else if(tab==='plantings') await renderFieldPlantings(content);
+  else if(tab==='hay') await renderHayCuttings(content);
+}
+
+async function renderPastureList(content) {
+  const {data:fields} = await sb.from('pasture_fields').select('*')
+    .eq('ranch_id',currentRanch.id).order('name');
+  const typeIcon = {pasture:'🌿',wheat:'🌾',hay:'🟡',crop:'🌱'};
+  content.innerHTML = fields?.length ? fields.map(f=>`
+    <div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-weight:700;font-size:15px">${typeIcon[f.type]||'🌿'} ${f.name}</div>
+          <div style="font-size:12px;color:var(--gray)">${f.acres?f.acres+' acres · ':''}${f.type||'pasture'}${f.soil_type?' · '+f.soil_type:''}</div>
+        </div>
+        <div style="font-size:12px;color:var(--orange);font-weight:600">
+          ${(cache.get('animals')||[]).filter(a=>a.location===f.name&&a.status!=='sold'&&a.status!=='dead').length} head
+        </div>
+      </div>
+      ${f.notes?`<div style="font-size:12px;color:var(--gray);margin-top:6px">${f.notes}</div>`:''}
+    </div>`).join('') :
+    '<div class="empty"><div class="empty-icon">🌿</div><p>No pastures added yet.<br>Tap "+ Add Pasture" to get started.</p></div>';
+}
+
+function openNewPasture() {
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay open';
+  modal.id = 'new-pasture-modal';
+  modal.innerHTML = `
+    <div class="modal">
+      <div class="modal-handle"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div class="modal-title" style="margin-bottom:0">Add Pasture / Field</div>
+        <button onclick="document.getElementById('new-pasture-modal').remove()" style="background:var(--bg2);border:none;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer;font-family:inherit">Cancel</button>
+      </div>
+      <div class="form-group"><label>Name</label><input type="text" id="pf-name" placeholder="e.g. North Wheat, Home Pasture"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Type</label>
+          <select id="pf-type">
+            <option value="pasture">Pasture</option>
+            <option value="wheat">Wheat</option>
+            <option value="hay">Hay Meadow</option>
+            <option value="crop">Crop Field</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Acres</label><input type="number" id="pf-acres" placeholder="0" inputmode="decimal"></div>
+      </div>
+      <div class="form-group"><label>Soil Type (optional)</label><input type="text" id="pf-soil" placeholder="e.g. Sandy loam, Clay"></div>
+      <div class="form-group"><label>Notes</label><textarea id="pf-notes" placeholder="Any notes..."></textarea></div>
+      <button class="btn btn-primary" style="width:100%" onclick="saveNewPasture()">Save Pasture</button>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+async function saveNewPasture() {
+  const name = document.getElementById('pf-name')?.value?.trim();
+  if(!name){alert('Name is required.');return;}
+  const {error} = await dbInsert('pasture_fields',{
+    name,
+    type: document.getElementById('pf-type')?.value||'pasture',
+    acres: parseFloat(document.getElementById('pf-acres')?.value)||null,
+    soil_type: document.getElementById('pf-soil')?.value?.trim()||null,
+    notes: document.getElementById('pf-notes')?.value?.trim()||null,
+  });
+  if(error){alert('Error: '+error.message);return;}
+  document.getElementById('new-pasture-modal')?.remove();
+  showPastureTab('pastures');
+}
+
+async function renderFieldTreatments(content) {
+  const today = new Date().toISOString().split('T')[0];
+  const {data:fields} = await sb.from('pasture_fields').select('*').eq('ranch_id',currentRanch.id).order('name');
+  const {data:treatments} = await sb.from('field_treatments').select('*').eq('ranch_id',currentRanch.id).order('treatment_date',{ascending:false});
+  const typeColors = {fertilizer:'var(--green)',herbicide:'var(--red)',lime:'var(--gray)',insecticide:'var(--amber)',other:'var(--orange)'};
+  content.innerHTML = `
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">Log Field Treatment</div>
+      <div class="form-row">
+        <div class="form-group"><label>Date</label><input type="date" id="ft-date" value="${today}"></div>
+        <div class="form-group"><label>Field</label>
+          <select id="ft-field"><option value="">— Select —</option>
+            ${(fields||[]).map(f=>`<option value="${f.id}">${f.name}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Type</label>
+          <select id="ft-type">
+            <option value="fertilizer">Fertilizer</option>
+            <option value="herbicide">Herbicide</option>
+            <option value="lime">Lime</option>
+            <option value="insecticide">Insecticide</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Product</label><input type="text" id="ft-product" placeholder="Product name"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Rate (per acre)</label><input type="text" id="ft-rate" placeholder="e.g. 200 lbs/ac"></div>
+        <div class="form-group"><label>Acres Treated</label><input type="number" id="ft-acres" placeholder="0" inputmode="decimal"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Total Cost ($)</label><input type="number" id="ft-cost" placeholder="0.00" inputmode="decimal"></div>
+        <div class="form-group"><label>Applied By</label><input type="text" id="ft-by" placeholder="Name or company"></div>
+      </div>
+      <div class="form-group"><label>Notes</label><input type="text" id="ft-notes" placeholder="Weather, conditions..."></div>
+      <button class="btn btn-primary" onclick="saveFieldTreatment()">Save Treatment</button>
+    </div>
+    <div class="card">
+      <div class="card-title">Treatment History (${(treatments||[]).length})</div>
+      ${(treatments||[]).length ? treatments.map(t=>{
+        const field=(fields||[]).find(f=>f.id===t.field_id);
+        return `<div style="padding:8px 0;border-bottom:1px solid var(--border)">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><strong>${t.product||t.type}</strong>${field?' · '+field.name:''}</div>
+            <span class="badge" style="background:${typeColors[t.type]||'var(--gray)'};color:white;font-size:10px">${t.type}</span>
+          </div>
+          <div style="font-size:12px;color:var(--gray)">${t.treatment_date}${t.acres_treated?' · '+t.acres_treated+' acres':''}${t.rate?' · '+t.rate:''}${t.cost?' · $'+t.cost:''}</div>
+        </div>`;}).join('') :
+      '<div style="text-align:center;color:var(--gray-lt);padding:20px;font-size:13px">No treatments recorded</div>'}
+    </div>`;
+}
+
+async function saveFieldTreatment() {
+  const date=document.getElementById('ft-date')?.value;
+  const fieldId=document.getElementById('ft-field')?.value;
+  const product=document.getElementById('ft-product')?.value?.trim();
+  if(!date||!fieldId||!product){alert('Date, field and product required.');return;}
+  const {error}=await dbInsert('field_treatments',{
+    field_id:fieldId, treatment_date:date,
+    type:document.getElementById('ft-type')?.value,
+    product,
+    rate:document.getElementById('ft-rate')?.value?.trim()||null,
+    acres_treated:parseFloat(document.getElementById('ft-acres')?.value)||null,
+    cost:parseFloat(document.getElementById('ft-cost')?.value)||null,
+    applied_by:document.getElementById('ft-by')?.value?.trim()||null,
+    notes:document.getElementById('ft-notes')?.value?.trim()||null,
+  });
+  if(error){alert('Error: '+error.message);return;}
+  alert('✅ Treatment saved');
+  showPastureTab('treatments');
+}
+
+async function renderFieldPlantings(content) {
+  const today=new Date().toISOString().split('T')[0];
+  const {data:fields}=await sb.from('pasture_fields').select('*').eq('ranch_id',currentRanch.id).order('name');
+  const {data:plantings}=await sb.from('field_plantings').select('*').eq('ranch_id',currentRanch.id).order('planting_date',{ascending:false});
+  content.innerHTML=`
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">Log Planting</div>
+      <div class="form-row">
+        <div class="form-group"><label>Date</label><input type="date" id="pl-date" value="${today}"></div>
+        <div class="form-group"><label>Field</label>
+          <select id="pl-field"><option value="">— Select —</option>
+            ${(fields||[]).map(f=>`<option value="${f.id}">${f.name}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Crop / Grass</label>
+          <select id="pl-crop">
+            <option value="wheat">Wheat</option>
+            <option value="bermuda">Bermudagrass</option>
+            <option value="fescue">Fescue</option>
+            <option value="native">Native Grass Mix</option>
+            <option value="rye">Winter Rye</option>
+            <option value="clover">Clover</option>
+            <option value="sorghum">Sorghum/Sudangrass</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Variety</label><input type="text" id="pl-variety" placeholder="Variety name"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Seeding Rate</label><input type="text" id="pl-rate" placeholder="e.g. 90 lbs/ac"></div>
+        <div class="form-group"><label>Acres</label><input type="number" id="pl-acres" placeholder="0" inputmode="decimal"></div>
+      </div>
+      <div class="form-group"><label>Notes</label><input type="text" id="pl-notes" placeholder="Seed source, conditions..."></div>
+      <button class="btn btn-primary" onclick="savePlanting()">Save Planting</button>
+    </div>
+    <div class="card">
+      <div class="card-title">Planting History (${(plantings||[]).length})</div>
+      ${(plantings||[]).length ? plantings.map(p=>{
+        const field=(fields||[]).find(f=>f.id===p.field_id);
+        return `<div style="padding:8px 0;border-bottom:1px solid var(--border)">
+          <div><strong>${p.crop}${p.variety?' — '+p.variety:''}</strong>${field?' · '+field.name:''}</div>
+          <div style="font-size:12px;color:var(--gray)">${p.planting_date}${p.acres?' · '+p.acres+' acres':''}${p.seeding_rate?' · '+p.seeding_rate:''}</div>
+        </div>`;}).join('') :
+      '<div style="text-align:center;color:var(--gray-lt);padding:20px;font-size:13px">No plantings recorded</div>'}
+    </div>`;
+}
+
+async function savePlanting() {
+  const date=document.getElementById('pl-date')?.value;
+  const fieldId=document.getElementById('pl-field')?.value;
+  if(!date||!fieldId){alert('Date and field required.');return;}
+  const {error}=await dbInsert('field_plantings',{
+    field_id:fieldId, planting_date:date,
+    crop:document.getElementById('pl-crop')?.value,
+    variety:document.getElementById('pl-variety')?.value?.trim()||null,
+    seeding_rate:document.getElementById('pl-rate')?.value?.trim()||null,
+    acres:parseFloat(document.getElementById('pl-acres')?.value)||null,
+    notes:document.getElementById('pl-notes')?.value?.trim()||null,
+  });
+  if(error){alert('Error: '+error.message);return;}
+  alert('✅ Planting saved');
+  showPastureTab('plantings');
+}
+
+async function renderHayCuttings(content) {
+  const today=new Date().toISOString().split('T')[0];
+  const {data:allFields}=await sb.from('pasture_fields').select('*').eq('ranch_id',currentRanch.id).order('name');
+  const {data:cuttings}=await sb.from('hay_cuttings').select('*').eq('ranch_id',currentRanch.id).order('cutting_date',{ascending:false});
+  const totalBales=(cuttings||[]).reduce((s,c)=>s+(c.bales||0),0);
+  const totalTons=(cuttings||[]).reduce((s,c)=>s+(c.total_tons||0),0);
+  const ordinal=n=>n===1?'1st':n===2?'2nd':n===3?'3rd':n+'th';
+  content.innerHTML=`
+    ${totalBales>0?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
+        <div style="font-size:24px;font-weight:800;color:var(--orange)">${totalBales}</div>
+        <div style="font-size:11px;color:var(--gray)">Total Bales</div>
+      </div>
+      <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
+        <div style="font-size:24px;font-weight:800;color:var(--orange)">${totalTons.toFixed(1)}</div>
+        <div style="font-size:11px;color:var(--gray)">Total Tons</div>
+      </div>
+    </div>`:''}
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">Log Hay Cutting</div>
+      <div class="form-row">
+        <div class="form-group"><label>Date</label><input type="date" id="hc-date" value="${today}"></div>
+        <div class="form-group"><label>Field</label>
+          <select id="hc-field"><option value="">— Select —</option>
+            ${(allFields||[]).map(f=>`<option value="${f.id}">${f.name}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Cutting #</label>
+          <select id="hc-cutting">
+            <option value="1">1st Cutting</option>
+            <option value="2">2nd Cutting</option>
+            <option value="3">3rd Cutting</option>
+            <option value="4">4th Cutting</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Bale Type</label>
+          <select id="hc-bale-type">
+            <option value="round">Round</option>
+            <option value="square">Square (large)</option>
+            <option value="small_square">Small Square</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Number of Bales</label><input type="number" id="hc-bales" placeholder="0" inputmode="numeric" oninput="calcHayTons()"></div>
+        <div class="form-group"><label>Avg Bale Weight (lbs)</label><input type="number" id="hc-weight" placeholder="1200" inputmode="numeric" oninput="calcHayTons()"></div>
+      </div>
+      <div class="form-group"><label>Total Tons (auto-calculated)</label><input type="number" id="hc-tons" placeholder="0.0" readonly style="background:var(--bg2)"></div>
+      <div class="form-group"><label>Notes</label><input type="text" id="hc-notes" placeholder="Quality, storage location..."></div>
+      <button class="btn btn-primary" onclick="saveHayCutting()">Save Cutting</button>
+    </div>
+    <div class="card">
+      <div class="card-title">Cutting History (${(cuttings||[]).length})</div>
+      ${(cuttings||[]).length ? cuttings.map(c=>{
+        const field=(allFields||[]).find(f=>f.id===c.field_id);
+        return `<div style="padding:8px 0;border-bottom:1px solid var(--border)">
+          <div style="display:flex;justify-content:space-between">
+            <strong>${ordinal(c.cutting_number||1)} Cutting${field?' — '+field.name:''}</strong>
+            <span style="color:var(--orange);font-weight:700">${c.bales} bales</span>
+          </div>
+          <div style="font-size:12px;color:var(--gray)">${c.cutting_date} · ${c.bale_type||'round'}${c.total_tons?' · '+c.total_tons.toFixed(1)+' tons':''}</div>
+        </div>`;}).join('') :
+      '<div style="text-align:center;color:var(--gray-lt);padding:20px;font-size:13px">No hay cuttings recorded</div>'}
+    </div>`;
+}
+
+function calcHayTons() {
+  const bales=parseInt(document.getElementById('hc-bales')?.value)||0;
+  const weight=parseFloat(document.getElementById('hc-weight')?.value)||0;
+  if(bales>0&&weight>0) document.getElementById('hc-tons').value=(bales*weight/2000).toFixed(1);
+}
+
+async function saveHayCutting() {
+  const date=document.getElementById('hc-date')?.value;
+  const fieldId=document.getElementById('hc-field')?.value;
+  const bales=parseInt(document.getElementById('hc-bales')?.value)||0;
+  if(!date||!fieldId||!bales){alert('Date, field and bale count required.');return;}
+  const weight=parseFloat(document.getElementById('hc-weight')?.value)||null;
+  const tons=weight&&bales?parseFloat((bales*weight/2000).toFixed(1)):null;
+  const {error}=await dbInsert('hay_cuttings',{
+    field_id:fieldId, cutting_date:date,
+    cutting_number:parseInt(document.getElementById('hc-cutting')?.value)||1,
+    bales, bale_type:document.getElementById('hc-bale-type')?.value,
+    bale_weight:weight, total_tons:tons,
+    notes:document.getElementById('hc-notes')?.value?.trim()||null,
+  });
+  if(error){alert('Error: '+error.message);return;}
+  alert('✅ Hay cutting saved');
+  showPastureTab('hay');
+}
 
 // ── HERD IMPORT ────────────────────────────────────────────────────────────
 function openHerdImport() {
