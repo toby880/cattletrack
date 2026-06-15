@@ -2661,14 +2661,40 @@ async function showProfileTab(tab) {
     const {data: ai} = await sb.from('ai_records').select('*').eq('ranch_id',currentRanch.id).eq('cow_tag',tag);
     const {data: pc} = await sb.from('preg_checks').select('*').eq('ranch_id',currentRanch.id).eq('animal_tag',tag);
     const {data: tr} = await sb.from('et_transfers').select('*').eq('ranch_id',currentRanch.id).eq('recipient_tag',tag);
+    const {data: obs} = await sb.from('tasks').select('*').eq('ranch_id',currentRanch.id).eq('animal_tag',tag).eq('title','Observed breeding').order('due_date',{ascending:false});
     const all = [
       ...(ai||[]).map(r=>({date:r.ai_date,type:'AI',detail:`${r.sire} · ${r.sync_protocol}`,color:'badge-blue'})),
       ...(pc||[]).map(r=>({date:r.check_date,type:'Preg Check',detail:`Result: ${r.result}${r.expected_calving?' · Calves '+r.expected_calving:''}`,color:r.result==='pregnant'?'badge-green':'badge-red'})),
       ...(tr||[]).map(r=>({date:r.transfer_date,type:'ET Transfer',detail:`From: ${r.donor_tag||'—'} · ${r.outcome||'pending'}`,color:'badge-gray'})),
+      ...(obs||[]).map(r=>({date:r.due_date,type:'Observed',detail:r.notes||'Observed breeding',color:'badge-orange'})),
     ].sort((a,b)=>new Date(b.date)-new Date(a.date));
-    content.innerHTML = all.length
-      ? '<div class="card">'+all.map(r=>`<div style="padding:10px 0;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between;margin-bottom:3px"><span class="badge ${r.color}">${r.type}</span><span style="font-size:11px;color:var(--gray)">${r.date}</span></div><div style="font-size:13px">${r.detail}</div></div>`).join('')+'</div>'
-      : '<div class="empty"><div class="empty-icon">🐂</div><p>No breeding records for this animal.</p></div>';
+
+    const today = new Date().toISOString().split('T')[0];
+    const bulls = (cache.get('animals')||[]).filter(a=>a.sex==='Bull'&&a.status!=='sold'&&a.status!=='dead').sort((a,b)=>a.tag.localeCompare(b.tag));
+
+    content.innerHTML = `
+      <div class="card" style="margin-bottom:10px">
+        <div class="card-title">Log Observed Breeding</div>
+        <div class="form-row">
+          <div class="form-group"><label>Bull</label>
+            <select id="ob-bull-animal">
+              <option value="">— Select Bull —</option>
+              ${bulls.map(a=>`<option value="${a.tag}">${a.tag}${a.name?' — '+a.name:''}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-row" style="margin:0;gap:8px">
+            <div class="form-group"><label>Date</label><input type="date" id="ob-date-animal" value="${today}"></div>
+            <div class="form-group"><label>Time</label>
+              <select id="ob-time-animal"><option value="AM">AM</option><option value="PM">PM</option></select>
+            </div>
+          </div>
+        </div>
+        <div class="form-group"><label>Notes</label><input type="text" id="ob-notes-animal" placeholder="Standing heat, any observations..."></div>
+        <button class="btn btn-primary" onclick="saveObservedBreedingFromAnimal('${tag}')">Save Observed Breeding</button>
+      </div>
+      ${all.length
+        ? '<div class="card">'+all.map(r=>`<div style="padding:10px 0;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between;margin-bottom:3px"><span class="badge ${r.color}">${r.type}</span><span style="font-size:11px;color:var(--gray)">${r.date}</span></div><div style="font-size:13px">${r.detail}</div></div>`).join('')+'</div>'
+        : '<div class="empty"><div class="empty-icon">🐂</div><p>No breeding records for this animal.</p></div>'}`;
   }
 
   if(tab==='embryo') {
@@ -3308,6 +3334,25 @@ function showNSSubTab(tab, btn) {
   document.getElementById('ns-observed-section').style.display = tab==='observed'?'block':'none';
   document.querySelectorAll('#page-breeding .tab-bar:nth-child(2) .tab').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
+}
+
+async function saveObservedBreedingFromAnimal(cowTag) {
+  const bull = document.getElementById('ob-bull-animal')?.value;
+  const date = document.getElementById('ob-date-animal')?.value;
+  const time = document.getElementById('ob-time-animal')?.value;
+  const notes = document.getElementById('ob-notes-animal')?.value?.trim();
+  if(!bull||!date){alert('Bull and date required.');return;}
+  const {error} = await dbInsert('tasks',{
+    animal_tag: cowTag,
+    due_date: date,
+    title: 'Observed breeding',
+    notes: `${cowTag} bred by ${bull}${time?' ('+time+')':''}${notes?' — '+notes:''}`,
+    done: true,
+  });
+  if(error){alert('Error: '+error.message);return;}
+  alert(`✅ Observed breeding saved\n${cowTag} × ${bull} on ${date}`);
+  // Refresh breeding tab
+  showAnimalTab(cowTag, 'breeding');
 }
 
 async function saveObservedBreeding() {
