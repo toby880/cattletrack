@@ -2,10 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CattleTrack">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#E8751A">
 <meta name="description" content="CattleTrack Analytics — Professional Ranch Management">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
 <title>CattleTrack Analytics</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
@@ -167,6 +172,8 @@ tr:hover td{background:var(--bg)}
 .progress-bar{background:var(--bg2);border-radius:4px;height:6px;margin:6px 0}
 .progress-fill{background:var(--orange);border-radius:4px;height:6px;transition:width 0.3s}
 </style>
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="icon" type="image/png" href="favicon.png">
 </head>
 <body>
 
@@ -1494,6 +1501,30 @@ async function signUp() {
       showAuthError('An account with this email already exists. Please sign in.');
       return;
     }
+
+    // Send signup notification email via Resend
+    try {
+      fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer re_iNv8LARt_PEC5JxHJpERGDzDwvpDqDHG9'
+        },
+        body: JSON.stringify({
+          from: 'notifications@cattletrackanalytics.com',
+          to: 'info@cattletrackanalytics.com',
+          subject: '🐄 New CattleTrack signup: ' + ranch,
+          html: `<h2>New Trial Started!</h2>
+            <p><strong>Ranch:</strong> ${ranch}</p>
+            <p><strong>Name:</strong> ${name}</p>
+            <p><strong>Email:</strong> ${email}</p>
+            <p><strong>Plan:</strong> ${plan}</p>
+            <p><strong>Breed:</strong> ${document.getElementById('signup-breed')?.value||'red_angus'}</p>
+            <p>Log into Supabase to activate their subscription when they pay.</p>`
+        })
+      });
+    } catch(e) { console.log('Notification failed:', e); }
+
     if(data.session) {
       await loadUserSession(data.user);
       return;
@@ -6834,6 +6865,28 @@ async function saveSettings() {
 
 // ── INIT ───────────────────────────────────────────────────────────────────
 async function init() {
+  // Register service worker for offline support
+  if('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      // Check for updates
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        newWorker.addEventListener('statechange', () => {
+          if(newWorker.state==='installed' && navigator.serviceWorker.controller) {
+            // New version available — show update banner
+            const banner = document.getElementById('syncBanner');
+            if(banner) {
+              banner.textContent = '🔄 Update available — tap to refresh';
+              banner.classList.add('show');
+              banner.style.cursor = 'pointer';
+              banner.onclick = () => { newWorker.postMessage('skipWaiting'); window.location.reload(); };
+            }
+          }
+        });
+      });
+    }).catch(err => console.log('SW registration failed:', err));
+  }
+
   // Check for invite link in URL
   await checkForInvite();
   // Check for existing session
