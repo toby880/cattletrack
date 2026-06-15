@@ -5402,21 +5402,66 @@ async function showPastureTab(tab) {
 async function renderPastureList(content) {
   const {data:fields} = await sb.from('pasture_fields').select('*')
     .eq('ranch_id',currentRanch.id).order('name');
+  const animals = (cache.get('animals')||[]).filter(a=>a.status!=='sold'&&a.status!=='dead');
   const typeIcon = {pasture:'🌿',wheat:'🌾',hay:'🟡',crop:'🌱'};
-  content.innerHTML = fields?.length ? fields.map(f=>`
-    <div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px">
+
+  // Group animals by location
+  const byPasture = {};
+  animals.forEach(a=>{
+    const loc = a.location||'Unassigned';
+    if(!byPasture[loc]) byPasture[loc] = [];
+    byPasture[loc].push(a);
+  });
+
+  const classLabel = {Cow:'Cows',Heifer:'Heifers',Bull:'Bulls',Steer:'Steers',Calf:'Calves',Stocker:'Stockers'};
+
+  const getBreakdown = (animals) => {
+    const counts = {};
+    animals.forEach(a=>{
+      const cls = a.sex==='Bull'?'Bulls':a.sex==='Steer'?'Steers':
+        a.animal_type==='Stocker'?'Stockers':
+        a.sex==='Female'&&a.dob&&(new Date()-new Date(a.dob))/86400000<365?'Calves':
+        a.sex==='Female'&&a.dob&&(new Date()-new Date(a.dob))/86400000<730?'Heifers':'Cows';
+      counts[cls] = (counts[cls]||0)+1;
+    });
+    return counts;
+  };
+
+  content.innerHTML = `
+    ${fields?.length ? fields.map(f=>{
+      const inPasture = byPasture[f.name]||[];
+      const breakdown = getBreakdown(inPasture);
+      return `
+      <div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${inPasture.length?'10px':'0'}">
+          <div>
+            <div style="font-weight:700;font-size:15px">${typeIcon[f.type]||'🌿'} ${f.name}</div>
+            <div style="font-size:12px;color:var(--gray)">${f.acres?f.acres+' acres · ':''}${f.type||'pasture'}${f.soil_type?' · '+f.soil_type:''}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:22px;font-weight:800;color:var(--orange)">${inPasture.length}</div>
+            <div style="font-size:11px;color:var(--gray)">head</div>
+          </div>
+        </div>
+        ${inPasture.length ? `
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          ${Object.entries(breakdown).map(([cls,count])=>`
+          <div style="background:var(--bg2);border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600">
+            ${count} ${cls}
+          </div>`).join('')}
+        </div>` : '<div style="font-size:12px;color:var(--gray-lt)">No cattle assigned</div>'}
+        ${f.notes?`<div style="font-size:12px;color:var(--gray);margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">${f.notes}</div>`:''}
+      </div>`;}).join('') :
+    '<div class="empty"><div class="empty-icon">🌿</div><p>No pastures added yet.<br>Tap "+ Add Pasture" to get started.</p></div>'}
+
+    ${byPasture['Unassigned']?.length ? `
+    <div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px;opacity:0.7">
       <div style="display:flex;justify-content:space-between;align-items:center">
-        <div>
-          <div style="font-weight:700;font-size:15px">${typeIcon[f.type]||'🌿'} ${f.name}</div>
-          <div style="font-size:12px;color:var(--gray)">${f.acres?f.acres+' acres · ':''}${f.type||'pasture'}${f.soil_type?' · '+f.soil_type:''}</div>
-        </div>
-        <div style="font-size:12px;color:var(--orange);font-weight:600">
-          ${(cache.get('animals')||[]).filter(a=>a.location===f.name&&a.status!=='sold'&&a.status!=='dead').length} head
-        </div>
+        <div><div style="font-weight:700;font-size:15px">❓ Unassigned</div>
+        <div style="font-size:12px;color:var(--gray)">No pasture set</div></div>
+        <div style="font-size:22px;font-weight:800;color:var(--gray)">${byPasture['Unassigned'].length}</div>
       </div>
-      ${f.notes?`<div style="font-size:12px;color:var(--gray);margin-top:6px">${f.notes}</div>`:''}
-    </div>`).join('') :
-    '<div class="empty"><div class="empty-icon">🌿</div><p>No pastures added yet.<br>Tap "+ Add Pasture" to get started.</p></div>';
+    </div>` : ''}`;
 }
 
 function openNewPasture() {
