@@ -3882,13 +3882,18 @@ async function showCalendarTab(tab) {
     const {data:ns}=await sb.from('natural_service').select('*').eq('ranch_id',currentRanch.id);
     const {data:health}=await dbSelect('health_events');
     const today=new Date(); today.setHours(0,0,0,0);
+    const daysUntil=d=>{
+      const parts=d.split('-');
+      const dt=new Date(parseInt(parts[0]),parseInt(parts[1])-1,parseInt(parts[2]));
+      dt.setHours(0,0,0,0);
+      return Math.round((dt-today)/86400000);
+    };
     const events=[
       ...(tasks||[]).filter(t=>!t.done).map(t=>({date:t.due_date,icon:'📌',label:t.title+(t.animal_tag?' — '+t.animal_tag:''),type:t.category,priority:t.priority,taskId:t.id})),
       ...(ai||[]).filter(r=>r.expected_calving).map(r=>({date:r.expected_calving,icon:'🐄',label:`Expected calving — ${r.cow_tag} (AI × ${r.sire||'—'})`,type:'calving'})),
       ...(ns||[]).filter(r=>r.pull_date).map(r=>({date:r.pull_date,icon:'🐂',label:`Pull bull — ${r.bull_tag} from ${r.pasture||'pasture'}`,type:'breeding'})),
       ...(health||[]).filter(h=>h.withdrawal_days>0).map(h=>{const c=new Date(h.event_date);c.setDate(c.getDate()+h.withdrawal_days);return{date:c.toISOString().split('T')[0],icon:'✅',label:`WD clear — ${h.animal_tag} (${h.product||h.event_type})`,type:'withdrawal'};}),
     ].filter(e=>e.date).sort((a,b)=>new Date(a.date)-new Date(b.date));
-    const daysUntil=d=>{const dt=new Date(d);dt.setHours(0,0,0,0);return Math.round((dt-today)/86400000);};
     const groups={};
     events.forEach(e=>{
       const d=daysUntil(e.date);
