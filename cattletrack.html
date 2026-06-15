@@ -2275,7 +2275,7 @@ async function loadDashboard() {
     const label = days===0?'Today':days===1?'Tomorrow':`${days}d`;
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
       <div><div style="font-size:13px;font-weight:500">${t.title}</div>
-      <div style="font-size:11px;color:var(--gray)">${t.category||'general'}${t.animal_tag?' · '+t.animal_tag:''}</div></div>
+      <div style="font-size:11px;color:var(--gray)">${t.category&&t.category!=='null'?t.category:''}${t.animal_tag&&t.animal_tag!=='null'?' · '+t.animal_tag:''}</div></div>
       <span style="font-size:12px;font-weight:700;color:${color};flex-shrink:0;margin-left:8px">${label}</span></div>`;
   })];
 
@@ -3192,7 +3192,21 @@ async function saveAICloud() {
     notes:document.getElementById('ai-notes')?.value?.trim()||null,
   });
   if(error){alert('Error: '+error.message);return;}
-  alert(`\u2705 AI saved: ${cow} \xd7 ${sire}\n1 straw deducted from inventory`);
+
+  // Deduct one straw from semen inventory
+  const {data:semData} = await sb.from('semen_inventory')
+    .select('id, straws_available')
+    .eq('ranch_id', currentRanch.id)
+    .ilike('sire', `%${sire}%`)
+    .single();
+  if(semData && semData.straws_available > 0) {
+    await sb.from('semen_inventory')
+      .update({straws_available: semData.straws_available - 1})
+      .eq('id', semData.id);
+    alert(`✅ AI saved: ${cow} × ${sire}\n1 straw deducted — ${semData.straws_available - 1} remaining`);
+  } else {
+    alert(`✅ AI saved: ${cow} × ${sire}`);
+  }
   showBreedingTab('ai');
 }
 
@@ -3201,7 +3215,20 @@ async function renderNaturalTab(content) {
   const {data}=await sb.from('natural_service').select('*').eq('ranch_id',currentRanch.id).order('turnout_date',{ascending:false});
   const today=new Date().toISOString().split('T')[0];
   const active=(data||[]).filter(r=>!r.pull_date||r.pull_date>=today);
+
+  // Get observed breedings from tasks
+  const {data:observed}=await sb.from('tasks').select('*')
+    .eq('ranch_id',currentRanch.id)
+    .eq('title','Observed breeding')
+    .order('due_date',{ascending:false})
+    .limit(20);
+
   content.innerHTML=`
+    <div class="tab-bar" style="margin-bottom:12px">
+      <button class="tab active" onclick="showNSSubTab('turnout',this)">Bull Turn-Out</button>
+      <button class="tab" onclick="showNSSubTab('observed',this)">Observed Breedings</button>
+    </div>
+    <div id="ns-turnout-section">
     <div class="card" style="margin-bottom:10px">
       <div class="card-title">Log Bull Turn-Out</div>
       <div class="form-group"><label>Bull Tag / Name</label><input type="text" id="ns-bull" placeholder="Bull ID or name"></div>
@@ -3221,14 +3248,78 @@ async function renderNaturalTab(content) {
     ${active.length?`<div class="card" style="margin-bottom:10px"><div class="card-title">Bulls Currently Out (${active.length})</div>${active.map(r=>{
       const daysOut=Math.floor((new Date()-new Date(r.turnout_date))/86400000);
       const daysLeft=r.pull_date?Math.ceil((new Date(r.pull_date)-new Date())/86400000):null;
-      return `<div style="padding:10px 0;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between"><strong>${r.bull_tag}</strong><span class="badge badge-orange">${daysOut}d out</span></div><div style="font-size:12px;color:var(--gray);margin-top:3px">${r.pasture||'—'} \xb7 ${r.cows_exposed||0} cows${daysLeft!==null?' \xb7 Pull in '+daysLeft+'d':''}</div></div>`;
+      return `<div style="padding:10px 0;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between"><strong>${r.bull_tag}</strong><span class="badge badge-orange">${daysOut}d out</span></div><div style="font-size:12px;color:var(--gray);margin-top:3px">${r.pasture||'—'} · ${r.cows_exposed||0} cows${daysLeft!==null?' · Pull in '+daysLeft+'d':''}</div></div>`;
     }).join('')}</div>`:''}
     <div class="card"><div class="card-title">Turn-Out History</div>
       <div class="table-wrap"><table>
         <thead><tr><th>Bull</th><th>Pasture</th><th>Turn-Out</th><th>Pull</th><th>Cows</th></tr></thead>
         <tbody>${(data||[]).slice(0,15).map(r=>`<tr><td><strong>${r.bull_tag}</strong></td><td>${r.pasture||'—'}</td><td>${r.turnout_date||'—'}</td><td>${r.pull_date||'—'}</td><td>${r.cows_exposed||'—'}</td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--gray-lt);padding:20px">No records yet</td></tr>'}</tbody>
       </table></div>
+    </div>
+    </div>
+
+    <div id="ns-observed-section" style="display:none">
+      <div class="card" style="margin-bottom:10px">
+        <div class="card-title">Log Observed Breeding</div>
+        <div style="font-size:12px;color:var(--gray);margin-bottom:10px">Record individual observed breedings in the pasture</div>
+        <div class="form-row">
+          <div class="form-group"><label>Cow Tag</label><input type="text" id="ob-cow" placeholder="e.g. H2R-M402"></div>
+          <div class="form-group"><label>Bull Tag</label><input type="text" id="ob-bull" placeholder="e.g. H2R-J7444"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Date</label><input type="date" id="ob-date" value="${today}"></div>
+          <div class="form-group"><label>Time</label>
+            <select id="ob-time">
+              <option value="AM">AM</option>
+              <option value="PM">PM</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group"><label>Notes</label><input type="text" id="ob-notes" placeholder="Standing heat, bred twice, any observations..."></div>
+        <button class="btn btn-primary" onclick="saveObservedBreeding()">Save Observed Breeding</button>
+      </div>
+      <div class="card">
+        <div class="card-title">Observed Breeding History (${(observed||[]).length})</div>
+        ${(observed||[]).length ? observed.map(o=>`
+        <div style="padding:8px 0;border-bottom:1px solid var(--border)">
+          <div style="display:flex;justify-content:space-between">
+            <strong>${o.animal_tag||'—'}</strong>
+            <span style="font-size:12px;color:var(--gray)">${o.due_date||'—'}</span>
+          </div>
+          <div style="font-size:12px;color:var(--gray)">${o.notes||'—'}</div>
+        </div>`).join('') :
+        '<div style="text-align:center;color:var(--gray-lt);padding:20px;font-size:13px">No observed breedings recorded</div>'}
+      </div>
     </div>`;
+}
+
+function showNSSubTab(tab, btn) {
+  document.getElementById('ns-turnout-section').style.display = tab==='turnout'?'block':'none';
+  document.getElementById('ns-observed-section').style.display = tab==='observed'?'block':'none';
+  document.querySelectorAll('#page-breeding .tab-bar:nth-child(2) .tab').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+}
+
+async function saveObservedBreeding() {
+  const cow = document.getElementById('ob-cow')?.value?.trim();
+  const bull = document.getElementById('ob-bull')?.value?.trim();
+  const date = document.getElementById('ob-date')?.value;
+  const time = document.getElementById('ob-time')?.value;
+  const notes = document.getElementById('ob-notes')?.value?.trim();
+  if(!cow||!bull||!date){alert('Cow tag, bull tag and date required.');return;}
+  const {error} = await dbInsert('tasks',{
+    animal_tag: cow,
+    due_date: date,
+    title: 'Observed breeding',
+    notes: `${cow} bred by ${bull}${time?' ('+time+')':''}${notes?' — '+notes:''}`,
+    done: true,
+  });
+  if(error){alert('Error: '+error.message);return;}
+  alert(`✅ Observed breeding saved\n${cow} × ${bull} on ${date}`);
+  document.getElementById('ob-cow').value='';
+  document.getElementById('ob-bull').value='';
+  document.getElementById('ob-notes').value='';
+  renderNaturalTab(document.getElementById('breeding-content'));
 }
 
 async function saveNSCloud() {
