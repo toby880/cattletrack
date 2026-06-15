@@ -5827,28 +5827,48 @@ function saveLRPManual() {
   renderLRPRates(document.getElementById('markets-content'));
 }
 function renderFutures(content) {
-  // Embed Barchart widget for CME feeder cattle futures
   content.innerHTML = `
     <div class="card" style="margin-bottom:10px">
       <div class="card-title">CME Feeder Cattle Futures</div>
-      <div style="font-size:12px;color:var(--gray);margin-bottom:10px">Live delayed quotes — CME Group</div>
-      <iframe src="https://widget.barchart.com/commodity/GF?widgetId=1" 
-        width="100%" height="300" frameborder="0" 
-        style="border-radius:8px"
-        sandbox="allow-scripts allow-same-origin">
-      </iframe>
+      <div style="font-size:12px;color:var(--gray);margin-bottom:12px">Tap to view live quotes on CME or Barchart</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <a href="https://www.cmegroup.com/markets/agriculture/livestock/feeder-cattle.quotes.html" target="_blank"
+          style="display:block;background:var(--orange);color:white;padding:14px;border-radius:10px;text-align:center;text-decoration:none;font-weight:700;font-size:14px">
+          📈 CME Feeder Cattle
+        </a>
+        <a href="https://www.cmegroup.com/markets/agriculture/livestock/live-cattle.quotes.html" target="_blank"
+          style="display:block;background:var(--dark);color:white;padding:14px;border-radius:10px;text-align:center;text-decoration:none;font-weight:700;font-size:14px">
+          📈 CME Live Cattle
+        </a>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <a href="https://www.barchart.com/futures/quotes/GF*0/futures-prices" target="_blank"
+          style="display:block;background:var(--bg2);color:var(--dark);padding:14px;border-radius:10px;text-align:center;text-decoration:none;font-weight:600;font-size:13px;border:1px solid var(--border)">
+          Barchart Feeder Cattle
+        </a>
+        <a href="https://www.barchart.com/futures/quotes/LC*0/futures-prices" target="_blank"
+          style="display:block;background:var(--bg2);color:var(--dark);padding:14px;border-radius:10px;text-align:center;text-decoration:none;font-weight:600;font-size:13px;border:1px solid var(--border)">
+          Barchart Live Cattle
+        </a>
+      </div>
     </div>
-    <div class="card">
-      <div class="card-title">Live Cattle Futures</div>
-      <div style="font-size:12px;color:var(--gray);margin-bottom:10px">Live delayed quotes — CME Group</div>
-      <iframe src="https://widget.barchart.com/commodity/LC?widgetId=1"
-        width="100%" height="300" frameborder="0"
-        style="border-radius:8px"
-        sandbox="allow-scripts allow-same-origin">
-      </iframe>
+
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">Oklahoma Markets</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <a href="https://www.ams.usda.gov/market-news/livestock-poultry-grain" target="_blank"
+          style="display:block;background:var(--bg2);color:var(--dark);padding:14px;border-radius:10px;text-align:center;text-decoration:none;font-weight:600;font-size:13px;border:1px solid var(--border)">
+          USDA AMS Reports
+        </a>
+        <a href="https://www.oklahomacattlemen.org/market-reports/" target="_blank"
+          style="display:block;background:var(--bg2);color:var(--dark);padding:14px;border-radius:10px;text-align:center;text-decoration:none;font-weight:600;font-size:13px;border:1px solid var(--border)">
+          OCA Market Reports
+        </a>
+      </div>
     </div>
+
     <div style="font-size:11px;color:var(--gray-lt);text-align:center;padding:8px">
-      Quotes delayed 10 minutes. Source: Barchart.com / CME Group
+      Links open in your browser. Enter prices in the Cash Prices tab to use the Sell Calculator.
     </div>`;
 }
 
