@@ -310,13 +310,13 @@ tr:hover td{background:var(--bg)}
     <button class="nav-btn" onclick="showPage('animals')">Animals</button>
     <button class="nav-btn" onclick="showPage('calving')">Calving</button>
     <button class="nav-btn" onclick="showPage('weights')">Weights</button>
+    <button class="nav-btn" onclick="showPage('measurements')">Measurements</button>
     <button class="nav-btn" onclick="showPage('health')">Health</button>
     <button class="nav-btn" onclick="showPage('breeding')">Breeding</button>
     <button class="nav-btn" onclick="showPage('pastures')">Pastures</button>
     <button class="nav-btn" onclick="showPage('sales')">Sales</button>
     <button class="nav-btn" onclick="showPage('calendar')">Calendar</button>
     <button class="nav-btn" onclick="showPage('inventory')">Inventory</button>
-    <button class="nav-btn" onclick="showPage('pastures')">Pastures</button>
     <button class="nav-btn" onclick="showPage('stockers')">Stockers</button>
     <button class="nav-btn" onclick="showPage('markets')">Markets</button>
     <button class="nav-btn" onclick="showPage('reports')">Reports</button>
@@ -901,6 +901,62 @@ tr:hover td{background:var(--bg)}
     </div>
 
 
+
+    <!-- MEASUREMENTS -->
+    <div class="page" id="page-measurements">
+      <div class="section-header">
+        <div class="section-title">📏 Measurements</div>
+      </div>
+
+      <!-- Filter Bar -->
+      <div class="card" style="margin-bottom:12px">
+        <div class="card-title">Load Group</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Pasture / Location</label>
+            <select id="meas-filter-pasture">
+              <option value="">All Pastures</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Sex / Class</label>
+            <select id="meas-filter-sex">
+              <option value="">All</option>
+              <option value="Cow">Cows</option>
+              <option value="Heifer">Heifers</option>
+              <option value="Bull">Bulls</option>
+              <option value="Steer">Steers</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Session Date</label>
+            <input type="date" id="meas-session-date">
+          </div>
+          <div class="form-group" style="display:flex;align-items:flex-end">
+            <button class="btn btn-primary" onclick="loadMeasurementGroup()">Load Animals</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Progress Bar -->
+      <div id="meas-progress-wrap" style="display:none;margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <div style="font-size:13px;font-weight:600" id="meas-progress-label">0 of 0 recorded</div>
+          <button class="btn btn-secondary btn-sm" onclick="loadMeasurementGroup()">↺ Reload</button>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="meas-progress-fill" style="width:0%"></div>
+        </div>
+      </div>
+
+      <!-- Animal List -->
+      <div id="meas-animal-list">
+        <div class="empty"><div class="empty-icon">📏</div><p>Select a group above and tap Load Animals to begin a scoring session.</p></div>
+      </div>
+    </div>
+
     <!-- SETTINGS -->
     <div class="page" id="page-settings">
       <div class="section-title" style="margin-bottom:16px">Settings</div>
@@ -1356,6 +1412,81 @@ tr:hover td{background:var(--bg)}
   </div>
 </div>
 
+<!-- MEASUREMENT ENTRY MODAL -->
+<div class="modal-overlay" id="meas-entry-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <div>
+        <div class="modal-title" style="margin-bottom:0" id="meas-modal-tag">—</div>
+        <div style="font-size:12px;color:var(--gray)" id="meas-modal-sub">—</div>
+      </div>
+      <button onclick="closeMeasModal()" style="background:var(--bg2);border:none;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer;font-family:inherit">Cancel</button>
+    </div>
+    <div style="height:1px;background:var(--border);margin:12px 0"></div>
+
+    <!-- All Animals -->
+    <div class="form-row">
+      <div class="form-group"><label>Weight (lbs)</label><input type="number" id="me-weight" placeholder="—" inputmode="decimal"></div>
+      <div class="form-group"><label>BCS (1-9)</label><input type="number" id="me-bcs" placeholder="—" min="1" max="9" step="0.5" inputmode="decimal"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Hair Shed (1-5)</label><input type="number" id="me-hair" placeholder="—" min="1" max="5" inputmode="numeric"></div>
+      <div class="form-group"><label>Hip Height (in)</label><input type="number" id="me-hip" placeholder="—" inputmode="decimal"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Claw Set (1-9)</label><input type="number" id="me-claw" placeholder="—" min="1" max="9" inputmode="numeric"></div>
+      <div class="form-group"><label>Foot Angle (1-9)</label><input type="number" id="me-angle" placeholder="—" min="1" max="9" inputmode="numeric"></div>
+    </div>
+
+    <div class="form-group">
+      <label>Disposition (1-5)</label>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:4px">
+        <button onclick="setDisposition(1)" id="disp-1" class="disp-btn" style="padding:10px 0;border:2px solid var(--border);border-radius:8px;background:var(--white);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">1<div style="font-size:9px;color:var(--gray);font-weight:400">Calm</div></button>
+        <button onclick="setDisposition(2)" id="disp-2" class="disp-btn" style="padding:10px 0;border:2px solid var(--border);border-radius:8px;background:var(--white);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">2<div style="font-size:9px;color:var(--gray);font-weight:400">Restless</div></button>
+        <button onclick="setDisposition(3)" id="disp-3" class="disp-btn" style="padding:10px 0;border:2px solid var(--border);border-radius:8px;background:var(--white);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">3<div style="font-size:9px;color:var(--gray);font-weight:400">Nervous</div></button>
+        <button onclick="setDisposition(4)" id="disp-4" class="disp-btn" style="padding:10px 0;border:2px solid var(--border);border-radius:8px;background:var(--white);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">4<div style="font-size:9px;color:var(--gray);font-weight:400">Flighty</div></button>
+        <button onclick="setDisposition(5)" id="disp-5" class="disp-btn" style="padding:10px 0;border:2px solid var(--border);border-radius:8px;background:var(--white);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">5<div style="font-size:9px;color:var(--gray);font-weight:400">Aggressive</div></button>
+      </div>
+    </div>
+
+    <!-- Bull Only -->
+    <div id="me-bull-fields" style="display:none">
+      <div style="height:1px;background:var(--border);margin:10px 0"></div>
+      <div style="font-size:11px;font-weight:600;color:var(--orange);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">🐂 Bull Measurements</div>
+      <div class="form-group">
+        <label>Scrotal Circumference (cm)</label>
+        <input type="number" id="me-scrotal" placeholder="—" inputmode="decimal">
+      </div>
+    </div>
+
+    <!-- Heifer Only -->
+    <div id="me-heifer-fields" style="display:none">
+      <div style="height:1px;background:var(--border);margin:10px 0"></div>
+      <div style="font-size:11px;font-weight:600;color:var(--orange);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">🐄 Heifer Measurements</div>
+      <div class="form-row">
+        <div class="form-group"><label>Pelvic Height (cm)</label><input type="number" id="me-pelvis-h" placeholder="—" inputmode="decimal" oninput="calcPelvicArea()"></div>
+        <div class="form-group"><label>Pelvic Width (cm)</label><input type="number" id="me-pelvis-w" placeholder="—" inputmode="decimal" oninput="calcPelvicArea()"></div>
+      </div>
+      <div class="form-group">
+        <label>Pelvic Area (cm² — auto)</label>
+        <input type="number" id="me-pelvis-area" placeholder="—" readonly style="background:var(--bg2)">
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-top:8px">
+      <label>Notes</label>
+      <input type="text" id="me-notes" placeholder="Any observations...">
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:4px">
+      <button class="btn btn-secondary" onclick="closeMeasModal()" style="flex:1">Skip</button>
+      <button class="btn btn-primary" onclick="saveMeasurementBatch()" style="flex:2">Save & Next →</button>
+    </div>
+  </div>
+</div>
+
+
 <script>
 // ── SUPABASE SETUP ─────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://jtyjgfrgwugvcqouldwi.supabase.co';
@@ -1717,6 +1848,7 @@ function showPage(name) {
   if(name==='stockers') loadStockerGroups();
   if(name==='markets') showMarketsTab('prices');
   if(name==='reports') { setTimeout(()=>{ showReportsTab('builder'); updateReportColumns(); }, 50); }
+  if(name==='measurements') { loadMeasurements(); }
   if(name==='settings') loadSettings();
 }
 
@@ -7478,6 +7610,204 @@ async function saveSettings() {
   currentRanch.name=document.getElementById('set-ranch-name').value.trim();
   document.getElementById('header-ranch-name').textContent=currentRanch.name;
   alert('✅ Settings saved');
+}
+
+
+// ── BATCH MEASUREMENTS ─────────────────────────────────────────────────────
+let measAnimals = [];
+let measCurrentIndex = 0;
+let measRecordedTags = new Set();
+let measCurrentAnimalSex = '';
+let measSelectedDisposition = null;
+
+async function loadMeasurements() {
+  // Populate pasture dropdown
+  const animals = cache.get('animals') || [];
+  const pastures = [...new Set(animals.map(a => a.location).filter(Boolean))].sort();
+  const pastureSelect = document.getElementById('meas-filter-pasture');
+  if(pastureSelect && pastureSelect.options.length <= 1) {
+    pastures.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p; opt.textContent = p;
+      pastureSelect.appendChild(opt);
+    });
+  }
+  const dateEl = document.getElementById('meas-session-date');
+  if(dateEl && !dateEl.value) dateEl.value = new Date().toISOString().split('T')[0];
+  document.getElementById('meas-animal-list').innerHTML =
+    '<div class="empty"><div class="empty-icon">📏</div><p>Select a group above and tap Load Animals to begin a scoring session.</p></div>';
+}
+
+async function loadMeasurementGroup() {
+  const pasture = document.getElementById('meas-filter-pasture')?.value || '';
+  const sex = document.getElementById('meas-filter-sex')?.value || '';
+  const date = document.getElementById('meas-session-date')?.value;
+  if(!date) { alert('Please select a session date.'); return; }
+
+  const { data } = await dbSelect('animals');
+  if(data) cache.set('animals', data);
+  let animals = (cache.get('animals') || []).filter(a => a.status !== 'sold' && a.status !== 'dead');
+  if(pasture) animals = animals.filter(a => (a.location || '') === pasture);
+  if(sex) animals = animals.filter(a => a.sex === sex);
+  animals = animals.sort((a, b) => a.tag.localeCompare(b.tag));
+
+  if(!animals.length) {
+    document.getElementById('meas-animal-list').innerHTML =
+      '<div class="empty"><div class="empty-icon">🐄</div><p>No animals found matching those filters.</p></div>';
+    document.getElementById('meas-progress-wrap').style.display = 'none';
+    return;
+  }
+
+  const { data: existing } = await sb.from('measurements')
+    .select('animal_tag').eq('ranch_id', currentRanch.id).eq('measure_date', date);
+  measRecordedTags = new Set((existing || []).map(m => m.animal_tag));
+
+  measAnimals = animals;
+  measCurrentIndex = 0;
+  renderMeasurementList();
+}
+
+function renderMeasurementList() {
+  const recorded = measRecordedTags.size;
+  const total = measAnimals.length;
+  const pct = total > 0 ? Math.round(recorded / total * 100) : 0;
+
+  document.getElementById('meas-progress-wrap').style.display = 'block';
+  document.getElementById('meas-progress-label').textContent = `${recorded} of ${total} recorded`;
+  document.getElementById('meas-progress-fill').style.width = pct + '%';
+
+  const sexIcon = { Bull: '♂', Heifer: '♀', Cow: '♀', Steer: '⚲' };
+  const sexBadge = { Bull: 'badge-blue', Heifer: 'badge-orange', Cow: 'badge-green', Steer: 'badge-gray' };
+
+  document.getElementById('meas-animal-list').innerHTML = measAnimals.map((a, i) => {
+    const done = measRecordedTags.has(a.tag);
+    return `
+      <div onclick="${done ? '' : `openMeasModal(${i})`}"
+        style="background:var(--white);border:1px solid ${done ? 'var(--green)' : 'var(--border)'};border-radius:10px;padding:12px 14px;margin-bottom:8px;cursor:${done ? 'default' : 'pointer'};display:flex;align-items:center;gap:12px;${done ? 'opacity:0.75' : ''}">
+        <div style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;background:${done ? 'var(--green)' : 'var(--bg2)'}">
+          ${done ? '<span style="color:white;font-weight:700;font-size:16px">✓</span>' : `<span style="color:var(--gray)">${sexIcon[a.sex] || '?'}</span>`}
+        </div>
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:8px">
+            <strong style="font-size:15px">${a.tag}</strong>
+            <span class="badge ${sexBadge[a.sex] || 'badge-gray'}" style="font-size:10px">${a.sex || '—'}</span>
+          </div>
+          <div style="font-size:12px;color:var(--gray);margin-top:2px">${a.name ? a.name + ' · ' : ''}${a.location || 'No pasture'}${a.dob ? ' · Born ' + a.dob : ''}</div>
+        </div>
+        ${done
+          ? '<span style="color:var(--green);font-size:13px;font-weight:600">Recorded</span>'
+          : '<div style="color:var(--gray-lt);font-size:20px">›</div>'
+        }
+      </div>`;
+  }).join('');
+}
+
+function openMeasModal(index) {
+  measCurrentIndex = index;
+  const animal = measAnimals[index];
+  if(!animal) return;
+
+  measCurrentAnimalSex = animal.sex || '';
+  measSelectedDisposition = null;
+
+  document.getElementById('meas-modal-tag').textContent = animal.tag + (animal.name ? ' — ' + animal.name : '');
+  document.getElementById('meas-modal-sub').textContent =
+    [animal.sex, animal.breed, animal.location].filter(Boolean).join(' · ') +
+    ` · ${index + 1} of ${measAnimals.length}`;
+
+  ['me-weight','me-bcs','me-hair','me-hip','me-claw','me-angle',
+   'me-scrotal','me-pelvis-h','me-pelvis-w','me-pelvis-area','me-notes'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.value = '';
+  });
+
+  document.querySelectorAll('.disp-btn').forEach(b => {
+    b.style.borderColor = 'var(--border)';
+    b.style.background = 'var(--white)';
+    b.style.color = 'var(--dark)';
+  });
+
+  document.getElementById('me-bull-fields').style.display = animal.sex === 'Bull' ? 'block' : 'none';
+  document.getElementById('me-heifer-fields').style.display = animal.sex === 'Heifer' ? 'block' : 'none';
+
+  document.getElementById('meas-entry-modal').classList.add('open');
+}
+
+function closeMeasModal() {
+  document.getElementById('meas-entry-modal').classList.remove('open');
+}
+
+function setDisposition(score) {
+  measSelectedDisposition = score;
+  const colors = { 1: 'var(--green)', 2: '#86efac', 3: 'var(--amber)', 4: 'var(--orange)', 5: 'var(--red)' };
+  document.querySelectorAll('.disp-btn').forEach((b, i) => {
+    const val = i + 1;
+    const active = val === score;
+    b.style.borderColor = active ? colors[val] : 'var(--border)';
+    b.style.background = active ? colors[val] : 'var(--white)';
+    b.style.color = active ? 'white' : 'var(--dark)';
+  });
+}
+
+function calcPelvicArea() {
+  const h = parseFloat(document.getElementById('me-pelvis-h')?.value) || 0;
+  const w = parseFloat(document.getElementById('me-pelvis-w')?.value) || 0;
+  if(h > 0 && w > 0) document.getElementById('me-pelvis-area').value = (h * w).toFixed(1);
+}
+
+async function saveMeasurementBatch() {
+  const animal = measAnimals[measCurrentIndex];
+  if(!animal) return;
+
+  const date = document.getElementById('meas-session-date')?.value;
+  const weight = parseFloat(document.getElementById('me-weight')?.value) || null;
+  const bcs = parseFloat(document.getElementById('me-bcs')?.value) || null;
+  const hair = parseInt(document.getElementById('me-hair')?.value) || null;
+  const hip = parseFloat(document.getElementById('me-hip')?.value) || null;
+  const claw = parseInt(document.getElementById('me-claw')?.value) || null;
+  const angle = parseInt(document.getElementById('me-angle')?.value) || null;
+  const notes = document.getElementById('me-notes')?.value?.trim() || null;
+
+  const hasData = weight || bcs || hair || hip || claw || angle || measSelectedDisposition;
+  if(!hasData) { alert('Enter at least one measurement before saving.'); return; }
+
+  const record = {
+    animal_tag: animal.tag,
+    measure_date: date,
+    weight,
+    bcs,
+    hair_shed_score: hair,
+    hip_height: hip,
+    claw_set_score: claw,
+    foot_angle_score: angle,
+    disposition_score: measSelectedDisposition,
+    notes,
+  };
+
+  if(animal.sex === 'Bull') {
+    record.scrotal_circ = parseFloat(document.getElementById('me-scrotal')?.value) || null;
+  }
+  if(animal.sex === 'Heifer') {
+    record.pelvic_height = parseFloat(document.getElementById('me-pelvis-h')?.value) || null;
+    record.pelvic_width = parseFloat(document.getElementById('me-pelvis-w')?.value) || null;
+    record.pelvic_area = parseFloat(document.getElementById('me-pelvis-area')?.value) || null;
+  }
+
+  const { error } = await dbInsert('measurements', record);
+  if(error) { alert('Error saving: ' + error.message); return; }
+
+  measRecordedTags.add(animal.tag);
+  closeMeasModal();
+  renderMeasurementList();
+
+  // Auto-advance to next unrecorded animal
+  const nextIndex = measAnimals.findIndex((a, i) => i > measCurrentIndex && !measRecordedTags.has(a.tag));
+  if(nextIndex !== -1) {
+    setTimeout(() => openMeasModal(nextIndex), 300);
+  } else {
+    const anySkipped = measAnimals.findIndex(a => !measRecordedTags.has(a.tag));
+    if(anySkipped !== -1) setTimeout(() => openMeasModal(anySkipped), 300);
+  }
 }
 
 // ── INIT ───────────────────────────────────────────────────────────────────
