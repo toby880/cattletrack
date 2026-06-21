@@ -309,7 +309,6 @@ tr:hover td{background:var(--bg)}
     <button class="nav-btn" onclick="showPage('insights')">⚡ Insights</button>
     <button class="nav-btn" onclick="showPage('animals')">Animals</button>
     <button class="nav-btn" onclick="showPage('calving')">Calving</button>
-    <button class="nav-btn" onclick="showPage('weights')">Weights</button>
     <button class="nav-btn" onclick="showPage('measurements')">Measurements</button>
     <button class="nav-btn" onclick="showPage('health')">Health</button>
     <button class="nav-btn" onclick="showPage('breeding')">Breeding</button>
@@ -934,9 +933,19 @@ tr:hover td{background:var(--bg)}
             <label>Session Date</label>
             <input type="date" id="meas-session-date">
           </div>
-          <div class="form-group" style="display:flex;align-items:flex-end">
-            <button class="btn btn-primary" onclick="loadMeasurementGroup()">Load Animals</button>
+          <div class="form-group">
+            <label>Weight Type (if weighing)</label>
+            <select id="meas-weight-type">
+              <option value="">No weight this session</option>
+              <option value="weaning">Weaning Weight</option>
+              <option value="yearling">Yearling Weight</option>
+              <option value="mature">Mature Weight</option>
+              <option value="custom">Check Weight</option>
+            </select>
           </div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:flex-end;margin-top:4px">
+          <button class="btn btn-primary" onclick="loadMeasurementGroup()">Load Animals</button>
         </div>
       </div>
 
@@ -1427,7 +1436,10 @@ tr:hover td{background:var(--bg)}
 
     <!-- All Animals -->
     <div class="form-row">
-      <div class="form-group"><label>Weight (lbs)</label><input type="number" id="me-weight" placeholder="—" inputmode="decimal"></div>
+      <div class="form-group">
+        <label>Weight (lbs) <span id="me-weight-type-label" style="font-weight:400;color:var(--orange);text-transform:none;letter-spacing:0"></span></label>
+        <input type="number" id="me-weight" placeholder="—" inputmode="decimal">
+      </div>
       <div class="form-group"><label>BCS (1-9)</label><input type="number" id="me-bcs" placeholder="—" min="1" max="9" step="0.5" inputmode="decimal"></div>
     </div>
     <div class="form-row">
@@ -7730,6 +7742,12 @@ function openMeasModal(index) {
   document.getElementById('me-bull-fields').style.display = animal.sex === 'Bull' ? 'block' : 'none';
   document.getElementById('me-heifer-fields').style.display = animal.sex === 'Heifer' ? 'block' : 'none';
 
+  // Show weight type label in modal
+  const wtType = document.getElementById('meas-weight-type')?.value;
+  const wtLabels = { weaning:'Weaning', yearling:'Yearling', mature:'Mature', custom:'Check' };
+  const wtLabel = document.getElementById('me-weight-type-label');
+  if(wtLabel) wtLabel.textContent = wtType && wtLabels[wtType] ? '· ' + wtLabels[wtType] : '· no type set';
+
   document.getElementById('meas-entry-modal').classList.add('open');
 }
 
@@ -7795,6 +7813,18 @@ async function saveMeasurementBatch() {
 
   const { error } = await dbInsert('measurements', record);
   if(error) { alert('Error saving: ' + error.message); return; }
+
+  // Also write to weights table if a weight was recorded and weight type selected
+  const weightType = document.getElementById('meas-weight-type')?.value;
+  if(weight && weightType) {
+    await dbInsert('weights', {
+      animal_tag: animal.tag,
+      weight_date: date,
+      weight_lbs: weight,
+      weight_type: weightType,
+      notes: `Recorded during measurement session`,
+    });
+  }
 
   measRecordedTags.add(animal.tag);
   closeMeasModal();
