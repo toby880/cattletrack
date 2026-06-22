@@ -2906,12 +2906,12 @@ async function showProfileTab(tab) {
       Docility:['doc'],
       Other:['sc','claw','angle','pap','hs','en'],
       '$Values':['dollar_m','dollar_w','dollar_f','dollar_g','dollar_b','dollar_c'],
-    } : {Growth:['bw','ww','yw','adg','dmi'],Maternal:['milk','mw','stay','hpg'],Carcass:['rea','fat','marbling'],Calving:['ced','cem'],Indexes:['hb','gm','pro'],Other:['me']};
+    } : {Indexes:['pro','hb','gm'],Growth:['bw','ww','yw','adg','dmi'],Maternal:['milk','mw','hpg','cem','stay','me'],Carcass:['marbling','yg','rea','fat'],Other:['sc','yg']};
     const labels = {
       bw:'BW',ww:'WW',yw:'YW',adg:'ADG',dmi:'DMI',milk:'Milk',
       hpg:'HPG',cem:'CEM',mw:'MW',mh:'MH',stay:'Stay',fat:'FAT',
       rea:'REA',marbling:'Marbling',ced:'CED',me:'ME',
-      hb:'HerdBuilder',gm:'GridMaster',pro:'PROs',
+      hb:'HB',gm:'GM',pro:'ProS',yg:'YG',cw:'CW',
       // AAA specific
       yh:'YH',sc:'SC',doc:'Docility',claw:'Claw',angle:'Angle',
       pap:'PAP',hs:'Hair Shed',teat_epd:'Teat',uddr:'Udder',
@@ -5881,7 +5881,7 @@ function parseSENLine(line) {
   // Find block using BW/WW/YW ranges: BW -10 to +10, WW 30-110, YW 60-170
   const allNums=[];const numRe=/-?\d+\.\d+/g;let nm;
   while((nm=numRe.exec(line))!==null)allNums.push({pos:nm.index,val:parseFloat(nm[0])});
-  const epdNames=['bw','ww','yw','adg','dmi','milk','hpg','cem','mw','stay','fat','rea','marbling','ced','me',null];
+  const epdNames=['bw','ww','yw','adg','dmi','milk','mw','cem','hpg','stay','fat','rea','marbling','sc','me','yg'];
   let epdStart=-1;
   for(let i=0;i<allNums.length-15;i++){
     const bw=allNums[i].val,ww=allNums[i+1].val,yw=allNums[i+2].val;
