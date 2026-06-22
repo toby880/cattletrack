@@ -2919,7 +2919,20 @@ async function showProfileTab(tab) {
     ].sort((a,b)=>(b.dob||'').localeCompare(a.dob||''));
 
     content.innerHTML = allOffspring.length
-      ? '<div class="card">'+allOffspring.map(c=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)" onclick="openAnimalProfile('${c.tag}')" style="cursor:pointer"><div><strong>${c.tag}</strong>${c.name?' — '+c.name:''}<div style="font-size:12px;color:var(--gray)">${c.sex||'—'} · Born: ${c.dob||'—'}${c.weight?' · '+c.weight+' lb':''}</div></div>${c.ease?`<span class="badge ${c.ease>='3'?'badge-red':'badge-green'}" style="font-size:10px">Ease ${c.ease}</span>`:''}</div>`).join('')+'</div>'
+      ? '<div class="card">'+allOffspring.map(c=>`
+        <div onclick="openAnimalProfile('${c.tag}')" style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer">
+          <div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <strong style="color:var(--orange);text-decoration:underline;font-size:15px">${c.tag}</strong>
+              ${c.name?`<span style="font-size:13px;color:var(--dark)">— ${c.name}</span>`:''}
+            </div>
+            <div style="font-size:12px;color:var(--gray);margin-top:2px">${c.sex||'—'} · Born: ${c.dob||'—'}${c.weight?' · '+c.weight+' lb':''}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            ${c.ease?`<span class="badge ${c.ease>='3'?'badge-red':'badge-green'}" style="font-size:10px">Ease ${c.ease}</span>`:''}
+            <span style="color:var(--gray-lt);font-size:16px">›</span>
+          </div>
+        </div>`).join('')+'</div>'
       : '<div class="empty"><div class="empty-icon">🐄</div><p>No offspring on record.</p></div>';
   }
 
