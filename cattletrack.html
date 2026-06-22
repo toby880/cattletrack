@@ -6490,7 +6490,7 @@ async function runAssociationImport() {
 
     for(const calf of dam.calves) {
       const calfAnimal = byReg[calf.reg] || byTag[calf.tag] || byTag[calf.prefix+calf.tag];
-      const damTagResolved = damAnimal?.tag || dam.prefix+dam.tag || dam.tag;
+      const damTagResolved = damAnimal?.tag || dam.tag;
       const sireStr = calf.sire ? calf.sire.split('/').pop()?.trim() : null;
 
       if(calfAnimal) {
@@ -6503,7 +6503,7 @@ async function runAssociationImport() {
         }
       } else {
         const {error} = await dbInsert('animals', {
-          tag: (calf.prefix+calf.tag).trim() || calf.tag,
+          tag: calf.tag.trim(),
           reg_number: calf.reg || null,
           sex: calf.sex === 'COW' ? 'Cow' : calf.sex === 'HEIFER' ? 'Heifer' : calf.sex === 'BULL' ? 'Bull' : 'Steer',
           dob: calf.dob || null,
@@ -6512,11 +6512,11 @@ async function runAssociationImport() {
           status: 'active',
           breed: 'Red Angus',
         });
-        if(!error) { added++; byTag[(calf.prefix+calf.tag).trim()] = {tag:(calf.prefix+calf.tag).trim(), reg_number:calf.reg}; }
+        if(!error) { added++; byTag[calf.tag.trim()] = {tag:calf.tag.trim(), reg_number:calf.reg}; }
         else errors++;
       }
 
-      const calfTag = calfAnimal?.tag || (calf.prefix+calf.tag).trim();
+      const calfTag = calfAnimal?.tag || calf.tag.trim();
       if(calf.birthWt) { await dbInsert('weights', {animal_tag:calfTag, weight_date:null, weight_lbs:calf.birthWt, weight_type:'birth', notes:'Association import'}); weightAdded++; }
       if(calf.weanWt) { await dbInsert('weights', {animal_tag:calfTag, weight_date:null, weight_lbs:calf.weanWt, weight_type:'weaning', notes:'Association adjusted weaning weight'}); weightAdded++; }
       if(calf.yearWt) { await dbInsert('weights', {animal_tag:calfTag, weight_date:null, weight_lbs:calf.yearWt, weight_type:'yearling', notes:'Association adjusted yearling weight'}); weightAdded++; }
@@ -9699,7 +9699,7 @@ async function runRAAImport(file) {
         } else {
           // Add new animal record for this calf
           const {error} = await dbInsert('animals', {
-            tag: calf.prefix ? calf.prefix+calf.tag : calf.tag,
+            tag: calf.tag.trim(),
             reg_number: calf.reg || null,
             sex: calf.sex === 'COW' ? 'Cow' : calf.sex === 'HEIFER' ? 'Heifer' : calf.sex === 'BULL' ? 'Bull' : 'Steer',
             dob: calf.dob || null,
@@ -9710,12 +9710,12 @@ async function runRAAImport(file) {
           });
           if(!error) {
             added++;
-            byTag[calf.prefix+calf.tag] = {tag: calf.prefix+calf.tag, reg_number: calf.reg};
+            byTag[calf.tag.trim()] = {tag: calf.tag.trim(), reg_number: calf.reg};
           } else errors++;
         }
 
         // Add weight records if present
-        const calfTag = calfAnimal?.tag || (calf.prefix+calf.tag);
+        const calfTag = calfAnimal?.tag || calf.tag.trim();
         if(calf.birthWt) {
           await dbInsert('weights', { animal_tag: calfTag, weight_date: calf.dob||null, weight_lbs: calf.birthWt, weight_type: 'birth', notes: 'RAAA import' });
           weightAdded++;
