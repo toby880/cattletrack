@@ -355,6 +355,7 @@ tr:hover td{background:var(--bg)}
         <div class="section-title">Animals</div>
         <div style="display:flex;gap:8px">
           <button class="btn btn-secondary btn-sm" onclick="openHerdImport()">📥 Import</button>
+          <button class="btn btn-secondary btn-sm" onclick="openSmartGroups()">⚡ Smart Groups</button>
           <button class="btn btn-secondary btn-sm" onclick="openGroupAction()">Group Action</button>
           <button class="btn btn-primary btn-sm" onclick="openAddAnimal()">+ Add</button>
         </div>
@@ -1222,6 +1223,45 @@ tr:hover td{background:var(--bg)}
     <div style="display:flex;gap:10px;margin-top:4px">
       <button class="btn btn-secondary" onclick="closeAddAnimal()" style="flex:1">Cancel</button>
       <button class="btn btn-primary" onclick="saveNewAnimal()" style="flex:2">Add Animal</button>
+    </div>
+  </div>
+</div>
+
+<!-- SMART GROUPS MODAL -->
+<div class="modal-overlay" id="smart-groups-modal">
+  <div class="modal" style="max-height:92vh;overflow-y:auto">
+    <div class="modal-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="modal-title" style="margin-bottom:0">⚡ Smart Groups</div>
+      <button onclick="closeSmartGroups()" style="background:var(--bg2);border:none;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer;font-family:inherit">✕</button>
+    </div>
+
+    <!-- Saved Groups List -->
+    <div id="sg-saved-list" style="margin-bottom:16px"></div>
+
+    <!-- Build New Group -->
+    <div class="card">
+      <div class="card-title" id="sg-form-title">New Smart Group</div>
+      <div class="form-group">
+        <label>Group Name</label>
+        <input type="text" id="sg-name" placeholder="e.g. Yearling Bulls, AI Cows, Fall Calves...">
+      </div>
+      <div class="form-group">
+        <label>Description (optional)</label>
+        <input type="text" id="sg-desc" placeholder="Brief description">
+      </div>
+
+      <div style="font-size:12px;font-weight:600;color:var(--gray);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px;margin-top:4px">Filter Rules</div>
+      <div id="sg-rules-list" style="margin-bottom:10px"></div>
+      <button class="btn btn-secondary btn-sm" onclick="addSmartGroupRule()" style="width:100%;margin-bottom:12px">+ Add Rule</button>
+
+      <!-- Preview -->
+      <div id="sg-preview" style="display:none;background:var(--bg2);border-radius:8px;padding:10px;margin-bottom:12px;font-size:13px"></div>
+
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary" onclick="previewSmartGroup()" style="flex:1">Preview</button>
+        <button class="btn btn-primary" onclick="saveSmartGroup()" style="flex:2">Save Group</button>
+      </div>
     </div>
   </div>
 </div>
@@ -2768,6 +2808,11 @@ function renderAnimals(data) {
     </div>`).join('');
 }
 
+function openProfileByTag(tag) {
+  const a = (cache.get('animals')||[]).find(a => a.tag === tag);
+  if(a) openProfile(a.id);
+}
+
 async function openProfile(animalId) {
   const animals = cache.get('animals') || [];
   const animal = animals.find(a=>a.id===animalId);
@@ -2920,7 +2965,7 @@ async function showProfileTab(tab) {
 
     content.innerHTML = allOffspring.length
       ? '<div class="card">'+allOffspring.map(c=>`
-        <div onclick="const _a=(cache.get('animals')||[]).find(a=>a.tag==='${c.tag}');if(_a)openProfile(_a.id)" style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer">
+        <div onclick="openProfileByTag('${c.tag}')" style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer">
           <div>
             <div style="display:flex;align-items:center;gap:8px">
               <strong style="color:var(--orange);text-decoration:underline;font-size:15px">${c.tag}</strong>
@@ -9757,6 +9802,302 @@ async function runRAAImport(file) {
     statusEl.innerHTML = '❌ Error: ' + e.message;
     console.error(e);
   }
+}
+
+
+// ── SMART GROUPS ──────────────────────────────────────────────────────────
+const SG_RULES = [
+  { id: 'sex', label: 'Sex / Class', type: 'select', options: ['Cow','Heifer','Bull','Steer'] },
+  { id: 'location', label: 'Pasture', type: 'pasture' },
+  { id: 'category', label: 'Category', type: 'text' },
+  { id: 'breed', label: 'Breed', type: 'text' },
+  { id: 'status', label: 'Status', type: 'select', options: ['active','sold','dead'] },
+  { id: 'age_min', label: 'Age at least (months)', type: 'number' },
+  { id: 'age_max', label: 'Age at most (months)', type: 'number' },
+  { id: 'dob_after', label: 'Born after', type: 'date' },
+  { id: 'dob_before', label: 'Born before', type: 'date' },
+  { id: 'conception_method', label: 'Conception Method', type: 'select', options: ['AI','ET','Natural'] },
+  { id: 'is_twin', label: 'Is Twin', type: 'bool' },
+  { id: 'calfhood_vaccinated', label: 'Calfhood Vaccinated', type: 'bool' },
+  { id: 'genomic_tested', label: 'Genomic Tested', type: 'bool' },
+  { id: 'not_weighed_days', label: 'Not weighed in (days)', type: 'number' },
+  { id: 'bcs_below', label: 'BCS below', type: 'number' },
+  { id: 'disposition_above', label: 'Disposition score above', type: 'number' },
+  { id: 'has_ai', label: 'Has AI record', type: 'bool' },
+  { id: 'preg_status', label: 'Preg check result', type: 'select', options: ['Pregnant','Open','Not checked'] },
+  { id: 'withdrawal_active', label: 'Currently in withdrawal', type: 'bool' },
+];
+
+let sgEditingId = null;
+
+async function openSmartGroups() {
+  document.getElementById('smart-groups-modal').classList.add('open');
+  sgEditingId = null;
+  document.getElementById('sg-form-title').textContent = 'New Smart Group';
+  document.getElementById('sg-name').value = '';
+  document.getElementById('sg-desc').value = '';
+  document.getElementById('sg-rules-list').innerHTML = '';
+  document.getElementById('sg-preview').style.display = 'none';
+  await loadSavedGroups();
+}
+
+function closeSmartGroups() {
+  document.getElementById('smart-groups-modal').classList.remove('open');
+}
+
+async function loadSavedGroups() {
+  const {data: groups} = await sb.from('saved_groups').select('*').eq('ranch_id', currentRanch.id).order('created_at', {ascending:false});
+  const el = document.getElementById('sg-saved-list');
+  if(!groups?.length) { el.innerHTML = '<div style="font-size:13px;color:var(--gray);margin-bottom:8px">No saved groups yet.</div>'; return; }
+
+  el.innerHTML = '<div style="font-size:12px;font-weight:600;color:var(--gray);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px">Saved Groups</div>' +
+    groups.map(g => `
+      <div style="background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px">
+        <div style="flex:1">
+          <div style="font-weight:600;font-size:14px">${g.name}</div>
+          ${g.description?`<div style="font-size:12px;color:var(--gray)">${g.description}</div>`:''}
+          <div style="font-size:11px;color:var(--gray-lt);margin-top:2px">${(g.rules||[]).length} rules</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button onclick="loadSmartGroup('${g.id}')" class="btn btn-primary btn-sm">Load</button>
+          <button onclick="editSmartGroup('${g.id}',${JSON.stringify(g).replace(/"/g,'&quot;')})" class="btn btn-secondary btn-sm">Edit</button>
+          <button onclick="deleteSmartGroup('${g.id}')" style="background:var(--red);color:white;border:none;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;font-family:inherit">✕</button>
+        </div>
+      </div>`).join('');
+}
+
+function addSmartGroupRule(ruleId='', value='') {
+  const pastures = (cache.get('pastures')||[]);
+  const div = document.createElement('div');
+  div.className = 'sg-rule';
+  div.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px';
+
+  const ruleSelect = `<select class="sg-rule-type" onchange="updateRuleInput(this)" style="flex:2;font-size:13px;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:inherit">
+    <option value="">— Select filter —</option>
+    ${SG_RULES.map(r=>`<option value="${r.id}" ${r.id===ruleId?'selected':''}>${r.label}</option>`).join('')}
+  </select>`;
+
+  div.innerHTML = ruleSelect +
+    `<div class="sg-rule-input-wrap" style="flex:2"></div>` +
+    `<button onclick="this.parentElement.remove()" style="background:var(--red);color:white;border:none;border-radius:6px;padding:8px 10px;cursor:pointer;font-size:13px">✕</button>`;
+
+  document.getElementById('sg-rules-list').appendChild(div);
+
+  if(ruleId) {
+    updateRuleInput(div.querySelector('.sg-rule-type'), value);
+  }
+}
+
+function updateRuleInput(sel, prefillValue='') {
+  const rule = SG_RULES.find(r=>r.id===sel.value);
+  const wrap = sel.parentElement.querySelector('.sg-rule-input-wrap');
+  if(!rule) { wrap.innerHTML=''; return; }
+
+  const pastures = (cache.get('pastures')||[]);
+  let input = '';
+  if(rule.type==='select') {
+    input = `<select class="sg-rule-value" style="width:100%;font-size:13px;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:inherit">
+      ${rule.options.map(o=>`<option value="${o}" ${o===prefillValue?'selected':''}>${o}</option>`).join('')}
+    </select>`;
+  } else if(rule.type==='pasture') {
+    input = `<select class="sg-rule-value" style="width:100%;font-size:13px;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:inherit">
+      <option value="">Any pasture</option>
+      ${pastures.map(p=>`<option value="${p.name}" ${p.name===prefillValue?'selected':''}>${p.name}</option>`).join('')}
+    </select>`;
+  } else if(rule.type==='bool') {
+    input = `<select class="sg-rule-value" style="width:100%;font-size:13px;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:inherit">
+      <option value="true" ${'true'===prefillValue?'selected':''}>Yes</option>
+      <option value="false" ${'false'===prefillValue?'selected':''}>No</option>
+    </select>`;
+  } else if(rule.type==='date') {
+    input = `<input type="date" class="sg-rule-value" value="${prefillValue}" style="width:100%;font-size:13px;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:inherit">`;
+  } else {
+    input = `<input type="${rule.type==='number'?'number':'text'}" class="sg-rule-value" value="${prefillValue}" placeholder="Value..." style="width:100%;font-size:13px;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:inherit">`;
+  }
+  wrap.innerHTML = input;
+}
+
+function getRules() {
+  const rules = [];
+  document.querySelectorAll('.sg-rule').forEach(row => {
+    const type = row.querySelector('.sg-rule-type')?.value;
+    const value = row.querySelector('.sg-rule-value')?.value;
+    if(type && value !== undefined && value !== '') rules.push({field: type, value});
+  });
+  return rules;
+}
+
+async function applySmartGroupRules(rules) {
+  let animals = (cache.get('animals')||[]);
+  const today = new Date();
+
+  for(const rule of rules) {
+    const {field, value} = rule;
+    animals = animals.filter(a => {
+      switch(field) {
+        case 'sex': return a.sex === value;
+        case 'location': return a.location === value;
+        case 'category': return (a.category||'').toLowerCase().includes(value.toLowerCase());
+        case 'breed': return (a.breed||'').toLowerCase().includes(value.toLowerCase());
+        case 'status': return a.status === value;
+        case 'conception_method': return a.conception_method === value;
+        case 'is_twin': return String(a.is_twin) === value;
+        case 'calfhood_vaccinated': return String(a.calfhood_vaccinated) === value;
+        case 'genomic_tested': return String(a.genomic_tested) === value;
+        case 'age_min': {
+          if(!a.dob) return false;
+          const months = (today - new Date(a.dob)) / (1000*60*60*24*30);
+          return months >= parseFloat(value);
+        }
+        case 'age_max': {
+          if(!a.dob) return false;
+          const months = (today - new Date(a.dob)) / (1000*60*60*24*30);
+          return months <= parseFloat(value);
+        }
+        case 'dob_after': return a.dob && a.dob >= value;
+        case 'dob_before': return a.dob && a.dob <= value;
+        default: return true;
+      }
+    });
+  }
+
+  // Rules requiring DB queries
+  for(const rule of rules) {
+    const {field, value} = rule;
+    if(field === 'not_weighed_days') {
+      const days = parseInt(value);
+      const cutoff = new Date(today - days*86400000).toISOString().split('T')[0];
+      const {data: recent} = await sb.from('weights').select('animal_tag').eq('ranch_id', currentRanch.id).gte('weight_date', cutoff);
+      const recentTags = new Set((recent||[]).map(w=>w.animal_tag));
+      animals = animals.filter(a => !recentTags.has(a.tag));
+    }
+    if(field === 'has_ai') {
+      const {data: ai} = await sb.from('ai_records').select('cow_tag').eq('ranch_id', currentRanch.id);
+      const aiTags = new Set((ai||[]).map(r=>r.cow_tag));
+      animals = animals.filter(a => value==='true' ? aiTags.has(a.tag) : !aiTags.has(a.tag));
+    }
+    if(field === 'preg_status') {
+      const {data: pc} = await sb.from('preg_checks').select('animal_tag,result').eq('ranch_id', currentRanch.id).order('check_date',{ascending:false});
+      const latestPreg = {};
+      (pc||[]).forEach(r => { if(!latestPreg[r.animal_tag]) latestPreg[r.animal_tag]=r.result; });
+      animals = animals.filter(a => {
+        if(value==='Not checked') return !latestPreg[a.tag];
+        return latestPreg[a.tag] === value;
+      });
+    }
+    if(field === 'bcs_below') {
+      const {data: meas} = await sb.from('measurements').select('animal_tag,bcs').eq('ranch_id', currentRanch.id).order('measure_date',{ascending:false});
+      const latestBCS = {};
+      (meas||[]).forEach(r => { if(!latestBCS[r.animal_tag] && r.bcs) latestBCS[r.animal_tag]=r.bcs; });
+      animals = animals.filter(a => latestBCS[a.tag] && latestBCS[a.tag] < parseFloat(value));
+    }
+    if(field === 'withdrawal_active') {
+      const {data: he} = await sb.from('health_events').select('animal_tag,event_date,withdrawal_days').eq('ranch_id', currentRanch.id);
+      const inWD = new Set();
+      (he||[]).forEach(r => {
+        if(!r.withdrawal_days) return;
+        const clear = new Date(r.event_date);
+        clear.setDate(clear.getDate() + r.withdrawal_days);
+        if(clear >= today) inWD.add(r.animal_tag);
+      });
+      animals = animals.filter(a => value==='true' ? inWD.has(a.tag) : !inWD.has(a.tag));
+    }
+  }
+  return animals;
+}
+
+async function previewSmartGroup() {
+  const rules = getRules();
+  if(!rules.length) { alert('Add at least one rule first.'); return; }
+  const el = document.getElementById('sg-preview');
+  el.style.display = 'block';
+  el.innerHTML = '<div class="loading"><div class="spinner"></div>Previewing...</div>';
+  const matched = await applySmartGroupRules(rules);
+  el.innerHTML = `<strong>${matched.length} animals match</strong> these rules${matched.length?':<br><span style="color:var(--gray);font-size:12px">'+matched.slice(0,10).map(a=>a.tag+(a.name?' '+a.name:'')).join(', ')+(matched.length>10?'...':'')+'</span>':''}`;
+}
+
+async function saveSmartGroup() {
+  const name = document.getElementById('sg-name').value.trim();
+  if(!name) { alert('Give this group a name.'); return; }
+  const rules = getRules();
+  if(!rules.length) { alert('Add at least one rule.'); return; }
+
+  const record = {
+    ranch_id: currentRanch.id,
+    name,
+    description: document.getElementById('sg-desc').value.trim() || null,
+    rules,
+  };
+
+  if(sgEditingId) {
+    await sb.from('saved_groups').update(record).eq('id', sgEditingId);
+  } else {
+    await sb.from('saved_groups').insert(record);
+  }
+
+  sgEditingId = null;
+  document.getElementById('sg-name').value = '';
+  document.getElementById('sg-desc').value = '';
+  document.getElementById('sg-rules-list').innerHTML = '';
+  document.getElementById('sg-preview').style.display = 'none';
+  document.getElementById('sg-form-title').textContent = 'New Smart Group';
+  await loadSavedGroups();
+}
+
+async function loadSmartGroup(id) {
+  const {data: groups} = await sb.from('saved_groups').select('*').eq('id', id).single();
+  if(!groups) return;
+  const matched = await applySmartGroupRules(groups.rules||[]);
+  closeSmartGroups();
+  // Apply to animals page filter
+  window._smartGroupAnimals = matched;
+  window._smartGroupName = groups.name;
+  renderAnimalsFromSmartGroup();
+}
+
+function renderAnimalsFromSmartGroup() {
+  const animals = window._smartGroupAnimals || [];
+  const name = window._smartGroupName || 'Smart Group';
+  const el = document.getElementById('animal-cards');
+  const sexIcon = { Bull:'♂', Heifer:'♀', Cow:'♀', Steer:'⚲' };
+  const sexBadge = { Bull:'badge-blue', Heifer:'badge-orange', Cow:'badge-green', Steer:'badge-gray' };
+
+  let html = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+    <div style="font-size:13px;font-weight:600;color:var(--orange)">⚡ ${name} — ${animals.length} animals</div>
+    <button onclick="window._smartGroupAnimals=null;renderAnimals()" style="font-size:12px;color:var(--gray);background:none;border:none;cursor:pointer;font-family:inherit">✕ Clear</button>
+  </div>`;
+
+  html += animals.map(a => `
+    <div onclick="openProfile('${a.id}')" style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:36px;height:36px;border-radius:50%;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${sexIcon[a.sex]||'🐄'}</div>
+        <div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <strong style="font-size:15px">${currentRanch.herd_prefix&&!a.tag.startsWith(currentRanch.herd_prefix)?currentRanch.herd_prefix+' '+a.tag:a.tag}</strong>
+            <span class="badge ${sexBadge[a.sex]||'badge-gray'}" style="font-size:10px">${a.sex||'—'}</span>
+          </div>
+          <div style="font-size:12px;color:var(--gray)">${a.sex?`${sexIcon[a.sex]||''} ${a.sex} · `:''}Born: ${a.dob||'—'}${a.location?' · 📍'+a.location:''}</div>
+        </div>
+      </div>
+      <span style="color:var(--gray-lt);font-size:18px">›</span>
+    </div>`).join('') || '<div class="empty"><div class="empty-icon">🐄</div><p>No animals match these rules.</p></div>';
+
+  el.innerHTML = html;
+}
+
+async function editSmartGroup(id, group) {
+  sgEditingId = id;
+  document.getElementById('sg-form-title').textContent = 'Edit: ' + group.name;
+  document.getElementById('sg-name').value = group.name;
+  document.getElementById('sg-desc').value = group.description || '';
+  document.getElementById('sg-rules-list').innerHTML = '';
+  (group.rules||[]).forEach(r => addSmartGroupRule(r.field, r.value));
+}
+
+async function deleteSmartGroup(id) {
+  if(!confirm('Delete this smart group?')) return;
+  await sb.from('saved_groups').delete().eq('id', id);
+  await loadSavedGroups();
 }
 
 // ── INIT ───────────────────────────────────────────────────────────────────
