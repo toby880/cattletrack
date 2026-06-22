@@ -2764,6 +2764,8 @@ async function loadAnimals() {
 }
 
 function renderAnimals(data) {
+  // If a smart group is active, use that instead
+  if(window._smartGroupAnimals && !data) { renderAnimalsFromSmartGroup(); return; }
   const animals = data || cache.get('animals') || [];
   const q = document.getElementById('animal-search')?.value?.toLowerCase() || '';
   const f = document.getElementById('animal-filter')?.value || '';
