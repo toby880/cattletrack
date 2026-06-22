@@ -310,7 +310,6 @@ tr:hover td{background:var(--bg)}
     <button class="nav-btn" onclick="showPage('animals')">Animals</button>
     <button class="nav-btn" onclick="showPage('calving')">Calving</button>
     <button class="nav-btn" onclick="showPage('measurements')">Chute Work</button>
-    <button class="nav-btn" onclick="showPage('health')">Health</button>
     <button class="nav-btn" onclick="showPage('breeding')">Breeding</button>
     <button class="nav-btn" onclick="showPage('pastures')">Pastures</button>
     <button class="nav-btn" onclick="showPage('sales')">Sales</button>
@@ -512,154 +511,6 @@ tr:hover td{background:var(--bg)}
     </div>
 
     <!-- HEALTH -->
-    <div class="page" id="page-health">
-      <div class="tab-bar">
-        <button class="tab active" onclick="showHealthTab('log')">Log Event</button>
-        <button class="tab" onclick="showHealthTab('group')">Group Treatment</button>
-        <button class="tab" onclick="showHealthTab('history')">History</button>
-        <button class="tab" onclick="showHealthTab('withdrawal')">Withdrawal</button>
-      </div>
-      <div id="health-log">
-        <div class="card">
-          <div class="card-title">Health / Treatment Event</div>
-          <div class="form-group"><label>Animal Tag</label>
-            <select id="h-animal" style="width:100%"><option value="">— Select Animal —</option></select>
-          </div>
-          <div class="form-row">
-            <div class="form-group"><label>Date</label><input type="date" id="h-date"></div>
-            <div class="form-group"><label>Event Type</label>
-              <select id="h-type">
-                <option value="vaccination">Vaccination</option>
-                <option value="treatment">Treatment / Antibiotic</option>
-                <option value="pour-on">Pour-On / Dewormer</option>
-                <option value="preg-check">Preg Check</option>
-                <option value="vet-visit">Vet Visit</option>
-                <option value="injury">Injury / Illness</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>Product / Vaccine</label>
-            <div style="display:flex;gap:8px">
-              <select id="h-product-select" onchange="autofillDrug()" style="flex:1;font-size:14px">
-                <option value="">— Select from drug list —</option>
-                <optgroup label="Antibiotics">
-                  <option value="Draxxin|28|IM">Draxxin (tulathromycin) — 28d</option>
-                  <option value="Excenel|4|SQ">Excenel (ceftiofur) — 4d</option>
-                  <option value="Nuflor|36|SQ">Nuflor (florfenicol) — 36d</option>
-                  <option value="Nuflor Gold|36|SQ">Nuflor Gold — 36d</option>
-                  <option value="LA-200|28|SQ">LA-200 (oxytetracycline) — 28d</option>
-                  <option value="Biomycin 200|28|SQ">Biomycin 200 — 28d</option>
-                  <option value="Tetradure 300|28|SQ">Tetradure 300 — 28d</option>
-                  <option value="Baytril 100|28|SQ">Baytril 100 (enrofloxacin) — 28d</option>
-                  <option value="Micotil|42|SQ">Micotil (tilmicosin) — 42d</option>
-                  <option value="Zuprevo|21|SQ">Zuprevo (tildipirosin) — 21d</option>
-                  <option value="Zactran|21|SQ">Zactran (gamithromycin) — 21d</option>
-                  <option value="Naxcel|4|SQ">Naxcel (ceftiofur) — 4d</option>
-                  <option value="Penicillin G|10|IM">Penicillin G — 10d</option>
-                </optgroup>
-                <optgroup label="Antiparasitic / Dewormers">
-                  <option value="Ivermectin Pour-On|48|topical">Ivermectin Pour-On — 48d</option>
-                  <option value="Ivermectin Injectable|35|SQ">Ivermectin Injectable — 35d</option>
-                  <option value="Dectomax Pour-On|45|topical">Dectomax Pour-On — 45d</option>
-                  <option value="Dectomax Injectable|35|SQ">Dectomax Injectable — 35d</option>
-                  <option value="Cydectin Pour-On|0|topical">Cydectin Pour-On — 0d</option>
-                  <option value="Cydectin Injectable|17|SQ">Cydectin Injectable — 17d</option>
-                  <option value="Safe-Guard|8|oral">Safe-Guard (fenbendazole) — 8d</option>
-                  <option value="Valbazen|27|oral">Valbazen (albendazole) — 27d</option>
-                  <option value="Prohibit|7|oral">Prohibit (levamisole) — 7d</option>
-                </optgroup>
-                <optgroup label="Anti-inflammatories">
-                  <option value="Banamine|4|IV">Banamine (flunixin) — 4d</option>
-                  <option value="Metacam|21|SQ">Metacam (meloxicam) — 21d</option>
-                  <option value="Dexamethasone|0|IM">Dexamethasone — 0d</option>
-                </optgroup>
-                <optgroup label="Vaccines">
-                  <option value="Bovishield Gold 5|0|SQ">Bovishield Gold 5 — 0d</option>
-                  <option value="Bovishield Gold FP 5|0|SQ">Bovishield Gold FP 5 — 0d</option>
-                  <option value="Vista Once SQ|0|SQ">Vista Once SQ — 0d</option>
-                  <option value="Pyramid 5|0|SQ">Pyramid 5 — 0d</option>
-                  <option value="Cattlemaster Gold FP5|0|SQ">Cattlemaster Gold FP5 — 0d</option>
-                  <option value="Triangle 5|0|SQ">Triangle 5 — 0d</option>
-                  <option value="Express FP|0|SQ">Express FP — 0d</option>
-                  <option value="Lepto Shield|0|SQ">Lepto Shield — 0d</option>
-                  <option value="Vision 7|0|SQ">Vision 7 (clostridial) — 0d</option>
-                  <option value="Ultra Choice 7|0|SQ">Ultra Choice 7 — 0d</option>
-                  <option value="Covexin 8|0|SQ">Covexin 8 — 0d</option>
-                  <option value="Piliguard Pinkeye|0|SQ">Piliguard Pinkeye — 0d</option>
-                  <option value="Nasalgen|0|intranasal">Nasalgen (IBRV intranasal) — 0d</option>
-                  <option value="ScourGuard 4K|0|SQ">ScourGuard 4K — 0d</option>
-                  <option value="Bar-Vac CD/T|0|SQ">Bar-Vac CD/T — 0d</option>
-                </optgroup>
-                <optgroup label="Reproductive / Hormones">
-                  <option value="CIDR|0|intravaginal">CIDR (progesterone) — 0d</option>
-                  <option value="Estrumate|0|IM">Estrumate (PGF2α) — 0d</option>
-                  <option value="Lutalyse|0|IM">Lutalyse (PGF2α) — 0d</option>
-                  <option value="Factrel|0|IM">Factrel (GnRH) — 0d</option>
-                  <option value="Cystorelin|0|IM">Cystorelin (GnRH) — 0d</option>
-                  <option value="Fertagyl|0|IM">Fertagyl (GnRH) — 0d</option>
-                  <option value="OvaCyst|0|IM">OvaCyst (GnRH) — 0d</option>
-                  <option value="ECP|0|IM">ECP (estradiol cypionate) — 0d</option>
-                  <option value="MGA (in feed)|0|oral">MGA (melengestrol acetate) — 0d</option>
-                </optgroup>
-                <optgroup label="Other">
-                  <option value="Vitamin A&D|0|IM">Vitamin A&D — 0d</option>
-                  <option value="Vitamin B Complex|0|IM">Vitamin B Complex — 0d</option>
-                  <option value="Vitamin E/Selenium|0|IM">Vitamin E / Selenium — 0d</option>
-                  <option value="BoSe|30|IM">BoSe (selenium) — 30d</option>
-                  <option value="MuSe|30|IM">MuSe (selenium) — 30d</option>
-                  <option value="Epinephrine|0|SQ">Epinephrine — 0d</option>
-                  <option value="Dextrose 50%|0|IV">Dextrose 50% — 0d</option>
-                  <option value="Calcium (CMPK)|0|SQ">Calcium / CMPK — 0d</option>
-                  <option value="custom||">+ Enter custom product...</option>
-                </optgroup>
-              </select>
-            </div>
-            <input type="text" id="h-product" placeholder="Or type product name here" style="margin-top:6px">
-          </div>
-          <div class="form-row">
-            <div class="form-group"><label>Dosage</label><input type="text" id="h-dosage" placeholder="e.g. 5ml"></div>
-            <div class="form-group"><label>Route</label>
-              <select id="h-route">
-                <option value="">—</option>
-                <option value="SQ">SQ</option>
-                <option value="IM">IM</option>
-                <option value="IV">IV</option>
-                <option value="oral">Oral</option>
-                <option value="topical">Topical</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group"><label>Cost ($)</label><input type="number" id="h-cost" placeholder="0.00" inputmode="decimal"></div>
-            <div class="form-group"><label>Withdrawal Days</label><input type="number" id="h-withdrawal" placeholder="0" inputmode="numeric"></div>
-          </div>
-          <div class="form-group"><label>Treated By</label><input type="text" id="h-by" placeholder="Name"></div>
-          <div class="form-group"><label>Notes</label><textarea id="h-notes" placeholder="Symptoms, observations..."></textarea></div>
-          <button class="btn btn-primary" onclick="saveHealth()">Save Health Record</button>
-        </div>
-      </div>
-      <div id="health-history" style="display:none">
-        <div class="card">
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Animal</th><th>Date</th><th>Type</th><th>Product</th><th>Cost</th></tr></thead>
-              <tbody id="health-tbody"></tbody>
-            </table>
-          </div>
-          <div class="empty" id="health-empty"><div class="empty-icon">💉</div><p>No health records yet.</p></div>
-        </div>
-      </div>
-      <div id="health-group" style="display:none"></div>
-      <div id="health-withdrawal" style="display:none">
-        <div class="card">
-          <div class="card-title">Animals in Withdrawal</div>
-          <div id="withdrawal-list"><div class="loading"><div class="spinner"></div>Loading...</div></div>
-        </div>
-      </div>
-    </div>
-
     <!-- BREEDING (placeholder — full module loads dynamically) -->
     <div class="page" id="page-breeding">
       <div class="tab-bar">
@@ -907,62 +758,232 @@ tr:hover td{background:var(--bg)}
         <div class="section-title">🐄 Chute Work</div>
       </div>
 
-      <!-- Filter Bar -->
-      <div class="card" style="margin-bottom:12px">
-        <div class="card-title">Load Group</div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Pasture / Location</label>
-            <select id="meas-filter-pasture">
-              <option value="">All Pastures</option>
-            </select>
+      <div class="tab-bar">
+        <button class="tab active" onclick="showChuteTab('session')">Session</button>
+        <button class="tab" onclick="showChuteTab('vaccines')">Vaccines</button>
+        <button class="tab" onclick="showChuteTab('treatment')">Treatment</button>
+        <button class="tab" onclick="showChuteTab('history')">History</button>
+      </div>
+
+      <!-- SESSION TAB -->
+      <div id="chute-session">
+        <!-- EID / Tag Scan -->
+        <div class="card" style="margin-bottom:10px" id="chute-scan-card" style="display:none">
+          <div class="card-title">🔍 Scan or Enter Tag</div>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="chute-scan-input" placeholder="Scan EID wand or type tag #..." style="flex:1;font-size:16px" oninput="chuteTagLookup(this.value)" autocomplete="off" autocorrect="off" autocapitalize="off">
+            <button class="btn btn-secondary btn-sm" onclick="document.getElementById('chute-scan-input').value='';document.getElementById('chute-scan-input').focus()">✕</button>
           </div>
-          <div class="form-group">
-            <label>Sex / Class</label>
-            <select id="meas-filter-sex">
-              <option value="">All</option>
-              <option value="Cow">Cows</option>
-              <option value="Heifer">Heifers</option>
-              <option value="Bull">Bulls</option>
-              <option value="Steer">Steers</option>
-            </select>
+          <div id="chute-scan-result" style="margin-top:8px;font-size:13px;color:var(--gray)"></div>
+        </div>
+
+        <!-- Load Group Card -->
+        <div class="card" style="margin-bottom:12px" id="chute-setup-card">
+          <div class="card-title">Start Session</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Pasture / Location</label>
+              <select id="meas-filter-pasture">
+                <option value="">All Pastures</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Sex / Class</label>
+              <select id="meas-filter-sex">
+                <option value="">All</option>
+                <option value="Cow">Cows</option>
+                <option value="Heifer">Heifers</option>
+                <option value="Bull">Bulls</option>
+                <option value="Steer">Steers</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Session Date</label>
+              <input type="date" id="meas-session-date">
+            </div>
+            <div class="form-group">
+              <label>Weight Type (if weighing)</label>
+              <select id="meas-weight-type">
+                <option value="">No weight this session</option>
+                <option value="weaning">Weaning Weight</option>
+                <option value="yearling">Yearling Weight</option>
+                <option value="mature">Mature Weight</option>
+                <option value="custom">Check Weight</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Herd-wide treatments -->
+          <div style="margin-top:10px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <label style="font-size:12px;font-weight:600;color:var(--gray);text-transform:uppercase;letter-spacing:0.4px">Herd-Wide Treatments <span style="font-size:10px;font-weight:400;color:var(--gray-lt)">(optional — all worked animals receive these)</span></label>
+              <button class="btn btn-secondary btn-sm" onclick="addHerdTreatment()">+ Add</button>
+            </div>
+            <div id="herd-treatments-list"></div>
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:flex-end;margin-top:12px">
+            <button class="btn btn-primary" onclick="loadMeasurementGroup()">Load Animals →</button>
           </div>
         </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Session Date</label>
-            <input type="date" id="meas-session-date">
+
+        <!-- Progress Bar -->
+        <div id="meas-progress-wrap" style="display:none;margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <div style="font-size:13px;font-weight:600" id="meas-progress-label">0 of 0 recorded</div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-secondary btn-sm" onclick="endChuteSession()">End Session</button>
+              <button class="btn btn-secondary btn-sm" onclick="loadMeasurementGroup()">↺ Reload</button>
+            </div>
           </div>
-          <div class="form-group">
-            <label>Weight Type (if weighing)</label>
-            <select id="meas-weight-type">
-              <option value="">No weight this session</option>
-              <option value="weaning">Weaning Weight</option>
-              <option value="yearling">Yearling Weight</option>
-              <option value="mature">Mature Weight</option>
-              <option value="custom">Check Weight</option>
-            </select>
+          <div class="progress-bar">
+            <div class="progress-fill" id="meas-progress-fill" style="width:0%"></div>
+          </div>
+          <div id="chute-session-summary" style="display:flex;gap:12px;margin-top:6px;font-size:12px;color:var(--gray)">
+            <span id="chute-worked-count">0 worked</span>
+            <span id="chute-skipped-count">0 skipped</span>
+            <span id="chute-remaining-count">0 remaining</span>
           </div>
         </div>
-        <div style="display:flex;align-items:center;justify-content:flex-end;margin-top:4px">
-          <button class="btn btn-primary" onclick="loadMeasurementGroup()">Load Animals</button>
+
+        <!-- Animal List -->
+        <div id="meas-animal-list">
+          <div class="empty"><div class="empty-icon">🐄</div><p>Set up your session above and tap Load Animals to begin.</p></div>
         </div>
       </div>
 
-      <!-- Progress Bar -->
-      <div id="meas-progress-wrap" style="display:none;margin-bottom:12px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-          <div style="font-size:13px;font-weight:600" id="meas-progress-label">0 of 0 recorded</div>
-          <button class="btn btn-secondary btn-sm" onclick="loadMeasurementGroup()">↺ Reload</button>
+      <!-- VACCINES TAB -->
+      <div id="chute-vaccines" style="display:none">
+        <div class="card" style="margin-bottom:10px">
+          <div class="card-title">Log Vaccination</div>
+          <div style="font-size:13px;color:var(--gray);margin-bottom:12px">Record a vaccination for an individual animal or use herd-wide treatments in a session for groups.</div>
+          <div class="form-group">
+            <label>Animal Tag</label>
+            <select id="vac-animal" style="width:100%"><option value="">— Select Animal —</option></select>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Date</label><input type="date" id="vac-date"></div>
+            <div class="form-group"><label>Time</label><input type="time" id="vac-time"></div>
+          </div>
+          <div class="form-group">
+            <label>Vaccine / Product</label>
+            <select id="vac-product-inv" onchange="autofillVaccineFromInv()" style="margin-bottom:6px">
+              <option value="">— Select from inventory —</option>
+            </select>
+            <input type="text" id="vac-product" placeholder="Or type product name">
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Lot Number</label><input type="text" id="vac-lot" placeholder="Lot #"></div>
+            <div class="form-group"><label>Expiration Date</label><input type="date" id="vac-expiry"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Dosage</label><input type="text" id="vac-dosage" placeholder="e.g. 2ml"></div>
+            <div class="form-group"><label>Route</label>
+              <select id="vac-route"><option value="SQ">SQ</option><option value="IM">IM</option><option value="intranasal">Intranasal</option><option value="oral">Oral</option></select>
+            </div>
+          </div>
+          <div class="form-group"><label>Given By</label><input type="text" id="vac-by" placeholder="Name"></div>
+          <div class="form-group"><label>Notes</label><input type="text" id="vac-notes" placeholder="Any observations..."></div>
+          <button class="btn btn-primary" onclick="saveVaccination()">Save Vaccination</button>
         </div>
-        <div class="progress-bar">
-          <div class="progress-fill" id="meas-progress-fill" style="width:0%"></div>
+        <div class="card">
+          <div class="card-title">Recent Vaccinations</div>
+          <div id="vac-history-list"><div class="loading"><div class="spinner"></div>Loading...</div></div>
         </div>
       </div>
 
-      <!-- Animal List -->
-      <div id="meas-animal-list">
-        <div class="empty"><div class="empty-icon">📏</div><p>Select a group above and tap Load Animals to begin a scoring session.</p></div>
+      <!-- TREATMENT TAB -->
+      <div id="chute-treatment" style="display:none">
+        <div class="card" style="margin-bottom:10px">
+          <div class="card-title">💉 Sick Animal Treatment</div>
+          <div style="font-size:13px;color:var(--gray);margin-bottom:12px">For doctoring pulled or sick animals. Timestamps and lot numbers recorded automatically.</div>
+          <div class="form-group">
+            <label>Animal Tag</label>
+            <select id="tx-animal" style="width:100%"><option value="">— Select Animal —</option></select>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Date</label><input type="date" id="tx-date"></div>
+            <div class="form-group"><label>Time</label><input type="time" id="tx-time"></div>
+          </div>
+          <div class="form-group">
+            <label>Product / Drug</label>
+            <select id="tx-product-select" onchange="autofillTxDrug()" style="margin-bottom:6px">
+              <option value="">— Select from inventory —</option>
+            </select>
+            <select id="tx-product-list" onchange="autofillTxDrugList()" style="margin-bottom:6px">
+              <option value="">— Or select from drug list —</option>
+              <optgroup label="Antibiotics">
+                <option value="Draxxin|28|SQ">Draxxin — 28d</option>
+                <option value="Excenel|4|SQ">Excenel — 4d</option>
+                <option value="Nuflor|36|SQ">Nuflor — 36d</option>
+                <option value="Nuflor Gold|36|SQ">Nuflor Gold — 36d</option>
+                <option value="LA-200|28|SQ">LA-200 — 28d</option>
+                <option value="Baytril 100|28|SQ">Baytril 100 — 28d</option>
+                <option value="Micotil|42|SQ">Micotil — 42d</option>
+                <option value="Zuprevo|21|SQ">Zuprevo — 21d</option>
+                <option value="Zactran|21|SQ">Zactran — 21d</option>
+                <option value="Penicillin G|10|IM">Penicillin G — 10d</option>
+              </optgroup>
+              <optgroup label="Anti-inflammatory">
+                <option value="Banamine|4|IV">Banamine — 4d</option>
+                <option value="Metacam|21|SQ">Metacam — 21d</option>
+                <option value="Dexamethasone|0|IM">Dexamethasone — 0d</option>
+              </optgroup>
+              <optgroup label="Dewormers">
+                <option value="Ivermectin Pour-On|48|topical">Ivermectin Pour-On — 48d</option>
+                <option value="Dectomax Pour-On|45|topical">Dectomax Pour-On — 45d</option>
+                <option value="Safe-Guard|8|oral">Safe-Guard — 8d</option>
+              </optgroup>
+            </select>
+            <input type="text" id="tx-product" placeholder="Or type product name">
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Lot Number</label><input type="text" id="tx-lot" placeholder="Lot #"></div>
+            <div class="form-group"><label>Expiration Date</label><input type="date" id="tx-expiry"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Dosage</label><input type="text" id="tx-dosage" placeholder="e.g. 5ml"></div>
+            <div class="form-group"><label>Route</label>
+              <select id="tx-route">
+                <option value="SQ">SQ</option><option value="IM">IM</option>
+                <option value="IV">IV</option><option value="oral">Oral</option>
+                <option value="topical">Topical</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Withdrawal Days</label><input type="number" id="tx-withdrawal" placeholder="0" inputmode="numeric"></div>
+            <div class="form-group"><label>Cost ($)</label><input type="number" id="tx-cost" placeholder="0.00" inputmode="decimal"></div>
+          </div>
+          <div class="form-group"><label>Diagnosis / Reason</label><input type="text" id="tx-diagnosis" placeholder="BRD, Pinkeye, Foot rot..."></div>
+          <div class="form-group"><label>Treated By</label><input type="text" id="tx-by" placeholder="Name"></div>
+          <div class="form-group"><label>Notes</label><textarea id="tx-notes" placeholder="Symptoms, temperature, observations..."></textarea></div>
+          <button class="btn btn-primary" onclick="saveTreatment()">Save Treatment</button>
+        </div>
+        <div class="card">
+          <div class="card-title">Withdrawal Tracker</div>
+          <div id="chute-withdrawal-list"><div class="loading"><div class="spinner"></div>Loading...</div></div>
+        </div>
+      </div>
+
+      <!-- HISTORY TAB -->
+      <div id="chute-history" style="display:none">
+        <div class="card" style="margin-bottom:10px">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <input type="text" id="chute-history-search" placeholder="Search tag, product, event..." style="flex:1;font-size:14px" oninput="renderChuteHistory()">
+            <select id="chute-history-type" onchange="renderChuteHistory()" style="width:130px;font-size:13px;padding:8px 10px">
+              <option value="">All Types</option>
+              <option value="vaccination">Vaccination</option>
+              <option value="treatment">Treatment</option>
+              <option value="session">Chute Session</option>
+            </select>
+            <input type="date" id="chute-history-from" onchange="renderChuteHistory()" style="width:140px;font-size:13px;padding:8px 10px">
+            <input type="date" id="chute-history-to" onchange="renderChuteHistory()" style="width:140px;font-size:13px;padding:8px 10px">
+          </div>
+        </div>
+        <div id="chute-history-content"><div class="loading"><div class="spinner"></div>Loading...</div></div>
       </div>
     </div>
 
@@ -1502,9 +1523,15 @@ tr:hover td{background:var(--bg)}
       </div>
     </div>
 
-    <div class="form-group" style="margin-top:8px">
-      <label>Notes</label>
-      <input type="text" id="me-notes" placeholder="Any observations...">
+    <div class="form-row" style="margin-top:8px">
+      <div class="form-group">
+        <label>DNA Barcode</label>
+        <input type="text" id="me-dna-barcode" placeholder="Scan or type barcode" autocomplete="off" autocorrect="off" autocapitalize="off">
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <input type="text" id="me-notes" placeholder="Any observations...">
+      </div>
     </div>
 
     <!-- One-Time Records -->
@@ -1549,8 +1576,8 @@ tr:hover td{background:var(--bg)}
     </div>
 
     <div style="display:flex;gap:10px;margin-top:12px">
-      <button class="btn btn-secondary" onclick="closeMeasModal()" style="flex:1">Skip</button>
-      <button class="btn btn-primary" onclick="saveMeasurementBatch()" style="flex:2">Save & Next →</button>
+      <button class="btn btn-secondary" onclick="skipMeasAnimal()" style="flex:1">Skip — Didn't Come Through</button>
+      <button class="btn btn-primary" onclick="saveMeasurementBatch()" style="flex:2">✓ Worked — Save & Next</button>
     </div>
   </div>
 </div>
@@ -1907,7 +1934,6 @@ function showPage(name) {
   if(name==='animals') loadAnimals();
   if(name==='calving') { showCalvingTab('log'); }
   if(name==='weights') { showWeightsTab('log'); }
-  if(name==='health') { showHealthTab('log'); populateHealthAnimalDropdown(); }
   if(name==='breeding') showBreedingTab('semen');
   if(name==='pastures') loadPastures();
   if(name==='sales') { showSalesTab('record'); }
@@ -1917,7 +1943,7 @@ function showPage(name) {
   if(name==='stockers') loadStockerGroups();
   if(name==='markets') showMarketsTab('prices');
   if(name==='reports') { setTimeout(()=>{ showReportsTab('builder'); updateReportColumns(); }, 50); }
-  if(name==='measurements') { loadMeasurements(); }
+  if(name==='measurements') { loadMeasurements(); showChuteTab('session'); }
   if(name==='settings') loadSettings();
 }
 
@@ -2557,7 +2583,7 @@ async function loadDashboard() {
       <div style="font-size:11px;font-weight:600;color:var(--orange);text-transform:uppercase;margin-bottom:10px">⚡ Quick Actions</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <button onclick="showPage('calving')" style="background:var(--bg2);border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;text-align:left">🐄 Log Calving</button>
-        <button onclick="showPage('health')" style="background:var(--bg2);border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;text-align:left">💉 Log Treatment</button>
+        <button onclick="showChuteTab('treatment');showPage('measurements')" style="background:var(--bg2);border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;text-align:left">💉 Treatment</button>
         <button onclick="openGroupAction()" style="background:var(--bg2);border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;text-align:left">👥 Group Action</button>
         <button onclick="showPage('insights')" style="background:var(--bg2);border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;text-align:left">⚡ View Insights</button>
       </div>
@@ -7801,7 +7827,7 @@ function openMeasModal(index) {
     ` · ${index + 1} of ${measAnimals.length}`;
 
   ['me-weight','me-bcs','me-hair','me-hip','me-claw','me-angle',
-   'me-scrotal','me-pelvis-h','me-pelvis-w','me-pelvis-area','me-notes'].forEach(id => {
+   'me-scrotal','me-pelvis-h','me-pelvis-w','me-pelvis-area','me-notes','me-dna-barcode'].forEach(id => {
     const el = document.getElementById(id);
     if(el) el.value = '';
   });
@@ -7984,6 +8010,608 @@ async function saveMeasurementBatch() {
     const anySkipped = measAnimals.findIndex(a => !measRecordedTags.has(a.tag));
     if(anySkipped !== -1) setTimeout(() => openMeasModal(anySkipped), 300);
   }
+}
+
+
+// ── CHUTE WORK ────────────────────────────────────────────────────────────
+let chuteSkippedTags = new Set();
+let herdTreatments = [];
+
+function showChuteTab(tab) {
+  ['session','vaccines','treatment','history'].forEach(t => {
+    const el = document.getElementById('chute-'+t);
+    if(el) el.style.display = t===tab ? 'block' : 'none';
+  });
+  document.querySelectorAll('#page-measurements .tab-bar .tab').forEach((b,i) =>
+    b.classList.toggle('active', ['session','vaccines','treatment','history'][i]===tab));
+  if(tab==='vaccines') loadVaccineTab();
+  if(tab==='treatment') loadTreatmentTab();
+  if(tab==='history') renderChuteHistory();
+}
+
+// ── HERD-WIDE TREATMENTS ──────────────────────────────────────────────────
+function addHerdTreatment() {
+  const inventory = cache.get('inventory') || [];
+  const vaccines = inventory.filter(i => i.category === 'medications');
+
+  const div = document.createElement('div');
+  div.className = 'herd-tx-row';
+  div.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap';
+  div.innerHTML = `
+    <select class="herd-tx-inv" onchange="herdTxSelectInv(this)" style="flex:2;font-size:13px;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:inherit">
+      <option value="">— From inventory —</option>
+      ${vaccines.map(v=>`<option value="${v.id}" data-name="${v.name}" data-lot="${v.lot_number||''}" data-exp="${v.expiration_date||''}" data-wd="${v.withdrawal_days||0}">${v.name}${v.lot_number?' · Lot '+v.lot_number:''}</option>`).join('')}
+      <option value="manual">+ Type manually</option>
+    </select>
+    <input type="text" class="herd-tx-name" placeholder="Product name" style="flex:2;font-size:13px;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:inherit;display:none">
+    <input type="text" class="herd-tx-dose" placeholder="Dose" style="width:80px;font-size:13px;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:inherit">
+    <button onclick="this.parentElement.remove()" style="background:var(--red);color:white;border:none;border-radius:6px;padding:8px 10px;cursor:pointer;font-size:13px">✕</button>`;
+  document.getElementById('herd-treatments-list').appendChild(div);
+}
+
+function herdTxSelectInv(sel) {
+  const row = sel.closest('.herd-tx-row');
+  const nameInput = row.querySelector('.herd-tx-name');
+  if(sel.value === 'manual') {
+    sel.style.display = 'none';
+    nameInput.style.display = 'block';
+    nameInput.focus();
+  } else {
+    nameInput.style.display = 'none';
+  }
+}
+
+function getHerdTreatments() {
+  const rows = document.querySelectorAll('.herd-tx-row');
+  const treatments = [];
+  rows.forEach(row => {
+    const sel = row.querySelector('.herd-tx-inv');
+    const nameInput = row.querySelector('.herd-tx-name');
+    const dose = row.querySelector('.herd-tx-dose')?.value?.trim();
+    let name = '', invId = null, lot = '', expiry = '', wd = 0;
+    if(sel.value && sel.value !== 'manual') {
+      const opt = sel.selectedOptions[0];
+      name = opt.dataset.name;
+      invId = sel.value;
+      lot = opt.dataset.lot;
+      expiry = opt.dataset.exp;
+      wd = parseInt(opt.dataset.wd)||0;
+    } else {
+      name = nameInput?.value?.trim();
+    }
+    if(name) treatments.push({name, invId, lot, expiry, wd, dose});
+  });
+  return treatments;
+}
+
+// ── EID TAG LOOKUP ────────────────────────────────────────────────────────
+function chuteTagLookup(val) {
+  if(!val || val.length < 2) { document.getElementById('chute-scan-result').textContent = ''; return; }
+  const animals = cache.get('animals') || [];
+  // Match by EID or tag
+  const match = animals.find(a =>
+    (a.eid_tag && a.eid_tag.toLowerCase() === val.toLowerCase()) ||
+    a.tag.toLowerCase() === val.toLowerCase()
+  );
+  const resultEl = document.getElementById('chute-scan-result');
+  if(match) {
+    const idx = measAnimals.findIndex(a => a.id === match.id);
+    if(idx !== -1) {
+      resultEl.innerHTML = `<span style="color:var(--green);font-weight:600">✓ Found: ${match.tag}${match.name?' — '+match.name:''}</span>`;
+      setTimeout(() => {
+        document.getElementById('chute-scan-input').value = '';
+        resultEl.textContent = '';
+        openMeasModal(idx);
+      }, 500);
+    } else {
+      resultEl.innerHTML = `<span style="color:var(--amber)">${match.tag} found but not in current group</span>`;
+    }
+  } else {
+    resultEl.innerHTML = `<span style="color:var(--gray-lt)">No match for "${val}"</span>`;
+  }
+}
+
+// ── SKIP ANIMAL ───────────────────────────────────────────────────────────
+function skipMeasAnimal() {
+  const animal = measAnimals[measCurrentIndex];
+  if(!animal) return;
+  chuteSkippedTags.add(animal.tag);
+  closeMeasModal();
+  renderMeasurementList();
+  // Auto-advance to next unrecorded unscanned animal
+  const nextIndex = measAnimals.findIndex((a, i) => i > measCurrentIndex && !measRecordedTags.has(a.tag) && !chuteSkippedTags.has(a.tag));
+  if(nextIndex !== -1) setTimeout(() => openMeasModal(nextIndex), 300);
+}
+
+function endChuteSession() {
+  if(!confirm(`End session?
+
+${measRecordedTags.size} animals worked
+${chuteSkippedTags.size} skipped
+
+Herd-wide treatments have been logged for worked animals only.`)) return;
+  // Reset session state
+  measAnimals = [];
+  measRecordedTags = new Set();
+  chuteSkippedTags = new Set();
+  herdTreatments = [];
+  document.getElementById('meas-progress-wrap').style.display = 'none';
+  document.getElementById('chute-scan-card').style.display = 'none';
+  document.getElementById('meas-animal-list').innerHTML = '<div class="empty"><div class="empty-icon">🐄</div><p>Set up your session above and tap Load Animals to begin.</p></div>';
+  document.getElementById('herd-treatments-list').innerHTML = '';
+}
+
+// ── OVERRIDE renderMeasurementList to show worked/skipped split ──────────
+const _origRenderMeasurementList = renderMeasurementList;
+// Override with new version that handles skip tracking and scan field
+renderMeasurementList = function() {
+  const recorded = measRecordedTags.size;
+  const skipped = chuteSkippedTags.size;
+  const total = measAnimals.length;
+  const pct = total > 0 ? Math.round(recorded / total * 100) : 0;
+
+  document.getElementById('meas-progress-wrap').style.display = 'block';
+  document.getElementById('chute-scan-card').style.display = 'block';
+  document.getElementById('meas-progress-label').textContent = `${recorded} of ${total} worked`;
+  document.getElementById('meas-progress-fill').style.width = pct + '%';
+  document.getElementById('chute-worked-count').textContent = `${recorded} worked`;
+  document.getElementById('chute-skipped-count').textContent = `${skipped} skipped`;
+  document.getElementById('chute-remaining-count').textContent = `${total - recorded - skipped} remaining`;
+
+  // Focus scan field
+  setTimeout(() => document.getElementById('chute-scan-input')?.focus(), 100);
+
+  const sexIcon = { Bull: '♂', Heifer: '♀', Cow: '♀', Steer: '⚲' };
+  const sexBadge = { Bull: 'badge-blue', Heifer: 'badge-orange', Cow: 'badge-green', Steer: 'badge-gray' };
+
+  const toDoAnimals = measAnimals.filter(a => !measRecordedTags.has(a.tag) && !chuteSkippedTags.has(a.tag));
+  const workedAnimals = measAnimals.filter(a => measRecordedTags.has(a.tag));
+  const skippedAnimals = measAnimals.filter(a => chuteSkippedTags.has(a.tag));
+
+  const renderAnimalRow = (a, i, status) => {
+    const globalIdx = measAnimals.indexOf(a);
+    const isDone = status === 'worked';
+    const isSkipped = status === 'skipped';
+    return `
+      <div onclick="${status === 'todo' ? `openMeasModal(${globalIdx})` : ''}"
+        style="background:var(--white);border:1px solid ${isDone?'var(--green)':isSkipped?'var(--amber)':'var(--border)'};border-radius:10px;padding:12px 14px;margin-bottom:8px;cursor:${status==='todo'?'pointer':'default'};display:flex;align-items:center;gap:12px;${isDone||isSkipped?'opacity:0.7':''}">
+        <div style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;background:${isDone?'var(--green)':isSkipped?'var(--amber)':'var(--bg2)'}">
+          ${isDone?'<span style="color:white;font-weight:700;font-size:16px">✓</span>':isSkipped?'<span style="color:white;font-size:12px">→</span>':`<span style="color:var(--gray)">${sexIcon[a.sex]||'?'}</span>`}
+        </div>
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:8px">
+            <strong style="font-size:15px">${a.tag}</strong>
+            <span class="badge ${sexBadge[a.sex]||'badge-gray'}" style="font-size:10px">${a.sex||'—'}</span>
+            ${a.eid_tag?`<span style="font-size:10px;color:var(--gray-lt)">EID</span>`:''}
+          </div>
+          <div style="font-size:12px;color:var(--gray);margin-top:2px">${a.name?a.name+' · ':''}${a.location||'No pasture'}</div>
+        </div>
+        <span style="font-size:12px;font-weight:600;color:${isDone?'var(--green)':isSkipped?'var(--amber)':'var(--gray-lt)'}">${isDone?'Worked':isSkipped?'Skipped':'›'}</span>
+      </div>`;
+  };
+
+  let html = '';
+  if(toDoAnimals.length) {
+    html += `<div style="font-size:11px;font-weight:600;color:var(--orange);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">${toDoAnimals.length} Remaining</div>`;
+    html += toDoAnimals.map(a => renderAnimalRow(a, measAnimals.indexOf(a), 'todo')).join('');
+  }
+  if(workedAnimals.length) {
+    html += `<div style="font-size:11px;font-weight:600;color:var(--green);text-transform:uppercase;letter-spacing:1px;margin:12px 0 8px">${workedAnimals.length} Worked ✓</div>`;
+    html += workedAnimals.map(a => renderAnimalRow(a, measAnimals.indexOf(a), 'worked')).join('');
+  }
+  if(skippedAnimals.length) {
+    html += `<div style="font-size:11px;font-weight:600;color:var(--amber);text-transform:uppercase;letter-spacing:1px;margin:12px 0 8px">${skippedAnimals.length} Skipped</div>`;
+    html += skippedAnimals.map(a => renderAnimalRow(a, measAnimals.indexOf(a), 'skipped')).join('');
+  }
+  if(!html) html = '<div class="empty"><div class="empty-icon">✅</div><p>All animals worked!</p></div>';
+  document.getElementById('meas-animal-list').innerHTML = html;
+};
+
+// ── OVERRIDE saveMeasurementBatch to handle herd treatments + timestamp ───
+const _origSaveMeasurementBatch = saveMeasurementBatch;
+saveMeasurementBatch = async function() {
+  // Get herd treatments BEFORE calling original save
+  herdTreatments = getHerdTreatments();
+  await _origSaveMeasurementBatch();
+};
+
+// ── PATCH saveMeasurementBatch to log herd treatments + DNA barcode ───────
+// We hook into the animalUpdates section by patching the end of the original
+const origSaveFn = saveMeasurementBatch.toString();
+
+// Instead override completely with patched version
+saveMeasurementBatch = async function() {
+  const animal = measAnimals[measCurrentIndex];
+  if(!animal) return;
+
+  const date = document.getElementById('meas-session-date')?.value;
+  const now = new Date();
+  const timestamp = now.toISOString();
+  const weight = parseFloat(document.getElementById('me-weight')?.value) || null;
+  const bcs = parseFloat(document.getElementById('me-bcs')?.value) || null;
+  const hair = parseInt(document.getElementById('me-hair')?.value) || null;
+  const hip = parseFloat(document.getElementById('me-hip')?.value) || null;
+  const claw = parseInt(document.getElementById('me-claw')?.value) || null;
+  const angle = parseInt(document.getElementById('me-angle')?.value) || null;
+  const dnaBarcode = document.getElementById('me-dna-barcode')?.value?.trim() || null;
+  const notes = document.getElementById('me-notes')?.value?.trim() || null;
+
+  const hasData = weight || bcs || hair || hip || claw || angle || measSelectedDisposition || dnaBarcode;
+  if(!hasData) { alert('Enter at least one measurement before saving.'); return; }
+
+  const record = {
+    animal_tag: animal.tag,
+    measure_date: date,
+    recorded_at: timestamp,
+    recorded_by: currentUser?.email || null,
+    weight, bcs,
+    hair_shed_score: hair,
+    hip_height: hip,
+    claw_set_score: claw,
+    foot_angle_score: angle,
+    disposition_score: measSelectedDisposition,
+    dna_barcode: dnaBarcode,
+    notes,
+  };
+
+  if(animal.sex === 'Bull') record.scrotal_circ = parseFloat(document.getElementById('me-scrotal')?.value) || null;
+  if(animal.sex === 'Heifer') {
+    record.pelvic_height = parseFloat(document.getElementById('me-pelvis-h')?.value) || null;
+    record.pelvic_width = parseFloat(document.getElementById('me-pelvis-w')?.value) || null;
+    record.pelvic_area = parseFloat(document.getElementById('me-pelvis-area')?.value) || null;
+  }
+
+  const { error } = await dbInsert('measurements', record);
+  if(error) { alert('Error saving: ' + error.message); return; }
+
+  // Write weight record if weight type selected
+  const weightType = document.getElementById('meas-weight-type')?.value;
+  if(weight && weightType) {
+    await dbInsert('weights', {
+      animal_tag: animal.tag,
+      weight_date: date,
+      weight_lbs: weight,
+      weight_type: weightType,
+      notes: `Chute session · ${timestamp}`,
+    });
+  }
+
+  // Log herd-wide treatments for this worked animal
+  const treatments = getHerdTreatments();
+  for(const tx of treatments) {
+    await dbInsert('health_events', {
+      animal_tag: animal.tag,
+      event_date: date,
+      event_timestamp: timestamp,
+      recorded_by: currentUser?.email || null,
+      event_type: 'vaccination',
+      product: tx.name,
+      dosage: tx.dose || null,
+      withdrawal_days: tx.wd || 0,
+      lot_number: tx.lot || null,
+      expiration_date: tx.expiry || null,
+      notes: 'Herd-wide — chute session',
+    });
+    // Deduct from inventory if linked
+    if(tx.invId) {
+      const {data:inv} = await sb.from('inventory').select('quantity').eq('id',tx.invId).single();
+      if(inv) await sb.from('inventory').update({quantity: Math.max(0, (inv.quantity||0) - 1)}).eq('id', tx.invId);
+    }
+  }
+
+  // Save one-time records back to animals table
+  const animalUpdates = {};
+  const eidVal = document.getElementById('me-eid')?.value?.trim();
+  if(eidVal && !animal.eid_tag) animalUpdates.eid_tag = eidVal;
+
+  if(dnaBarcode) animalUpdates.dna_barcode = dnaBarcode;
+
+  const calfhoodChecked = document.getElementById('me-calfhood-vac')?.checked;
+  if(calfhoodChecked && !animal.calfhood_vaccinated) {
+    animalUpdates.calfhood_vaccinated = true;
+    animalUpdates.calfhood_vac_date = document.getElementById('me-calfhood-date')?.value || date;
+    animalUpdates.calfhood_vac_vet = document.getElementById('me-calfhood-vet')?.value?.trim() || null;
+  }
+
+  const genomicChecked = document.getElementById('me-genomic')?.checked;
+  if(genomicChecked && !animal.genomic_tested) {
+    animalUpdates.genomic_tested = true;
+    animalUpdates.genomic_test_date = date;
+    animalUpdates.genomic_lab = document.getElementById('me-genomic-lab')?.value || null;
+  }
+
+  if(Object.keys(animalUpdates).length > 0) {
+    await sb.from('animals').update(animalUpdates).eq('id', animal.id);
+    const cached = cache.get('animals') || [];
+    const idx = cached.findIndex(a => a.id === animal.id);
+    if(idx !== -1) { cached[idx] = {...cached[idx], ...animalUpdates}; cache.set('animals', cached); }
+    measAnimals[measCurrentIndex] = {...animal, ...animalUpdates};
+  }
+
+  measRecordedTags.add(animal.tag);
+  closeMeasModal();
+  renderMeasurementList();
+
+  const nextIndex = measAnimals.findIndex((a, i) => i > measCurrentIndex && !measRecordedTags.has(a.tag) && !chuteSkippedTags.has(a.tag));
+  if(nextIndex !== -1) setTimeout(() => openMeasModal(nextIndex), 300);
+  else {
+    const anySkipped = measAnimals.findIndex(a => !measRecordedTags.has(a.tag) && !chuteSkippedTags.has(a.tag));
+    if(anySkipped !== -1) setTimeout(() => openMeasModal(anySkipped), 300);
+  }
+};
+
+// ── VACCINE TAB ───────────────────────────────────────────────────────────
+async function loadVaccineTab() {
+  // Populate animal dropdown
+  const animals = (cache.get('animals')||[]).filter(a=>a.status!=='sold'&&a.status!=='dead').sort((a,b)=>a.tag.localeCompare(b.tag));
+  const vacAnimal = document.getElementById('vac-animal');
+  if(vacAnimal) {
+    vacAnimal.innerHTML = '<option value="">— Select Animal —</option>' +
+      animals.map(a=>`<option value="${a.tag}">${a.tag}${a.name?' — '+a.name:''}</option>`).join('');
+  }
+
+  // Populate inventory vaccine dropdown
+  const {data:inv} = await sb.from('inventory').select('*').eq('ranch_id',currentRanch.id).eq('category','medications').order('name');
+  const vacInv = document.getElementById('vac-product-inv');
+  if(vacInv && inv) {
+    vacInv.innerHTML = '<option value="">— Select from inventory —</option>' +
+      inv.map(i=>`<option value="${i.id}" data-name="${i.name}" data-lot="${i.lot_number||''}" data-exp="${i.expiration_date||''}" data-wd="${i.withdrawal_days||0}">${i.name}${i.lot_number?' · Lot '+i.lot_number:''}${i.quantity?' · '+i.quantity+' '+( i.unit||'units'):''}</option>`).join('') +
+      '<option value="manual">+ Enter manually</option>';
+  }
+
+  // Set date and time
+  const now = new Date();
+  if(document.getElementById('vac-date') && !document.getElementById('vac-date').value)
+    document.getElementById('vac-date').value = now.toISOString().split('T')[0];
+  if(document.getElementById('vac-time') && !document.getElementById('vac-time').value)
+    document.getElementById('vac-time').value = now.toTimeString().slice(0,5);
+
+  // Load recent vaccinations
+  const {data:recent} = await sb.from('health_events').select('*').eq('ranch_id',currentRanch.id).eq('event_type','vaccination').order('created_at',{ascending:false}).limit(20);
+  const listEl = document.getElementById('vac-history-list');
+  if(listEl) {
+    listEl.innerHTML = (recent||[]).length ? (recent||[]).map(r=>`
+      <div style="padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between">
+          <strong>${r.animal_tag}</strong>
+          <span style="font-size:11px;color:var(--gray)">${r.event_date}${r.event_timestamp?' '+new Date(r.event_timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):''}</span>
+        </div>
+        <div style="font-size:12px;color:var(--gray)">${r.product||'—'}${r.lot_number?' · Lot '+r.lot_number:''}${r.recorded_by?' · by '+r.recorded_by:''}</div>
+      </div>`).join('') :
+    '<div style="text-align:center;color:var(--gray-lt);padding:20px;font-size:13px">No vaccinations recorded yet</div>';
+  }
+}
+
+function autofillVaccineFromInv() {
+  const sel = document.getElementById('vac-product-inv');
+  const opt = sel.selectedOptions[0];
+  if(!opt || sel.value === 'manual' || !sel.value) return;
+  document.getElementById('vac-product').value = opt.dataset.name || '';
+  document.getElementById('vac-lot').value = opt.dataset.lot || '';
+  document.getElementById('vac-expiry').value = opt.dataset.exp || '';
+  if(opt.dataset.wd) document.getElementById('vac-route').focus();
+}
+
+async function saveVaccination() {
+  const animal = document.getElementById('vac-animal')?.value;
+  const date = document.getElementById('vac-date')?.value;
+  const time = document.getElementById('vac-time')?.value;
+  const product = document.getElementById('vac-product')?.value?.trim();
+  if(!animal||!date||!product) { alert('Animal, date and product required.'); return; }
+
+  const timestamp = date + (time ? 'T' + time + ':00' : 'T00:00:00');
+  const invSel = document.getElementById('vac-product-inv');
+  const invId = invSel?.value && invSel.value !== 'manual' ? invSel.value : null;
+
+  const {error} = await dbInsert('health_events', {
+    animal_tag: animal,
+    event_date: date,
+    event_timestamp: new Date(timestamp).toISOString(),
+    recorded_by: currentUser?.email || null,
+    event_type: 'vaccination',
+    product,
+    lot_number: document.getElementById('vac-lot')?.value?.trim() || null,
+    expiration_date: document.getElementById('vac-expiry')?.value || null,
+    dosage: document.getElementById('vac-dosage')?.value?.trim() || null,
+    route: document.getElementById('vac-route')?.value || null,
+    treated_by: document.getElementById('vac-by')?.value?.trim() || null,
+    notes: document.getElementById('vac-notes')?.value?.trim() || null,
+  });
+  if(error) { alert('Error: '+error.message); return; }
+
+  // Deduct from inventory
+  if(invId) {
+    const {data:inv} = await sb.from('inventory').select('quantity').eq('id',invId).single();
+    if(inv) await sb.from('inventory').update({quantity: Math.max(0,(inv.quantity||0)-1)}).eq('id',invId);
+  }
+
+  alert(`✅ Vaccination saved for ${animal}`);
+  loadVaccineTab();
+}
+
+// ── TREATMENT TAB ─────────────────────────────────────────────────────────
+async function loadTreatmentTab() {
+  const animals = (cache.get('animals')||[]).filter(a=>a.status!=='sold'&&a.status!=='dead').sort((a,b)=>a.tag.localeCompare(b.tag));
+  const txAnimal = document.getElementById('tx-animal');
+  if(txAnimal) {
+    txAnimal.innerHTML = '<option value="">— Select Animal —</option>' +
+      animals.map(a=>`<option value="${a.tag}">${a.tag}${a.name?' — '+a.name:''}</option>`).join('');
+  }
+
+  // Populate inventory drug dropdown
+  const {data:inv} = await sb.from('inventory').select('*').eq('ranch_id',currentRanch.id).eq('category','medications').order('name');
+  const txInv = document.getElementById('tx-product-select');
+  if(txInv && inv) {
+    txInv.innerHTML = '<option value="">— Select from inventory —</option>' +
+      inv.map(i=>`<option value="${i.id}" data-name="${i.name}" data-lot="${i.lot_number||''}" data-exp="${i.expiration_date||''}" data-wd="${i.withdrawal_days||0}">${i.name}${i.lot_number?' · Lot '+i.lot_number:''}${i.quantity?' · '+i.quantity+' '+( i.unit||'units'):''}</option>`).join('') +
+      '<option value="manual">+ Enter manually</option>';
+  }
+
+  const now = new Date();
+  if(document.getElementById('tx-date') && !document.getElementById('tx-date').value)
+    document.getElementById('tx-date').value = now.toISOString().split('T')[0];
+  if(document.getElementById('tx-time') && !document.getElementById('tx-time').value)
+    document.getElementById('tx-time').value = now.toTimeString().slice(0,5);
+
+  // Load withdrawal tracker
+  const {data:health} = await sb.from('health_events').select('*').eq('ranch_id',currentRanch.id).order('event_date',{ascending:false}).limit(200);
+  const today = new Date();
+  const inWD = (health||[]).filter(h=>{
+    if(!h.withdrawal_days||h.withdrawal_days<=0) return false;
+    const c=new Date(h.event_date);c.setDate(c.getDate()+h.withdrawal_days);
+    return c>=today;
+  }).map(h=>{
+    const c=new Date(h.event_date);c.setDate(c.getDate()+h.withdrawal_days);
+    return {...h,clearDate:c.toISOString().split('T')[0],daysLeft:Math.ceil((c-today)/86400000)};
+  });
+
+  const wdEl = document.getElementById('chute-withdrawal-list');
+  if(wdEl) {
+    wdEl.innerHTML = inWD.length ? inWD.map(r=>`
+      <div style="padding:10px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between">
+          <strong>${r.animal_tag}</strong>
+          <span style="color:var(--red);font-size:12px;font-weight:600">⚠ ${r.daysLeft}d left</span>
+        </div>
+        <div style="font-size:12px;color:var(--gray)">${r.product} — clear ${r.clearDate}${r.lot_number?' · Lot '+r.lot_number:''}${r.recorded_by?' · by '+r.recorded_by:''}</div>
+      </div>`).join('') :
+    '<div class="empty"><div class="empty-icon">✅</div><p>No animals in withdrawal.</p></div>';
+  }
+}
+
+function autofillTxDrug() {
+  const sel = document.getElementById('tx-product-select');
+  const opt = sel.selectedOptions[0];
+  if(!opt || sel.value === 'manual' || !sel.value) return;
+  document.getElementById('tx-product').value = opt.dataset.name || '';
+  document.getElementById('tx-lot').value = opt.dataset.lot || '';
+  document.getElementById('tx-expiry').value = opt.dataset.exp || '';
+  document.getElementById('tx-withdrawal').value = opt.dataset.wd || '0';
+}
+
+function autofillTxDrugList() {
+  const sel = document.getElementById('tx-product-list');
+  const val = sel.value;
+  if(!val) return;
+  const [name, days, route] = val.split('|');
+  document.getElementById('tx-product').value = name;
+  document.getElementById('tx-withdrawal').value = days||'0';
+  document.getElementById('tx-route').value = route||'SQ';
+  sel.value = '';
+}
+
+async function saveTreatment() {
+  const animal = document.getElementById('tx-animal')?.value;
+  const date = document.getElementById('tx-date')?.value;
+  const time = document.getElementById('tx-time')?.value;
+  const product = document.getElementById('tx-product')?.value?.trim();
+  if(!animal||!date||!product) { alert('Animal, date and product required.'); return; }
+
+  const timestamp = new Date(date + (time ? 'T' + time + ':00' : 'T00:00:00')).toISOString();
+  const wd = parseInt(document.getElementById('tx-withdrawal')?.value)||0;
+  const invId = document.getElementById('tx-product-select')?.value;
+
+  const {error} = await dbInsert('health_events', {
+    animal_tag: animal,
+    event_date: date,
+    event_timestamp: timestamp,
+    recorded_by: currentUser?.email || null,
+    event_type: 'treatment',
+    product,
+    lot_number: document.getElementById('tx-lot')?.value?.trim() || null,
+    expiration_date: document.getElementById('tx-expiry')?.value || null,
+    dosage: document.getElementById('tx-dosage')?.value?.trim() || null,
+    route: document.getElementById('tx-route')?.value || null,
+    cost: parseFloat(document.getElementById('tx-cost')?.value)||null,
+    withdrawal_days: wd,
+    treated_by: document.getElementById('tx-by')?.value?.trim() || null,
+    diagnosis: document.getElementById('tx-diagnosis')?.value?.trim() || null,
+    notes: document.getElementById('tx-notes')?.value?.trim() || null,
+  });
+  if(error) { alert('Error: '+error.message); return; }
+
+  if(invId && invId !== 'manual') {
+    const {data:inv} = await sb.from('inventory').select('quantity').eq('id',invId).single();
+    if(inv) await sb.from('inventory').update({quantity: Math.max(0,(inv.quantity||0)-1)}).eq('id',invId);
+  }
+
+  const icon = wd > 0 ? `⚠ Withdrawal: ${wd}d` : '✅';
+  alert(`✅ Treatment saved for ${animal}${wd>0?' · '+icon:''}`);
+  ['tx-product','tx-lot','tx-expiry','tx-dosage','tx-cost','tx-withdrawal','tx-by','tx-diagnosis','tx-notes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('tx-animal').selectedIndex=0;
+  document.getElementById('tx-product-select').value='';
+  document.getElementById('tx-product-list').value='';
+  loadTreatmentTab();
+}
+
+// ── CHUTE HISTORY ─────────────────────────────────────────────────────────
+async function renderChuteHistory() {
+  const el = document.getElementById('chute-history-content');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
+
+  const search = document.getElementById('chute-history-search')?.value?.toLowerCase()||'';
+  const type = document.getElementById('chute-history-type')?.value||'';
+  const from = document.getElementById('chute-history-from')?.value||'';
+  const to = document.getElementById('chute-history-to')?.value||'';
+
+  // Fetch health events (treatments + vaccinations)
+  let q = sb.from('health_events').select('*').eq('ranch_id',currentRanch.id).order('created_at',{ascending:false}).limit(200);
+  if(from) q = q.gte('event_date', from);
+  if(to) q = q.lte('event_date', to);
+  const {data:health} = await q;
+
+  // Fetch measurements (chute sessions)
+  let mq = sb.from('measurements').select('*').eq('ranch_id',currentRanch.id).order('created_at',{ascending:false}).limit(200);
+  if(from) mq = mq.gte('measure_date', from);
+  if(to) mq = mq.lte('measure_date', to);
+  const {data:meas} = await mq;
+
+  // Combine and filter
+  let events = [
+    ...(health||[]).filter(h => type===''||type===h.event_type||(type==='vaccination'&&h.event_type==='vaccination')||(type==='treatment'&&h.event_type==='treatment')).map(h=>({
+      date: h.event_date,
+      time: h.event_timestamp ? new Date(h.event_timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : null,
+      tag: h.animal_tag,
+      type: h.event_type,
+      detail: h.product + (h.lot_number?' · Lot '+h.lot_number:'') + (h.dosage?' · '+h.dosage:'') + (h.withdrawal_days>0?' · WD '+h.withdrawal_days+'d':''),
+      by: h.recorded_by,
+      color: h.event_type==='vaccination'?'badge-green':'badge-red',
+      label: h.event_type==='vaccination'?'Vaccine':'Treatment',
+    })),
+    ...(type===''||type==='session' ? (meas||[]).map(m=>({
+      date: m.measure_date,
+      time: m.recorded_at ? new Date(m.recorded_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : null,
+      tag: m.animal_tag,
+      type: 'session',
+      detail: [m.weight?m.weight+'lb':null, m.bcs?'BCS '+m.bcs:null, m.hair_shed_score?'Hair '+m.hair_shed_score:null, m.hip_height?'Hip '+m.hip_height+'"':null, m.dna_barcode?'DNA ✓':null].filter(Boolean).join(' · ')||'Scores recorded',
+      by: m.recorded_by,
+      color: 'badge-blue',
+      label: 'Session',
+    })) : []),
+  ].filter(e => !search || e.tag?.toLowerCase().includes(search) || e.detail?.toLowerCase().includes(search));
+
+  events.sort((a,b) => new Date(b.date+' '+(b.time||'00:00')) - new Date(a.date+' '+(a.time||'00:00')));
+
+  if(!events.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">📋</div><p>No records found.</p></div>';
+    return;
+  }
+
+  el.innerHTML = `
+    <div style="font-size:12px;color:var(--gray);margin-bottom:8px">${events.length} records</div>
+    <div class="card" style="padding:0">
+      ${events.map(e=>`
+      <div style="padding:10px 12px;border-bottom:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <strong>${e.tag}</strong>
+            <span class="badge ${e.color}" style="font-size:10px">${e.label}</span>
+          </div>
+          <span style="font-size:11px;color:var(--gray)">${e.date}${e.time?' '+e.time:''}</span>
+        </div>
+        <div style="font-size:12px;color:var(--gray)">${e.detail}${e.by?' · '+e.by:''}</div>
+      </div>`).join('')}
+    </div>`;
 }
 
 // ── INIT ───────────────────────────────────────────────────────────────────
