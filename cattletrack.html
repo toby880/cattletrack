@@ -6404,15 +6404,12 @@ function parseNestedAssociationFile(headers, rows, preview) {
     const firstCol = r[0];
 
     if(firstCol === 'Calves:') { inCalves = true; continue; }
-    if(firstCol === '# Calves:' || firstCol === 'EPD' || !firstCol) { continue; }
+    if(firstCol === '# Calves:') { inCalves = false; continue; } // end of calf section
+    if(firstCol === 'EPD' || !firstCol) { continue; }
 
-    // Skip EPD label/value rows (non-numeric first col that isn't a sex value)
+    // Skip EPD label/value rows
     const sex = sexIdx >= 0 ? r[sexIdx] : null;
-    if(!sexValues.includes(sex)) {
-      // If we see a non-animal row that isn't Calves:/EPD, we may be between dams
-      // Don't reset inCalves here — let the Calves: marker control it
-      continue;
-    }
+    if(!sexValues.includes(sex)) { continue; }
 
     const reg = String(typeof firstCol === 'number' ? Math.round(firstCol) : firstCol);
     const prefix = prefixIdx >= 0 ? (r[prefixIdx]||'') : '';
