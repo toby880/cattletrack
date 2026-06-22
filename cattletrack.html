@@ -994,7 +994,14 @@ tr:hover td{background:var(--bg)}
         <div class="card-title">Ranch Information</div>
         <div class="form-group"><label>Ranch Name</label><input type="text" id="set-ranch-name" placeholder="Ranch name"></div>
         <div class="form-group"><label>Owner Name</label><input type="text" id="set-owner-name" placeholder="Your name"></div>
-        <div class="form-group"><label>Phone</label><input type="text" id="set-phone" placeholder="Phone number"></div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Herd Prefix <span style="font-weight:400;color:var(--gray);text-transform:none;letter-spacing:0">(optional)</span></label>
+            <input type="text" id="set-herd-prefix" placeholder="e.g. H2R" maxlength="6" style="text-transform:uppercase">
+            <div style="font-size:11px;color:var(--gray);margin-top:3px">Displayed alongside ear tags — not stored as part of the tag number</div>
+          </div>
+          <div class="form-group"><label>Phone</label><input type="text" id="set-phone" placeholder="Phone number"></div>
+        </div>
         <div class="form-group"><label>Address</label><input type="text" id="set-address" placeholder="Ranch address"></div>
         <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
       </div>
@@ -1042,6 +1049,8 @@ tr:hover td{background:var(--bg)}
           You'll receive a ZIP file by email. Upload it here.
         </div>
         <button class="btn btn-primary" onclick="openCattleMaxImport()">📦 Import from CattleMax</button>
+        <button class="btn btn-secondary" style="margin-top:8px;width:100%" onclick="stripHerdPrefix()">🔧 Strip Prefix from Existing Tags</button>
+        <div style="font-size:11px;color:var(--gray);margin-top:6px">Use this if your tags currently include the prefix (e.g. H2R-N515 → N515)</div>
       </div>
 
     </div>
@@ -2740,7 +2749,7 @@ function renderAnimals(data) {
     <div onclick="openProfile('${a.id}')" style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px">
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
-          <strong style="font-size:15px">${a.tag}</strong>
+          <strong style="font-size:15px">${currentRanch.herd_prefix&&!a.tag.startsWith(currentRanch.herd_prefix)?currentRanch.herd_prefix+' '+a.tag:a.tag}</strong>
           <span class="badge ${typeColor[a.animal_type]||'badge-gray'}" style="font-size:10px">${a.animal_type==='Registered'?'Reg':'Comm'}</span>
           ${a.status==='sold'?'<span class="badge badge-red" style="font-size:10px">Sold</span>':''}
           ${a.status==='donor'?'<span class="badge badge-blue" style="font-size:10px">Donor</span>':''}
@@ -2798,7 +2807,7 @@ async function showProfileTab(tab) {
     const a = currentAnimal;
     const row = (l,v) => v ? `<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:var(--gray)">${l}</span><strong style="text-align:right;max-width:60%">${v}</strong></div>` : '';
     content.innerHTML = `
-      <div class="card" style="margin-bottom:10px"><div class="card-title">General</div>${row('Ear Tag',a.tag)}${row('EID Tag',a.eid_tag)}${row('Name',a.name)}${row('Reg Number',a.reg_number)}${row('Tattoo Left',a.tattoo_left)}${row('Tattoo Right',a.tattoo_right)}${a.tattoo&&!a.tattoo_left?row('Tattoo',a.tattoo):''}${row('Conception Method',a.conception_method)}${row('Donor/Genetic',a.donor_genetic)}${a.is_twin?row('Twin','Yes'):''}</div>
+      <div class="card" style="margin-bottom:10px"><div class="card-title">General</div>${currentRanch.herd_prefix?row('Herd Prefix',currentRanch.herd_prefix):''}${row('Ear Tag',a.tag)}${row('EID Tag',a.eid_tag)}${row('Name',a.name)}${row('Reg Number',a.reg_number)}${row('Tattoo Left',a.tattoo_left)}${row('Tattoo Right',a.tattoo_right)}${a.tattoo&&!a.tattoo_left?row('Tattoo',a.tattoo):''}${row('Conception Method',a.conception_method)}${row('Donor/Genetic',a.donor_genetic)}${a.is_twin?row('Twin','Yes'):''}</div>
       <div class="card" style="margin-bottom:10px"><div class="card-title">Descriptive</div>${row('Sex',a.sex)}${row('Breed',a.breed)}${row('Color',a.color)}${row('Horn Status',a.horn_status)}${row('Category',a.category)}</div>
       <div class="card" style="margin-bottom:10px"><div class="card-title">Status</div>${row('Status',a.status)}${row('Location / Pasture',a.location)}${row('Birth Date',a.dob)}${row('Weaning Date',a.weaning_date)}${row('Acquisition',a.acquisition)}${row('Purchase Price',a.purchase_price?'$'+parseFloat(a.purchase_price).toLocaleString():null)}${row('Purchased From',a.purchased_from)}${row('Sire',a.sire)}${row('Dam',a.dam)}</div>
       <div class="card"><div class="card-title">Records</div>${a.calfhood_vaccinated?row('Calfhood Vac','✓ '+( a.calfhood_vac_date||'on file')+(a.calfhood_vac_vet?' · '+a.calfhood_vac_vet:'')):row('Calfhood Vac','Not recorded')}${a.genomic_tested?row('Genomic Tested','✓ '+(a.genomic_lab||'')+(a.genomic_test_date?' · '+a.genomic_test_date:'')):''}</div>`;
@@ -7708,6 +7717,7 @@ async function saveNewStockerGroup() {
 function loadSettings() {
   document.getElementById('set-ranch-name').value=currentRanch.name||'';
   document.getElementById('set-owner-name').value=currentRanch.owner_name||'';
+  document.getElementById('set-herd-prefix').value=currentRanch.herd_prefix||'';
   document.getElementById('set-phone').value=currentRanch.phone||'';
   document.getElementById('set-address').value=currentRanch.address||'';
   const isActive = currentRanch.subscription_active;
@@ -7847,11 +7857,13 @@ async function saveSettings() {
   const {error}=await sb.from('ranches').update({
     name:document.getElementById('set-ranch-name').value.trim(),
     owner_name:document.getElementById('set-owner-name').value.trim(),
+    herd_prefix:document.getElementById('set-herd-prefix').value.trim().toUpperCase()||null,
     phone:document.getElementById('set-phone').value.trim(),
     address:document.getElementById('set-address').value.trim(),
   }).eq('id',currentRanch.id);
   if(error){alert('Error: '+error.message);return;}
   currentRanch.name=document.getElementById('set-ranch-name').value.trim();
+  currentRanch.herd_prefix=document.getElementById('set-herd-prefix').value.trim().toUpperCase()||null;
   document.getElementById('header-ranch-name').textContent=currentRanch.name;
   alert('✅ Settings saved');
 }
@@ -7933,7 +7945,7 @@ function renderMeasurementList() {
         </div>
         <div style="flex:1">
           <div style="display:flex;align-items:center;gap:8px">
-            <strong style="font-size:15px">${a.tag}</strong>
+            <strong style="font-size:15px">${currentRanch.herd_prefix&&!a.tag.startsWith(currentRanch.herd_prefix)?currentRanch.herd_prefix+' '+a.tag:a.tag}</strong>
             <span class="badge ${sexBadge[a.sex] || 'badge-gray'}" style="font-size:10px">${a.sex || '—'}</span>
           </div>
           <div style="font-size:12px;color:var(--gray);margin-top:2px">${a.name ? a.name + ' · ' : ''}${a.location || 'No pasture'}${a.dob ? ' · Born ' + a.dob : ''}</div>
@@ -8313,7 +8325,7 @@ renderMeasurementList = function() {
         </div>
         <div style="flex:1">
           <div style="display:flex;align-items:center;gap:8px">
-            <strong style="font-size:15px">${a.tag}</strong>
+            <strong style="font-size:15px">${currentRanch.herd_prefix&&!a.tag.startsWith(currentRanch.herd_prefix)?currentRanch.herd_prefix+' '+a.tag:a.tag}</strong>
             <span class="badge ${sexBadge[a.sex]||'badge-gray'}" style="font-size:10px">${a.sex||'—'}</span>
             ${a.eid_tag?`<span style="font-size:10px;color:var(--gray-lt)">EID</span>`:''}
           </div>
@@ -8751,6 +8763,27 @@ async function renderChuteHistory() {
 // ── CATTLEMAX IMPORT ──────────────────────────────────────────────────────
 let cmZipData = {}; // parsed CSV data keyed by filename
 
+async function stripHerdPrefix() {
+  const prefix = currentRanch.herd_prefix;
+  if(!prefix) { alert('Set your herd prefix in Settings first.'); return; }
+  if(!confirm(`This will remove "${prefix}-" and "${prefix} " from the start of all matching animal tags in your database. This cannot be undone. Continue?`)) return;
+
+  const {data: animals} = await sb.from('animals').select('id,tag').eq('ranch_id', currentRanch.id);
+  let updated = 0;
+  for(const a of animals||[]) {
+    let newTag = a.tag;
+    if(a.tag.startsWith(prefix+'-')) newTag = a.tag.slice(prefix.length+1);
+    else if(a.tag.startsWith(prefix+' ')) newTag = a.tag.slice(prefix.length+1);
+    else if(a.tag.startsWith(prefix)) newTag = a.tag.slice(prefix.length);
+    if(newTag !== a.tag) {
+      await sb.from('animals').update({tag: newTag}).eq('id', a.id);
+      updated++;
+    }
+  }
+  await loadAnimals();
+  alert(`✓ Stripped prefix from ${updated} animal tags.`);
+}
+
 function openCattleMaxImport() {
   document.getElementById('cattlemax-import-modal').classList.add('open');
   document.getElementById('cm-step1').style.display = 'block';
@@ -8998,12 +9031,38 @@ async function runCattleMaxImport() {
     cmSetProgress(30, 'Animals done. Starting breedings...');
   }
 
-  // Build animalIdToTag from DB if we didn't import animals
-  if(Object.keys(animalIdToTag).length === 0 && cmZipData.animals) {
-    cmLog('Building animal ID lookup from existing records...');
-    const {data: allAnimals} = await sb.from('animals').select('tag').eq('ranch_id', currentRanch.id);
-    // We can't map CattleMax IDs without importing — warn user
-    cmLog('⚠ Import animals first for best results', 'warn');
+  // Always build a complete animalIdToTag from the CattleMax CSV
+  // Match by ear_tag → existing tag in Supabase (handles both H2R- prefixed and plain tags)
+  if(cmZipData.animals) {
+    cmLog('Building animal ID → tag lookup from CattleMax export...');
+    const {headers: ah, rows: ar} = cmZipData.animals;
+    const idIdx = ah.indexOf('id');
+    const tagIdx = ah.indexOf('ear_tag');
+    const breederIdx = ah.indexOf('breeder_contact_id');
+    const HRA = '1475306';
+    const pfx = document.getElementById('cm-prefix')?.value || 'H2R-';
+
+    // Fetch all existing tags from Supabase
+    const {data: existingAnimals} = await sb.from('animals').select('tag').eq('ranch_id', currentRanch.id);
+    const existingTagSet = new Set((existingAnimals||[]).map(a => a.tag));
+
+    ar.forEach(r => {
+      const cmId = r[idIdx]?.trim();
+      const earTag = r[tagIdx]?.trim();
+      if(!cmId || !earTag) return;
+      const isH2R = r[breederIdx]?.trim() === HRA;
+      const prefixedTag = isH2R ? pfx + earTag : earTag;
+      // Use prefixed tag if it exists in DB, otherwise try plain tag
+      if(existingTagSet.has(prefixedTag)) {
+        animalIdToTag[cmId] = prefixedTag;
+      } else if(existingTagSet.has(earTag)) {
+        animalIdToTag[cmId] = earTag;
+      } else {
+        // Fall back to prefixed tag anyway (may have been imported this run)
+        animalIdToTag[cmId] = prefixedTag;
+      }
+    });
+    cmLog(`✓ ${Object.keys(animalIdToTag).length} animal IDs mapped`, 'success');
   }
 
   // ── STEP 2: BREEDINGS ─────────────────────────────────────────────────────
