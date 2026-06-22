@@ -9215,8 +9215,23 @@ async function runCattleMaxImport() {
     const flushIdMap = {}; // cattlemax flush id → our db id
 
     for(const r of rows) {
-      const donorTag = animalIdToTag[r[col('animal_id')]];
-      const sireTag = animalIdToTag[r[col('sire_animal_id')]];
+      // Fall back to raw ear_tag from animals CSV if not in lookup
+      const donorAnimalId = r[col('animal_id')];
+      const sireAnimalId = r[col('sire_animal_id')];
+      let donorTag = animalIdToTag[donorAnimalId];
+      let sireTag = animalIdToTag[sireAnimalId];
+      if(!donorTag && cmZipData.animals) {
+        const {headers:ah,rows:ar} = cmZipData.animals;
+        const idIdx=ah.indexOf('id'), tagIdx=ah.indexOf('ear_tag'), nameIdx=ah.indexOf('name');
+        const found = ar.find(a=>a[idIdx]===donorAnimalId);
+        if(found) donorTag = found[tagIdx]?.trim() || found[nameIdx]?.trim();
+      }
+      if(!sireTag && cmZipData.animals && sireAnimalId) {
+        const {headers:ah,rows:ar} = cmZipData.animals;
+        const idIdx=ah.indexOf('id'), tagIdx=ah.indexOf('ear_tag'), nameIdx=ah.indexOf('name');
+        const found = ar.find(a=>a[idIdx]===sireAnimalId);
+        if(found) sireTag = found[tagIdx]?.trim() || found[nameIdx]?.trim();
+      }
       const flushDate = r[col('flush_date')]?.split(' ')[0];
       if(!donorTag || !flushDate) continue;
 
