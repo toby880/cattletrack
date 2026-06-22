@@ -1055,6 +1055,11 @@ tr:hover td{background:var(--bg)}
         <div style="font-size:11px;color:var(--gray);margin-top:6px">Use this if your tags currently include the prefix (e.g. H2R-N515 → N515)</div>
       </div>
 
+
+        <button class="btn btn-secondary" style="margin-top:8px;width:100%" onclick="stripHerdPrefix()">🔧 Strip Prefix from Existing Tags</button>
+        <div style="font-size:11px;color:var(--gray);margin-top:6px">Use this if your tags currently include the prefix (e.g. H2R-N515 → N515)</div>
+      </div>
+
     </div>
 
   </main>
@@ -6353,6 +6358,16 @@ function templateMapColumns(headers, rows, preview) {
 
 async function smartMapColumns(headers, rows, preview) {
   preview.innerHTML = '<div class="loading"><div class="spinner"></div>AI is mapping your columns...</div>';
+
+  // Detect nested dam/calf structure (RAAA style)
+  // Signature: rows contain marker rows like "Calves:" or "# Calves:" in first column
+  const hasNestedStructure = rows.some(r => r[0] === 'Calves:' || r[0] === '# Calves:');
+  if(hasNestedStructure) {
+    preview.innerHTML = '<div class="loading"><div class="spinner"></div>Detected breed association report format. Parsing dam/calf structure...</div>';
+    parseNestedAssociationFile(headers, rows, preview);
+    return;
+  }
+
   try {
     const sampleRows = rows.slice(0,3).map(r=>headers.reduce((obj,h,i)=>({...obj,[h]:r[i]}),{}));
     const response = await fetch('https://api.anthropic.com/v1/messages',{
@@ -6365,6 +6380,158 @@ async function smartMapColumns(headers, rows, preview) {
     if(m) showImportPreview(headers, rows, JSON.parse(m[0]), preview);
     else showImportPreview(headers, rows, {}, preview);
   } catch(e) { showImportPreview(headers, rows, {}, preview); }
+}
+
+function parseNestedAssociationFile(headers, rows, preview) {
+  // Parse dam/calf structure — works for RAAA Dam Summary and similar formats
+  const sexIdx = headers.findIndex(h => h.toLowerCase().includes('sex'));
+  const regIdx = headers.findIndex(h => h.toLowerCase().includes('reg'));
+  const tagIdx = headers.findIndex(h => h.toLowerCase() === 'id' || h.toLowerCase() === 'tag');
+  const prefixIdx = headers.findIndex(h => h.toLowerCase() === 'prefix');
+  const dobIdx = headers.findIndex(h => h.toLowerCase().includes('birth date') || h.toLowerCase().includes('dob'));
+  const sireIdx = headers.findIndex(h => h.toLowerCase().includes('sire'));
+  const birthWtIdx = headers.findIndex(h => h.toLowerCase().includes('birth wt'));
+  const weanIdx = headers.findIndex(h => h.toLowerCase().includes('wean adj'));
+  const yearIdx = headers.findIndex(h => h.toLowerCase().includes('year adj'));
+
+  const dams = [];
+  let currentDam = null;
+  let inCalves = false;
+  const sexValues = ['COW','HEIFER','BULL','STEER','BLFK'];
+
+  for(const r of rows) {
+    const firstCol = r[0];
+    if(firstCol === 'Calves:') { inCalves = true; continue; }
+    if(firstCol === '# Calves:' || firstCol === 'EPD') { continue; }
+    if(!firstCol) continue;
+    const sex = sexIdx >= 0 ? r[sexIdx] : null;
+    if(!sexValues.includes(sex)) continue;
+
+    const reg = firstCol != null ? String(typeof firstCol === 'number' ? Math.round(firstCol) : firstCol) : '';
+    const prefix = prefixIdx >= 0 ? (r[prefixIdx]||'') : '';
+    const tagId = tagIdx >= 0 ? (r[tagIdx]||'') : '';
+    const animal = {
+      reg, prefix, tag: tagId, sex,
+      dob: dobIdx >= 0 ? r[dobIdx] : null,
+      sire: sireIdx >= 0 ? r[sireIdx] : null,
+      birthWt: birthWtIdx >= 0 ? r[birthWtIdx] : null,
+      weanWt: weanIdx >= 0 ? r[weanIdx] : null,
+      yearWt: yearIdx >= 0 ? r[yearIdx] : null,
+    };
+
+    if(!inCalves) {
+      currentDam = {...animal, calves:[]};
+      dams.push(currentDam);
+    } else if(currentDam) {
+      currentDam.calves.push({...animal, damTag: currentDam.tag, damPrefix: currentDam.prefix, damReg: currentDam.reg});
+    }
+    inCalves = false; // reset after each non-marker animal row unless next is calf
+    // Check if next row is Calves: to set inCalves
+    const nextIdx = rows.indexOf(r) + 1;
+    if(nextIdx < rows.length && rows[nextIdx][0] === 'Calves:') inCalves = false; // handled by next loop
+  }
+
+  const totalCalves = dams.reduce((s,d) => s+d.calves.length, 0);
+  window._raaaDams = dams;
+
+  preview.innerHTML = `
+    <div class="card" style="margin-bottom:10px;background:var(--green-lt,#f0fdf4);border:1px solid var(--green)">
+      <div style="font-weight:600;color:var(--green);margin-bottom:4px">✓ Breed Association Format Detected</div>
+      <div style="font-size:13px">Found <strong>${dams.length} dams</strong> and <strong>${totalCalves} calves</strong> in nested format.</div>
+    </div>
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">Preview</div>
+      <div style="font-size:12px;color:var(--gray);margin-bottom:8px">First 3 dams and their calves:</div>
+      ${dams.slice(0,3).map(d => `
+        <div style="padding:8px 0;border-bottom:1px solid var(--border)">
+          <div style="font-weight:600">${d.prefix} ${d.tag} <span style="color:var(--gray);font-weight:400;font-size:12px">Reg: ${d.reg} · ${d.sex} · Born: ${d.dob||'—'}</span></div>
+          <div style="font-size:12px;color:var(--gray);margin-left:12px;margin-top:4px">
+            ${d.calves.slice(0,3).map(c => `↳ ${c.prefix} ${c.tag} · ${c.sex} · ${c.dob||'—'} · Sire: ${c.sire||'—'}`).join('<br>')}
+            ${d.calves.length > 3 ? `<br>+ ${d.calves.length-3} more` : ''}
+          </div>
+        </div>`).join('')}
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Duplicates</label>
+        <select id="import-skip-dupes"><option value="skip">Skip duplicates</option><option value="update">Update existing</option></select>
+      </div>
+      <div class="form-group">
+        <label>New animals default status</label>
+        <select id="import-default-status"><option value="active">Active</option><option value="sold">Sold</option></select>
+      </div>
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="runAssociationImport()">✅ Import ${dams.length} Dams + ${totalCalves} Calves</button>`;
+}
+
+async function runAssociationImport() {
+  const dams = window._raaaDams || [];
+  if(!dams.length) { alert('No data to import.'); return; }
+
+  const preview = document.getElementById('import-preview-content');
+  preview.innerHTML = '<div class="loading"><div class="spinner"></div>Importing...</div>';
+
+  const {data: existingAnimals} = await sb.from('animals').select('id,tag,reg_number,dam,sire').eq('ranch_id', currentRanch.id);
+  const byReg = {};
+  const byTag = {};
+  (existingAnimals||[]).forEach(a => {
+    if(a.reg_number) byReg[a.reg_number.trim()] = a;
+    if(a.tag) byTag[a.tag.trim()] = a;
+  });
+
+  let updated = 0, added = 0, weightAdded = 0, errors = 0;
+
+  for(const dam of dams) {
+    const damAnimal = byReg[dam.reg] || byTag[dam.tag] || byTag[dam.prefix+dam.tag];
+
+    for(const calf of dam.calves) {
+      const calfAnimal = byReg[calf.reg] || byTag[calf.tag] || byTag[calf.prefix+calf.tag];
+      const damTagResolved = damAnimal?.tag || dam.prefix+dam.tag || dam.tag;
+      const sireStr = calf.sire ? calf.sire.split('/').pop()?.trim() : null;
+
+      if(calfAnimal) {
+        const updates = {};
+        if(!calfAnimal.dam && damTagResolved) updates.dam = damTagResolved;
+        if(!calfAnimal.reg_number && calf.reg) updates.reg_number = calf.reg;
+        if(Object.keys(updates).length > 0) {
+          await sb.from('animals').update(updates).eq('id', calfAnimal.id);
+          updated++;
+        }
+      } else {
+        const {error} = await dbInsert('animals', {
+          tag: (calf.prefix+calf.tag).trim() || calf.tag,
+          reg_number: calf.reg || null,
+          sex: calf.sex === 'COW' ? 'Cow' : calf.sex === 'HEIFER' ? 'Heifer' : calf.sex === 'BULL' ? 'Bull' : 'Steer',
+          dob: calf.dob || null,
+          dam: damTagResolved || null,
+          sire: sireStr || null,
+          status: 'active',
+          breed: 'Red Angus',
+        });
+        if(!error) { added++; byTag[(calf.prefix+calf.tag).trim()] = {tag:(calf.prefix+calf.tag).trim(), reg_number:calf.reg}; }
+        else errors++;
+      }
+
+      const calfTag = calfAnimal?.tag || (calf.prefix+calf.tag).trim();
+      if(calf.birthWt) { await dbInsert('weights', {animal_tag:calfTag, weight_date:null, weight_lbs:calf.birthWt, weight_type:'birth', notes:'Association import'}); weightAdded++; }
+      if(calf.weanWt) { await dbInsert('weights', {animal_tag:calfTag, weight_date:null, weight_lbs:calf.weanWt, weight_type:'weaning', notes:'Association adjusted weaning weight'}); weightAdded++; }
+      if(calf.yearWt) { await dbInsert('weights', {animal_tag:calfTag, weight_date:null, weight_lbs:calf.yearWt, weight_type:'yearling', notes:'Association adjusted yearling weight'}); weightAdded++; }
+    }
+  }
+
+  await loadAnimals();
+  preview.innerHTML = `
+    <div class="card" style="text-align:center;padding:20px">
+      <div style="font-size:32px;margin-bottom:8px">✅</div>
+      <div style="font-weight:700;font-size:16px;margin-bottom:12px">Import Complete!</div>
+      <div style="font-size:13px;color:var(--gray)">
+        ${updated} animals updated with dam/sire links<br>
+        ${added} new animals added<br>
+        ${weightAdded} weight records added<br>
+        ${errors > 0 ? `<span style="color:var(--red)">${errors} errors</span>` : ''}
+      </div>
+      <button class="btn btn-primary" style="margin-top:16px" onclick="document.getElementById('herd-import-modal').classList.remove('open');showPage('animals')">View Animals →</button>
+    </div>`;
 }
 
 function showImportPreview(headers, rows, colMap, preview) {
@@ -9435,6 +9602,144 @@ async function runCattleMaxImport() {
       <div>🔥 Heats:</div><div><strong>${stats.heats}</strong></div>
       ${stats.errors > 0 ? `<div style="color:var(--red)">⚠ Errors:</div><div style="color:var(--red)"><strong>${stats.errors}</strong></div>` : ''}
     </div>`;
+}
+
+
+// ── RAAA DAM SUMMARY IMPORT ───────────────────────────────────────────────
+async function runRAAImport(file) {
+  if(!file) return;
+  const statusEl = document.getElementById('raaa-import-status');
+  statusEl.innerHTML = '⏳ Reading file...';
+
+  try {
+    // Load SheetJS
+    if(!window.XLSX) {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.onload = resolve; s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+
+    const ab = await file.arrayBuffer();
+    const wb = XLSX.read(ab, {type:'array'});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:null});
+
+    if(!rows.length) { statusEl.textContent = '❌ Empty file'; return; }
+
+    // Parse dam/calf structure
+    const dams = [];
+    let currentDam = null;
+    let inCalves = false;
+
+    for(let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      const reg = r[0], prefix = r[1], tagId = r[2], sex = r[4];
+      const dob = r[5], sireId = r[7];
+      const birthWt = r[13], weanWt = r[16], yearWt = r[19];
+
+      if(reg === 'Calves:') { inCalves = true; continue; }
+      if(reg === '# Calves:' || reg === 'EPD' || !reg || !sex) { 
+        if(reg === '# Calves:') inCalves = false;
+        continue; 
+      }
+      if(!['COW','HEIFER','BULL','STEER','BLFK'].includes(sex)) continue;
+
+      const regStr = typeof reg === 'number' ? String(Math.round(reg)) : String(reg);
+      const animal = { reg: regStr, prefix: prefix||'', tag: tagId||'', sex, dob, sire: sireId, birthWt, weanWt, yearWt };
+
+      if(!inCalves) {
+        currentDam = {...animal, calves:[]};
+        dams.push(currentDam);
+      } else if(currentDam) {
+        currentDam.calves.push({...animal, damTag: currentDam.tag, damPrefix: currentDam.prefix, damReg: currentDam.reg});
+      }
+    }
+
+    const totalCalves = dams.reduce((s,d) => s+d.calves.length, 0);
+    statusEl.innerHTML = `📋 Found ${dams.length} dams, ${totalCalves} calves. Importing...`;
+
+    // Fetch existing animals to match by reg number or tag
+    const {data: existingAnimals} = await sb.from('animals').select('id,tag,reg_number,dam,sire').eq('ranch_id', currentRanch.id);
+    const byReg = {};
+    const byTag = {};
+    (existingAnimals||[]).forEach(a => {
+      if(a.reg_number) byReg[a.reg_number.trim()] = a;
+      if(a.tag) byTag[a.tag.trim()] = a;
+    });
+
+    let updated = 0, added = 0, weightAdded = 0, errors = 0;
+
+    // Process each dam and her calves
+    for(const dam of dams) {
+      // Find dam in our DB by reg number or tag
+      const damAnimal = byReg[dam.reg] || byTag[dam.tag] || byTag[dam.prefix+dam.tag];
+
+      // Process calves
+      for(const calf of dam.calves) {
+        const calfAnimal = byReg[calf.reg] || byTag[calf.tag] || byTag[calf.prefix+calf.tag];
+        const damTagResolved = damAnimal?.tag || dam.tag;
+        const sireStr = calf.sire ? calf.sire.split('/').pop()?.trim() : null;
+
+        if(calfAnimal) {
+          // Update existing animal with dam/sire links and reg number
+          const updates = {};
+          if(!calfAnimal.dam && damTagResolved) updates.dam = damTagResolved;
+          if(!calfAnimal.reg_number && calf.reg) updates.reg_number = calf.reg;
+          if(Object.keys(updates).length > 0) {
+            await sb.from('animals').update(updates).eq('id', calfAnimal.id);
+            updated++;
+          }
+        } else {
+          // Add new animal record for this calf
+          const {error} = await dbInsert('animals', {
+            tag: calf.prefix ? calf.prefix+calf.tag : calf.tag,
+            reg_number: calf.reg || null,
+            sex: calf.sex === 'COW' ? 'Cow' : calf.sex === 'HEIFER' ? 'Heifer' : calf.sex === 'BULL' ? 'Bull' : 'Steer',
+            dob: calf.dob || null,
+            dam: damTagResolved || null,
+            sire: sireStr || null,
+            status: 'active',
+            breed: 'Red Angus',
+          });
+          if(!error) {
+            added++;
+            byTag[calf.prefix+calf.tag] = {tag: calf.prefix+calf.tag, reg_number: calf.reg};
+          } else errors++;
+        }
+
+        // Add weight records if present
+        const calfTag = calfAnimal?.tag || (calf.prefix+calf.tag);
+        if(calf.birthWt) {
+          await dbInsert('weights', { animal_tag: calfTag, weight_date: calf.dob||null, weight_lbs: calf.birthWt, weight_type: 'birth', notes: 'RAAA import' });
+          weightAdded++;
+        }
+        if(calf.weanWt) {
+          await dbInsert('weights', { animal_tag: calfTag, weight_date: null, weight_lbs: calf.weanWt, weight_type: 'weaning', notes: 'RAAA adjusted weaning weight' });
+          weightAdded++;
+        }
+        if(calf.yearWt) {
+          await dbInsert('weights', { animal_tag: calfTag, weight_date: null, weight_lbs: calf.yearWt, weight_type: 'yearling', notes: 'RAAA adjusted yearling weight' });
+          weightAdded++;
+        }
+      }
+    }
+
+    await loadAnimals(); // refresh cache
+    statusEl.innerHTML = `✅ Import complete!<br>
+      <div style="margin-top:6px;font-size:12px">
+        ${updated} animals updated with dam/sire links<br>
+        ${added} new animals added<br>
+        ${weightAdded} weight records added<br>
+        ${errors > 0 ? `<span style="color:var(--red)">${errors} errors</span>` : ''}
+      </div>`;
+
+  } catch(e) {
+    statusEl.innerHTML = '❌ Error: ' + e.message;
+    console.error(e);
+  }
 }
 
 // ── INIT ───────────────────────────────────────────────────────────────────
