@@ -5869,9 +5869,9 @@ function parseSENLine(line) {
   const a={epds:{},pedigree:{}};
   a.assoc=line.substring(0,3).trim();
   a.reg_number=line.substring(3,10).trim();
-  a.tag=line.substring(80,84).trim();
+  a.tag=line.substring(80,85).trim();
   a.herd_prefix=line.substring(86,89).trim();
-  a.herd_tag=(a.herd_prefix&&a.tag)?a.herd_prefix+'-'+a.tag:a.tag;
+  a.herd_tag=(a.herd_prefix&&a.tag)?a.herd_prefix+' '+a.tag:a.tag;
   const nameM=line.match(/R[A-Z0-9][A-Z]\d\s+([\w][\w\s]+?)\s{2,}P8?\d{3}/);
   if(nameM)a.name=nameM[1].trim();
   const dobM=line.match(/P12(\d{4})(\d{2})(\d{2})/);
