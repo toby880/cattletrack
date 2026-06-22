@@ -9071,6 +9071,9 @@ async function runCattleMaxImport() {
     const {headers, rows} = cmZipData.breedings;
     const col = h => headers.indexOf(h);
     let count = 0;
+    // Build duplicate set
+    const {data: existingAI} = await sb.from('ai_records').select('cow_tag,ai_date').eq('ranch_id', currentRanch.id);
+    const aiDupeSet = new Set((existingAI||[]).map(r => r.cow_tag+'|'+r.ai_date));
 
     // Re-build animalIdToTag from CattleMax animals file
     if(cmZipData.animals) {
@@ -9097,6 +9100,7 @@ async function runCattleMaxImport() {
       const method = r[col('breeding_method')]?.trim() || 'AI';
       const breedingDate = r[col('breeding_date')]?.split(' ')[0] || null;
       if(!breedingDate) continue;
+      if(aiDupeSet.has(cowTag+'|'+breedingDate)) { stats.breedings++; continue; }
 
       if(method === 'AI' || method === 'ET') {
         const {error} = await dbInsert('ai_records', {
@@ -9123,12 +9127,16 @@ async function runCattleMaxImport() {
     const col = h => headers.indexOf(h);
     let count = 0;
     cmSetProgress(48, 'Importing treatments...');
+    const {data: existingHE} = await sb.from('health_events').select('animal_tag,event_date,product').eq('ranch_id', currentRanch.id);
+    const heDupeSet = new Set((existingHE||[]).map(r => r.animal_tag+'|'+r.event_date+'|'+(r.product||'')));
 
     for(const r of rows) {
       const animalTag = animalIdToTag[r[col('animal_id')]];
       if(!animalTag) continue;
       const txDate = r[col('treatment_date')]?.split(' ')[0];
       if(!txDate) continue;
+      const product = r[col('medication')]?.trim()||'';
+      if(heDupeSet.has(animalTag+'|'+txDate+'|'+product)) { stats.treatments++; continue; }
 
       // Map category to event_type
       const cat = (r[col('category')]||'').toLowerCase();
@@ -9170,12 +9178,15 @@ async function runCattleMaxImport() {
     const col = h => headers.indexOf(h);
     let count = 0;
     cmSetProgress(60, 'Importing preg checks...');
+    const {data: existingPC} = await sb.from('preg_checks').select('animal_tag,check_date').eq('ranch_id', currentRanch.id);
+    const pcDupeSet = new Set((existingPC||[]).map(r => r.animal_tag+'|'+r.check_date));
 
     for(const r of rows) {
       const animalTag = animalIdToTag[r[col('animal_id')]];
       if(!animalTag) continue;
       const checkDate = r[col('check_date')]?.split(' ')[0];
       if(!checkDate) continue;
+      if(pcDupeSet.has(animalTag+'|'+checkDate)) { stats.pregChecks++; continue; }
 
       const {error} = await dbInsert('preg_checks', {
         cow_tag: animalTag,
@@ -9271,6 +9282,10 @@ async function runCattleMaxImport() {
     const col = h => headers.indexOf(h);
     let wCount = 0, mCount = 0;
     cmSetProgress(82, 'Importing measurements...');
+    const {data: existingM} = await sb.from('measurements').select('animal_tag,measure_date').eq('ranch_id', currentRanch.id);
+    const mDupeSet = new Set((existingM||[]).map(r => r.animal_tag+'|'+r.measure_date));
+    const {data: existingW} = await sb.from('weights').select('animal_tag,weight_date').eq('ranch_id', currentRanch.id);
+    const wDupeSet = new Set((existingW||[]).map(r => r.animal_tag+'|'+r.weight_date));
 
     for(const r of rows) {
       const animalTag = animalIdToTag[r[col('animal_id')]];
@@ -9284,7 +9299,7 @@ async function runCattleMaxImport() {
       const scrotal = parseFloat(r[col('scrotal')]) || null;
 
       // Write to measurements table
-      if(bcs || hip || scrotal) {
+      if((bcs || hip || scrotal) && !mDupeSet.has(animalTag+'|'+measDate)) {
         await dbInsert('measurements', {
           animal_tag: animalTag,
           measure_date: measDate,
@@ -9298,7 +9313,7 @@ async function runCattleMaxImport() {
       }
 
       // Write weight to weights table
-      if(weight) {
+      if(weight && !wDupeSet.has(animalTag+'|'+measDate)) {
         const cat = r[col('category')]?.trim() || '';
         const weightType = cat.toLowerCase().includes('birth') ? 'birth' :
           cat.toLowerCase().includes('wean') ? 'weaning' :
