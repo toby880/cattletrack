@@ -309,7 +309,7 @@ tr:hover td{background:var(--bg)}
     <button class="nav-btn" onclick="showPage('insights')">⚡ Insights</button>
     <button class="nav-btn" onclick="showPage('animals')">Animals</button>
     <button class="nav-btn" onclick="showPage('calving')">Calving</button>
-    <button class="nav-btn" onclick="showPage('measurements')">Measurements</button>
+    <button class="nav-btn" onclick="showPage('measurements')">Chute Work</button>
     <button class="nav-btn" onclick="showPage('health')">Health</button>
     <button class="nav-btn" onclick="showPage('breeding')">Breeding</button>
     <button class="nav-btn" onclick="showPage('pastures')">Pastures</button>
@@ -396,7 +396,7 @@ tr:hover td{background:var(--bg)}
         <button class="tab" onclick="showProfileTab('offspring')">Offspring</button>
         <button class="tab" onclick="showProfileTab('performance')">Performance</button>
         <button class="tab" onclick="showProfileTab('health')">Health</button>
-        <button class="tab" onclick="showProfileTab('measurements')">Measurements</button>
+        <button class="tab" onclick="showProfileTab('measurements')">Chute Records</button>
         <button class="tab" onclick="showProfileTab('pedigree')">Pedigree</button>
         <button class="tab" onclick="showProfileTab('epds')">EPDs</button>
         <button class="tab" onclick="showProfileTab('embryo')">Embryo</button>
@@ -904,7 +904,7 @@ tr:hover td{background:var(--bg)}
     <!-- MEASUREMENTS -->
     <div class="page" id="page-measurements">
       <div class="section-header">
-        <div class="section-title">📏 Measurements</div>
+        <div class="section-title">🐄 Chute Work</div>
       </div>
 
       <!-- Filter Bar -->
@@ -1404,6 +1404,22 @@ tr:hover td{background:var(--bg)}
     <div class="form-group" id="ea-breeder-wrap">
       <label>Purchased From</label><input type="text" id="ea-breeder">
     </div>
+    <div class="form-row">
+      <div class="form-group"><label>EID Tag</label><input type="text" id="ea-eid" placeholder="Electronic ID"></div>
+      <div class="form-group"><label>Tattoo Left</label><input type="text" id="ea-tattoo-left"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Tattoo Right</label><input type="text" id="ea-tattoo-right"></div>
+      <div class="form-group"><label>Weaning Date</label><input type="date" id="ea-weaning-date"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Donor/Genetic</label><input type="text" id="ea-donor-genetic" placeholder="ET donor tag"></div>
+      <div class="form-group" style="display:flex;align-items:center;padding-top:20px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500;color:var(--dark)">
+          <input type="checkbox" id="ea-is-twin" style="width:18px;height:18px;accent-color:var(--orange)"> Twin
+        </label>
+      </div>
+    </div>
     <div class="form-group">
       <label>Status</label>
       <select id="ea-status">
@@ -1491,7 +1507,48 @@ tr:hover td{background:var(--bg)}
       <input type="text" id="me-notes" placeholder="Any observations...">
     </div>
 
-    <div style="display:flex;gap:10px;margin-top:4px">
+    <!-- One-Time Records -->
+    <div id="me-onetime-section" style="display:none">
+      <div style="height:1px;background:var(--border);margin:12px 0"></div>
+      <div style="font-size:11px;font-weight:600;color:var(--orange);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">📋 One-Time Records</div>
+      <div id="me-calfhood-done" style="display:none;background:var(--bg2);border-radius:8px;padding:10px;margin-bottom:8px;font-size:13px;color:var(--green)">✓ Calfhood vaccination on file</div>
+      <div id="me-calfhood-form">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;text-transform:none;letter-spacing:0;font-weight:500;color:var(--dark)">
+            <input type="checkbox" id="me-calfhood-vac" style="width:18px;height:18px;accent-color:var(--orange)">
+            Calfhood Vaccinated
+          </label>
+        </div>
+        <div class="form-row" id="me-calfhood-details" style="display:none">
+          <div class="form-group"><label>Vac Date</label><input type="date" id="me-calfhood-date"></div>
+          <div class="form-group"><label>Vet Name</label><input type="text" id="me-calfhood-vet" placeholder="Vet name"></div>
+        </div>
+      </div>
+      <div id="me-eid-done" style="display:none;background:var(--bg2);border-radius:8px;padding:10px;margin-bottom:8px;font-size:13px;color:var(--gray)" id="me-eid-existing"></div>
+      <div id="me-eid-form" class="form-group">
+        <label>EID Tag</label>
+        <input type="text" id="me-eid" placeholder="Electronic ID tag number">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500;color:var(--dark)">
+            <input type="checkbox" id="me-genomic" style="width:18px;height:18px;accent-color:var(--orange)">
+            Genomic Tested
+          </label>
+        </div>
+        <div class="form-group"><label>Genomic Lab</label>
+          <select id="me-genomic-lab">
+            <option value="">— Select —</option>
+            <option value="GeneSeek">GeneSeek</option>
+            <option value="Neogen">Neogen</option>
+            <option value="Zoetis">Zoetis</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:12px">
       <button class="btn btn-secondary" onclick="closeMeasModal()" style="flex:1">Skip</button>
       <button class="btn btn-primary" onclick="saveMeasurementBatch()" style="flex:2">Save & Next →</button>
     </div>
@@ -2558,7 +2615,7 @@ function renderAnimals(data) {
           ${a.status==='sold'?'<span class="badge badge-red" style="font-size:10px">Sold</span>':''}
           ${a.status==='donor'?'<span class="badge badge-blue" style="font-size:10px">Donor</span>':''}
         </div>
-        <div style="font-size:12px;color:var(--gray)">${a.sex?`${sexIcon[a.sex]||''} ${a.sex} · `:''}${a.dam?`Dam: ${a.dam} · `:''}Born: ${a.dob||'—'}${a.location?' · 📍'+a.location:''}${a.category?' · '+a.category:''}</div>
+        <div style="font-size:12px;color:var(--gray)">${a.sex?`${sexIcon[a.sex]||''} ${a.sex} · `:''}${a.dam?`Dam: ${a.dam} · `:''}Born: ${a.dob||'—'}${a.location?' · 📍'+a.location:''}${a.category?' · '+a.category:''}${a.eid_tag?' · EID: '+a.eid_tag:''}</div>
         ${a.name?`<div style="font-size:12px;color:var(--gray-lt)">${a.name}</div>`:''}
       </div>
       <div style="color:var(--gray-lt);font-size:20px">›</div>
@@ -2611,9 +2668,10 @@ async function showProfileTab(tab) {
     const a = currentAnimal;
     const row = (l,v) => v ? `<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:var(--gray)">${l}</span><strong style="text-align:right;max-width:60%">${v}</strong></div>` : '';
     content.innerHTML = `
-      <div class="card" style="margin-bottom:10px"><div class="card-title">General</div>${row('Ear Tag',a.tag)}${row('Name',a.name)}${row('Reg Number',a.reg_number)}${row('Tattoo',a.tattoo)}</div>
+      <div class="card" style="margin-bottom:10px"><div class="card-title">General</div>${row('Ear Tag',a.tag)}${row('EID Tag',a.eid_tag)}${row('Name',a.name)}${row('Reg Number',a.reg_number)}${row('Tattoo Left',a.tattoo_left)}${row('Tattoo Right',a.tattoo_right)}${a.tattoo&&!a.tattoo_left?row('Tattoo',a.tattoo):''}${row('Conception Method',a.conception_method)}${row('Donor/Genetic',a.donor_genetic)}${a.is_twin?row('Twin','Yes'):''}</div>
       <div class="card" style="margin-bottom:10px"><div class="card-title">Descriptive</div>${row('Sex',a.sex)}${row('Breed',a.breed)}${row('Color',a.color)}${row('Horn Status',a.horn_status)}${row('Category',a.category)}</div>
-      <div class="card"><div class="card-title">Status</div>${row('Status',a.status)}${row('Location / Pasture',a.location)}${row('Category',a.category)}${row('Birth Date',a.dob)}${row('Acquisition',a.acquisition)}${row('Purchase Price',a.purchase_price?'$'+parseFloat(a.purchase_price).toLocaleString():null)}${row('Purchased From',a.purchased_from)}${row('Sire',a.sire)}${row('Dam',a.dam)}</div>`;
+      <div class="card" style="margin-bottom:10px"><div class="card-title">Status</div>${row('Status',a.status)}${row('Location / Pasture',a.location)}${row('Birth Date',a.dob)}${row('Weaning Date',a.weaning_date)}${row('Acquisition',a.acquisition)}${row('Purchase Price',a.purchase_price?'$'+parseFloat(a.purchase_price).toLocaleString():null)}${row('Purchased From',a.purchased_from)}${row('Sire',a.sire)}${row('Dam',a.dam)}</div>
+      <div class="card"><div class="card-title">Records</div>${a.calfhood_vaccinated?row('Calfhood Vac','✓ '+( a.calfhood_vac_date||'on file')+(a.calfhood_vac_vet?' · '+a.calfhood_vac_vet:'')):row('Calfhood Vac','Not recorded')}${a.genomic_tested?row('Genomic Tested','✓ '+(a.genomic_lab||'')+(a.genomic_test_date?' · '+a.genomic_test_date:'')):''}</div>`;
   }
 
   if(tab==='performance') {
@@ -2743,13 +2801,16 @@ async function showProfileTab(tab) {
       <div class="card" style="margin-bottom:10px">
         <div class="card-title">History</div>
         <div class="table-wrap"><table>
-          <thead><tr><th>Date</th><th>Bag</th><th>Teat</th><th>Hair Shed</th><th>BCS</th><th>Notes</th></tr></thead>
+          <thead><tr><th>Date</th><th>Wt</th><th>BCS</th><th>Hair</th><th>Hip</th><th>Claw</th><th>Angle</th><th>Disp</th><th>Notes</th></tr></thead>
           <tbody>${meas.map(m=>`<tr>
             <td>${m.measure_date||'—'}</td>
-            <td>${m.bag_score!=null?m.bag_score:'—'}</td>
-            <td>${m.teat_score!=null?m.teat_score:'—'}</td>
-            <td>${m.hair_shed_score!=null?m.hair_shed_score:'—'}</td>
+            <td>${m.weight!=null?m.weight+' lb':'—'}</td>
             <td>${m.bcs!=null?m.bcs:'—'}</td>
+            <td>${m.hair_shed_score!=null?m.hair_shed_score:'—'}</td>
+            <td>${m.hip_height!=null?m.hip_height+'"':'—'}</td>
+            <td>${m.claw_set_score!=null?m.claw_set_score:'—'}</td>
+            <td>${m.foot_angle_score!=null?m.foot_angle_score:'—'}</td>
+            <td>${m.disposition_score!=null?m.disposition_score:'—'}</td>
             <td style="font-size:12px;color:var(--gray)">${m.notes||'—'}</td>
           </tr>`).join('')}</tbody>
         </table></div>
@@ -4906,6 +4967,12 @@ function openEditAnimal() {
   document.getElementById('ea-breeder').value = a.purchased_from||'';
   document.getElementById('ea-status').value = a.status||'active';
   document.getElementById('ea-notes').value = a.notes||'';
+  document.getElementById('ea-eid').value = a.eid_tag||'';
+  document.getElementById('ea-tattoo-left').value = a.tattoo_left||'';
+  document.getElementById('ea-tattoo-right').value = a.tattoo_right||'';
+  document.getElementById('ea-weaning-date').value = a.weaning_date||'';
+  document.getElementById('ea-donor-genetic').value = a.donor_genetic||'';
+  document.getElementById('ea-is-twin').checked = a.is_twin||false;
   toggleEditPurchaseFields();
   document.getElementById('edit-animal-modal').classList.add('open');
 }
@@ -4942,6 +5009,12 @@ async function saveEditAnimal() {
     purchased_from: document.getElementById('ea-breeder').value.trim()||null,
     status: document.getElementById('ea-status').value,
     notes: document.getElementById('ea-notes').value.trim()||null,
+    eid_tag: document.getElementById('ea-eid').value.trim()||null,
+    tattoo_left: document.getElementById('ea-tattoo-left').value.trim()||null,
+    tattoo_right: document.getElementById('ea-tattoo-right').value.trim()||null,
+    weaning_date: document.getElementById('ea-weaning-date').value||null,
+    donor_genetic: document.getElementById('ea-donor-genetic').value.trim()||null,
+    is_twin: document.getElementById('ea-is-twin').checked||false,
   };
   if(!updates.tag) { alert('Ear tag is required.'); return; }
 
@@ -7742,6 +7815,49 @@ function openMeasModal(index) {
   document.getElementById('me-bull-fields').style.display = animal.sex === 'Bull' ? 'block' : 'none';
   document.getElementById('me-heifer-fields').style.display = animal.sex === 'Heifer' ? 'block' : 'none';
 
+  // One-time records section — always show
+  document.getElementById('me-onetime-section').style.display = 'block';
+
+  // Calfhood vac — show done message if already recorded
+  const calfhoodDone = document.getElementById('me-calfhood-done');
+  const calfhoodForm = document.getElementById('me-calfhood-form');
+  if(animal.calfhood_vaccinated) {
+    calfhoodDone.style.display = 'block';
+    calfhoodForm.style.display = 'none';
+  } else {
+    calfhoodDone.style.display = 'none';
+    calfhoodForm.style.display = 'block';
+    document.getElementById('me-calfhood-vac').checked = false;
+    document.getElementById('me-calfhood-details').style.display = 'none';
+    if(document.getElementById('me-calfhood-date')) document.getElementById('me-calfhood-date').value = '';
+    if(document.getElementById('me-calfhood-vet')) document.getElementById('me-calfhood-vet').value = '';
+  }
+
+  // EID — show existing or input
+  const eidDone = document.getElementById('me-eid-done');
+  const eidForm = document.getElementById('me-eid-form');
+  if(animal.eid_tag) {
+    eidDone.style.display = 'block';
+    eidDone.textContent = 'EID on file: ' + animal.eid_tag;
+    eidForm.style.display = 'none';
+  } else {
+    eidDone.style.display = 'none';
+    eidForm.style.display = 'block';
+    document.getElementById('me-eid').value = '';
+  }
+
+  // Genomic — show if already tested
+  document.getElementById('me-genomic').checked = animal.genomic_tested||false;
+  document.getElementById('me-genomic-lab').value = animal.genomic_lab||'';
+
+  // Wire calfhood checkbox toggle
+  document.getElementById('me-calfhood-vac').onchange = function() {
+    document.getElementById('me-calfhood-details').style.display = this.checked ? 'grid' : 'none';
+    if(this.checked && !document.getElementById('me-calfhood-date').value) {
+      document.getElementById('me-calfhood-date').value = document.getElementById('meas-session-date')?.value || new Date().toISOString().split('T')[0];
+    }
+  };
+
   // Show weight type label in modal
   const wtType = document.getElementById('meas-weight-type')?.value;
   const wtLabels = { weaning:'Weaning', yearling:'Yearling', mature:'Mature', custom:'Check' };
@@ -7824,6 +7940,36 @@ async function saveMeasurementBatch() {
       weight_type: weightType,
       notes: `Recorded during measurement session`,
     });
+  }
+
+  // Save one-time records back to animals table if changed
+  const animalUpdates = {};
+
+  const eidVal = document.getElementById('me-eid')?.value?.trim();
+  if(eidVal && !animal.eid_tag) animalUpdates.eid_tag = eidVal;
+
+  const calfhoodChecked = document.getElementById('me-calfhood-vac')?.checked;
+  if(calfhoodChecked && !animal.calfhood_vaccinated) {
+    animalUpdates.calfhood_vaccinated = true;
+    animalUpdates.calfhood_vac_date = document.getElementById('me-calfhood-date')?.value || date;
+    animalUpdates.calfhood_vac_vet = document.getElementById('me-calfhood-vet')?.value?.trim() || null;
+  }
+
+  const genomicChecked = document.getElementById('me-genomic')?.checked;
+  if(genomicChecked && !animal.genomic_tested) {
+    animalUpdates.genomic_tested = true;
+    animalUpdates.genomic_test_date = date;
+    animalUpdates.genomic_lab = document.getElementById('me-genomic-lab')?.value || null;
+  }
+
+  if(Object.keys(animalUpdates).length > 0) {
+    await sb.from('animals').update(animalUpdates).eq('id', animal.id);
+    // Update local cache
+    const cached = cache.get('animals') || [];
+    const idx = cached.findIndex(a => a.id === animal.id);
+    if(idx !== -1) { cached[idx] = {...cached[idx], ...animalUpdates}; cache.set('animals', cached); }
+    // Update measAnimals array so modal reflects changes immediately
+    measAnimals[measCurrentIndex] = {...animal, ...animalUpdates};
   }
 
   measRecordedTags.add(animal.tag);
