@@ -2920,7 +2920,7 @@ async function showProfileTab(tab) {
 
     content.innerHTML = allOffspring.length
       ? '<div class="card">'+allOffspring.map(c=>`
-        <div onclick="openAnimalProfile('${c.tag}')" style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer">
+        <div onclick="const _a=(cache.get('animals')||[]).find(a=>a.tag==='${c.tag}');if(_a)openProfile(_a.id)" style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer">
           <div>
             <div style="display:flex;align-items:center;gap:8px">
               <strong style="color:var(--orange);text-decoration:underline;font-size:15px">${c.tag}</strong>
