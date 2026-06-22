@@ -1054,6 +1054,9 @@ tr:hover td{background:var(--bg)}
         <button class="btn btn-primary" onclick="openCattleMaxImport()">📦 Import from CattleMax</button>
         <button class="btn btn-secondary" style="margin-top:8px;width:100%" onclick="stripHerdPrefix()">🔧 Strip Prefix from Existing Tags</button>
         <div style="font-size:11px;color:var(--gray);margin-top:6px">Use this if your tags currently include the prefix (e.g. H2R-N515 → N515)</div>
+        <button class="btn btn-secondary" style="margin-top:8px;width:100%" onclick="fixETRecipDams()">🧬 Fix ET Recip/Genetic Dam Links</button>
+        <div style="font-size:11px;color:var(--gray);margin-top:6px">Moves recip dam to correct field and sets genetic dam for 121 ET animals from CattleMax data</div>
+        <div id="et-fix-status" style="font-size:12px;color:var(--green);margin-top:4px"></div>
       </div>
 
 
@@ -2850,7 +2853,7 @@ async function showProfileTab(tab) {
       ...(weights.data||[]).map(r=>({date:r.weight_date,icon:'⚖️',text:`Weight: ${r.weight_lbs}lb (${r.weight_type})`})),
       ...(health.data||[]).map(r=>({date:r.event_date,icon:'💉',text:`${r.event_type}: ${r.product||''}`})),
       ...(sales.data||[]).map(r=>({date:r.sale_date,icon:'💰',text:`Sold to ${r.buyer||'buyer'} — $${(r.net_price||0).toFixed(0)}`})),
-      {date:currentAnimal.dob,icon:'🐄',text:`Born${currentAnimal.dob?' — '+currentAnimal.dob:''}`},
+      {date:currentAnimal.dob,icon:'🐄',text:`Born${currentAnimal.dob?' — '+currentAnimal.dob:''}${currentAnimal.conception_method==='ET'&&currentAnimal.recip_dam?' · Born to recip dam '+currentAnimal.recip_dam:currentAnimal.dam?' · Dam: '+currentAnimal.dam:''}${currentAnimal.sire?' · Sire: '+currentAnimal.sire:''}`},
     ].filter(e=>e.date).sort((a,b)=>new Date(b.date)-new Date(a.date));
     content.innerHTML = events.length
       ? '<div class="card">'+events.map(e=>`<div style="display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border)"><span style="font-size:20px">${e.icon}</span><div><div style="font-size:13px;font-weight:500">${e.text}</div><div style="font-size:11px;color:var(--gray)">${e.date}</div></div></div>`).join('')+'</div>'
@@ -2861,7 +2864,7 @@ async function showProfileTab(tab) {
     const a = currentAnimal;
     const row = (l,v) => v ? `<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:var(--gray)">${l}</span><strong style="text-align:right;max-width:60%">${v}</strong></div>` : '';
     content.innerHTML = `
-      <div class="card" style="margin-bottom:10px"><div class="card-title">General</div>${currentRanch.herd_prefix?row('Herd Prefix',currentRanch.herd_prefix):''}${row('Ear Tag',a.tag)}${row('EID Tag',a.eid_tag)}${row('Name',a.name)}${row('Reg Number',a.reg_number)}${row('Tattoo Left',a.tattoo_left)}${row('Tattoo Right',a.tattoo_right)}${a.tattoo&&!a.tattoo_left?row('Tattoo',a.tattoo):''}${row('Conception Method',a.conception_method)}${row('Donor/Genetic',a.donor_genetic)}${a.is_twin?row('Twin','Yes'):''}</div>
+      <div class="card" style="margin-bottom:10px"><div class="card-title">General</div>${currentRanch.herd_prefix?row('Herd Prefix',currentRanch.herd_prefix):''}${row('Ear Tag',a.tag)}${row('EID Tag',a.eid_tag)}${row('Name',a.name)}${row('Reg Number',a.reg_number)}${row('Tattoo Left',a.tattoo_left)}${row('Tattoo Right',a.tattoo_right)}${a.tattoo&&!a.tattoo_left?row('Tattoo',a.tattoo):''}${row('Conception Method',a.conception_method)}${row('Donor/Genetic',a.donor_genetic)}${a.recip_dam?row('Recip Dam',a.recip_dam):''}${a.is_twin?row('Twin','Yes'):''}</div>
       <div class="card" style="margin-bottom:10px"><div class="card-title">Descriptive</div>${row('Sex',a.sex)}${row('Breed',a.breed)}${row('Color',a.color)}${row('Horn Status',a.horn_status)}${row('Category',a.category)}</div>
       <div class="card" style="margin-bottom:10px"><div class="card-title">Status</div>${row('Status',a.status)}${row('Location / Pasture',a.location)}${row('Birth Date',a.dob)}${row('Weaning Date',a.weaning_date)}${row('Acquisition',a.acquisition)}${row('Purchase Price',a.purchase_price?'$'+parseFloat(a.purchase_price).toLocaleString():null)}${row('Purchased From',a.purchased_from)}${row('Sire',a.sire)}${row('Dam',a.dam)}</div>
       <div class="card"><div class="card-title">Records</div>${a.calfhood_vaccinated?row('Calfhood Vac','✓ '+( a.calfhood_vac_date||'on file')+(a.calfhood_vac_vet?' · '+a.calfhood_vac_vet:'')):row('Calfhood Vac','Not recorded')}${a.genomic_tested?row('Genomic Tested','✓ '+(a.genomic_lab||'')+(a.genomic_test_date?' · '+a.genomic_test_date:'')):''}</div>`;
@@ -9937,12 +9940,12 @@ async function applySmartGroupRules(rules) {
     const {field, value} = rule;
     animals = animals.filter(a => {
       switch(field) {
-        case 'sex': return a.sex === value;
+        case 'sex': return (a.sex||'').toLowerCase() === value.toLowerCase() || (a.sex||'').toUpperCase() === value.toUpperCase();
         case 'location': return a.location === value;
         case 'category': return (a.category||'').toLowerCase().includes(value.toLowerCase());
         case 'breed': return (a.breed||'').toLowerCase().includes(value.toLowerCase());
-        case 'status': return a.status === value;
-        case 'conception_method': return a.conception_method === value;
+        case 'status': return (a.status||'').toLowerCase() === value.toLowerCase();
+        case 'conception_method': return (a.conception_method||'').toLowerCase() === value.toLowerCase();
         case 'is_twin': return String(a.is_twin) === value;
         case 'calfhood_vaccinated': return String(a.calfhood_vaccinated) === value;
         case 'genomic_tested': return String(a.genomic_tested) === value;
@@ -10100,6 +10103,24 @@ async function deleteSmartGroup(id) {
   if(!confirm('Delete this smart group?')) return;
   await sb.from('saved_groups').delete().eq('id', id);
   await loadSavedGroups();
+}
+
+
+// ── ET RECIP DAM FIX ─────────────────────────────────────────────────────
+async function fixETRecipDams() {
+  const statusEl = document.getElementById('et-fix-status');
+  statusEl.textContent = 'Fixing...';
+  const updates = [{"tag": "Z7929", "recip_dam": "Brown ms Pride w7972", "dam": null}, {"tag": "X7669", "recip_dam": "Brown Ms Destination t7664", "dam": null}, {"tag": "Y6676", "recip_dam": "Beckton Christy u198 jc", "dam": null}, {"tag": "Y7765", "recip_dam": "Brown ms Retail Product u772", "dam": null}, {"tag": "B2401", "recip_dam": "1805", "dam": null}, {"tag": "U7760", "recip_dam": "BROWN MS CHEROKEE P7899", "dam": null}, {"tag": "926", "recip_dam": "BROWN MS DESTINATION T7634", "dam": null}, {"tag": "852", "recip_dam": "BROWN MS REVELATION S6937", "dam": null}, {"tag": "551", "recip_dam": "BROWN MS P707 x7664", "dam": null}, {"tag": "C505", "recip_dam": "034", "dam": "Y7765"}, {"tag": "C502", "recip_dam": "313", "dam": "Y7765"}, {"tag": "C503", "recip_dam": "314", "dam": "Y7765"}, {"tag": "C506", "recip_dam": "171", "dam": "Y7765"}, {"tag": "D604", "recip_dam": "214", "dam": "X7537"}, {"tag": "D605", "recip_dam": "314", "dam": "X7537"}, {"tag": "D606", "recip_dam": "013", "dam": "X7537"}, {"tag": "D609", "recip_dam": "107", "dam": "X7537"}, {"tag": "D608", "recip_dam": "223", "dam": "X7537"}, {"tag": "D607", "recip_dam": "258", "dam": "X7537"}, {"tag": "D610", "recip_dam": "239", "dam": "X7537"}, {"tag": "H2R-D621", "recip_dam": "207", "dam": "X7559"}, {"tag": "H2R-D620", "recip_dam": "222", "dam": "X7559"}, {"tag": "H2R-D622", "recip_dam": "254", "dam": "X7537"}, {"tag": "H2R-D624", "recip_dam": "313", "dam": "X7559"}, {"tag": "H2R-D619", "recip_dam": "027", "dam": "X7537"}, {"tag": "H2R-D618", "recip_dam": "171", "dam": "X7537"}, {"tag": "H2R-D623", "recip_dam": "204", "dam": "X7537"}, {"tag": "H2R-D616", "recip_dam": "243", "dam": "X7537"}, {"tag": "H2R-D625", "recip_dam": "259", "dam": "X7559"}, {"tag": "D628", "recip_dam": "108", "dam": "X7537"}, {"tag": "D633", "recip_dam": "117", "dam": "Y7765"}, {"tag": "D630", "recip_dam": "173", "dam": "X7537"}, {"tag": "D629", "recip_dam": "202", "dam": "Y6674"}, {"tag": "H2R-D627", "recip_dam": "218", "dam": "Y6674"}, {"tag": "D632", "recip_dam": "261", "dam": "X7537"}, {"tag": "D634", "recip_dam": "311", "dam": "Y7765"}, {"tag": "H2R-E704", "recip_dam": "013", "dam": "U7760"}, {"tag": "H2R-E701", "recip_dam": "171", "dam": "Y6674"}, {"tag": "H2R-E703", "recip_dam": "236", "dam": "U7760"}, {"tag": "H2R-E702", "recip_dam": "243", "dam": "U7760"}, {"tag": "H2R-E705", "recip_dam": "202", "dam": "926"}, {"tag": "H2R-E706", "recip_dam": "222", "dam": "926"}, {"tag": "H2R-E707", "recip_dam": "254", "dam": "U7760"}, {"tag": "H2R-E709", "recip_dam": "218", "dam": "U7760"}, {"tag": "H2R-E710", "recip_dam": "108", "dam": "Y6674"}, {"tag": "H2R-E711", "recip_dam": "207", "dam": "Y6674"}, {"tag": "H2R-E719", "recip_dam": "117", "dam": "Y6674"}, {"tag": "H2R-E722", "recip_dam": "122", "dam": "X7669"}, {"tag": "H2R-E721", "recip_dam": "208", "dam": "X7669"}, {"tag": "H2R-E724", "recip_dam": "261", "dam": "X7669"}, {"tag": "H2R-E723", "recip_dam": "311", "dam": "X7669"}, {"tag": "H2R-E727", "recip_dam": "314", "dam": "U7760"}, {"tag": "H2R-E726", "recip_dam": "1805", "dam": "Y6674"}, {"tag": "E725", "recip_dam": "027", "dam": "Y6674"}, {"tag": "H2R-E728", "recip_dam": "204", "dam": "X7669"}, {"tag": "H2R-E735", "recip_dam": "209", "dam": "926"}, {"tag": "H2R-E729", "recip_dam": "242", "dam": "X7669"}, {"tag": "H2R-E731", "recip_dam": "245-10", "dam": "X7669"}, {"tag": "H2R-E734", "recip_dam": "253", "dam": "926"}, {"tag": "H2R-E730", "recip_dam": "255", "dam": "926"}, {"tag": "H2R-E733", "recip_dam": "009", "dam": "Y6674"}, {"tag": "H2R-E732", "recip_dam": "238", "dam": "U7760"}, {"tag": "H2R-E736", "recip_dam": "248", "dam": "U7760"}, {"tag": "E737", "recip_dam": "152", "dam": "Y6674"}, {"tag": "H2R-E751", "recip_dam": "150", "dam": "926"}, {"tag": "H2R-E753", "recip_dam": "956", "dam": "U7760"}, {"tag": "H2R-F806", "recip_dam": "013", "dam": "X7669"}, {"tag": "H2R-F803", "recip_dam": "107", "dam": "Z7929"}, {"tag": "H2R-F805", "recip_dam": "108", "dam": "U7760"}, {"tag": "H2R-F804", "recip_dam": "204", "dam": "Z7929"}, {"tag": "H2R-F807", "recip_dam": "207", "dam": "X7669"}, {"tag": "H2R-F802", "recip_dam": "255", "dam": "Y6676"}, {"tag": "H2R-F808", "recip_dam": "311", "dam": "X7559"}, {"tag": "H2R-F840", "recip_dam": "208", "dam": "U7760"}, {"tag": "H2R-G912", "recip_dam": "013", "dam": "X7669"}, {"tag": "H2R-G915", "recip_dam": "108", "dam": "C502"}, {"tag": "H2R-G911", "recip_dam": "146", "dam": "X7669"}, {"tag": "H2R-G914", "recip_dam": "255", "dam": "926"}, {"tag": "H2R-H003", "recip_dam": "009", "dam": "Y7765"}, {"tag": "H2R-H009", "recip_dam": "242", "dam": "D620"}, {"tag": "H2R-H008", "recip_dam": "248", "dam": "D620"}, {"tag": "H2R-H2R Premier D624", "recip_dam": "X7559", "dam": "X7559"}, {"tag": "D624", "recip_dam": "X7559", "dam": null}, {"tag": "H2R-J109", "recip_dam": "009", "dam": "Z7929"}, {"tag": "H2R-J5437", "recip_dam": "108", "dam": "Z7929"}, {"tag": "H2R-J111", "recip_dam": "207", "dam": "D620"}, {"tag": "H2R-J5436", "recip_dam": "222", "dam": "Z7929"}, {"tag": "H2R-J113", "recip_dam": "208", "dam": "Y7765"}, {"tag": "H2R-J110", "recip_dam": "117", "dam": "Y7765"}, {"tag": "H2R-J112", "recip_dam": "242", "dam": "Z7929"}, {"tag": "H2R-J2104", "recip_dam": "171", "dam": "Y7765"}, {"tag": "H2R-J2105", "recip_dam": "246", "dam": "Y7765"}, {"tag": "H2R-J115", "recip_dam": "214", "dam": "Z7929"}, {"tag": "H2R-J5443", "recip_dam": "204", "dam": "Brown Ms Absolute D1565"}, {"tag": "H2R-J5442", "recip_dam": "152", "dam": "Z7929"}, {"tag": "H2R-J5441", "recip_dam": "236", "dam": "Brown Ms Absolute D1565"}, {"tag": "H2R-J2106", "recip_dam": "B2401", "dam": "Brown Ms Absolute D1565"}, {"tag": "H2R-J2103", "recip_dam": "255", "dam": "Brown Ms Absolute D1565"}, {"tag": "H2R-J5444", "recip_dam": "218", "dam": "Z7929"}, {"tag": "HXC AUTHORITY 7794E", "recip_dam": "HXC 502R", "dam": "HXC 502R"}, {"tag": "H2R-J6075", "recip_dam": "D612", "dam": "C500"}, {"tag": "H2R-255-K", "recip_dam": "255", "dam": "D620"}, {"tag": "H2R-246-K", "recip_dam": "246", "dam": "D620"}, {"tag": "H2R-E745-K", "recip_dam": "E745", "dam": "C500"}, {"tag": "H2R-D638-K", "recip_dam": "D638", "dam": "C500"}, {"tag": "H2R-K6805", "recip_dam": "B2401", "dam": "D602"}, {"tag": "H2R-K7719", "recip_dam": "E752", "dam": "D620"}, {"tag": "H2R-K7722", "recip_dam": "5", "dam": "D620"}, {"tag": "H2R-L6200", "recip_dam": "Z7929", "dam": "D602"}, {"tag": "H2R-L7204", "recip_dam": "G932", "dam": "J107"}, {"tag": "H2R-L7201", "recip_dam": "C505", "dam": "D602"}, {"tag": "H2R-L7203", "recip_dam": "G956", "dam": "Y6674"}, {"tag": "H2R-L7202", "recip_dam": "F801", "dam": "Y6674"}, {"tag": "K2534", "recip_dam": "CCFP MS ORACLE G9076", "dam": null}];
+  let done = 0, errors = 0;
+  for(const u of updates) {
+    const patch = {};
+    if(u.recip_dam) patch.recip_dam = u.recip_dam;
+    patch.dam = u.dam; // may be null (clears recip from dam field)
+    const {error} = await sb.from('animals').update(patch).eq('tag', u.tag).eq('ranch_id', currentRanch.id);
+    if(!error) done++; else errors++;
+  }
+  await loadAnimals();
+  statusEl.textContent = `✓ Fixed ${done} animals${errors?' · '+errors+' errors':''}`;
 }
 
 // ── INIT ───────────────────────────────────────────────────────────────────
