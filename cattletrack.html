@@ -6163,6 +6163,24 @@ function downloadImportTemplate() {
   a.click(); URL.revokeObjectURL(url);
 }
 
+function updateImportPreviewTags() {
+  const prefix = (document.getElementById('import-tag-prefix')?.value||'').trim();
+  const rows = window._importRows||[];
+  const headers = window._importHeaders||[];
+  const tagColEl = document.getElementById('col-tag');
+  const tagColIdx = tagColEl ? parseInt(tagColEl.value) : null;
+  const exampleEl = document.getElementById('import-prefix-example');
+  if(!exampleEl) return;
+  if(prefix && tagColIdx != null && rows[0]) {
+    const rawTag = String(rows[0][tagColIdx]||'').trim();
+    exampleEl.innerHTML = `Example: <strong style="color:var(--orange)">${prefix}${rawTag}</strong>`;
+  } else if(prefix) {
+    exampleEl.textContent = `Prefix: "${prefix}"`;
+  } else {
+    exampleEl.textContent = '';
+  }
+}
+
 async function previewHerdImport(file, method) {
   if(!file) return;
   const preview = document.getElementById('import-preview-content');
@@ -6259,6 +6277,15 @@ function showImportPreview(headers, rows, colMap, preview) {
         <select id="import-skip-dupes"><option value="skip">Skip duplicates</option><option value="update">Update existing</option></select>
       </div>
     </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Tag Prefix <span style="font-weight:400;color:var(--gray);text-transform:none;letter-spacing:0">(optional — prepended to every tag)</span></label>
+        <input type="text" id="import-tag-prefix" placeholder="e.g. H2R- " style="font-size:14px" oninput="updateImportPreviewTags()">
+      </div>
+      <div class="form-group" style="display:flex;align-items:flex-end">
+        <div style="font-size:12px;color:var(--gray);padding-bottom:10px" id="import-prefix-example"></div>
+      </div>
+    </div>
     <button class="btn btn-primary" style="width:100%" onclick="runHerdImport()">✅ Import ${rows.length} Animals</button>`;
 }
 
@@ -6270,6 +6297,7 @@ async function runHerdImport() {
 
   const skipDupes = document.getElementById('import-skip-dupes')?.value==='skip';
   const defaultStatus = document.getElementById('import-default-status')?.value||'active';
+  const tagPrefix = (document.getElementById('import-tag-prefix')?.value||'').trim();
   const existingTags = new Set((cache.get('animals')||[]).map(a=>a.tag));
   const rows = window._importRows||[];
 
@@ -6277,8 +6305,9 @@ async function runHerdImport() {
 
   let imported=0,skipped=0,updated=0,errors=0;
   for(const row of rows) {
-    const tag = String(row[colMap.tag]||'').trim();
-    if(!tag) continue;
+    const rawTag = String(row[colMap.tag]||'').trim();
+    if(!rawTag) continue;
+    const tag = tagPrefix ? tagPrefix + rawTag : rawTag;
     const isDupe = existingTags.has(tag);
     if(isDupe&&skipDupes){skipped++;continue;}
     const animal = {};
