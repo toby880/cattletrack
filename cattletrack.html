@@ -2896,9 +2896,23 @@ async function showProfileTab(tab) {
   }
 
   if(tab==='offspring') {
-    const {data: calves} = await sb.from('calving_records').select('*').eq('ranch_id',currentRanch.id).eq('dam_tag',tag);
-    content.innerHTML = (calves||[]).length
-      ? '<div class="card">'+(calves||[]).map(c=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)"><div><strong>${c.calf_tag}</strong><div style="font-size:12px;color:var(--gray)">${c.sex||'—'} · Born: ${c.birth_date||'—'}${c.birth_weight?' · '+c.birth_weight+' lb':''}</div></div><span class="badge ${c.calving_ease>='3'?'badge-red':'badge-green'}" style="font-size:10px">Ease ${c.calving_ease||'—'}</span></div>`).join('')+'</div>'
+    // Check both calving_records (manually entered) and animals table (imported from CattleMax)
+    const [{data: calves}, {data: animalOffspring}] = await Promise.all([
+      sb.from('calving_records').select('*').eq('ranch_id',currentRanch.id).eq('dam_tag',tag),
+      sb.from('animals').select('*').eq('ranch_id',currentRanch.id).eq('dam',tag).order('dob',{ascending:false})
+    ]);
+
+    const calfTags = new Set((calves||[]).map(c=>c.calf_tag));
+    // Animals from animals table not already in calving records
+    const importedOffspring = (animalOffspring||[]).filter(a=>!calfTags.has(a.tag));
+
+    const allOffspring = [
+      ...(calves||[]).map(c=>({tag:c.calf_tag, sex:c.sex, dob:c.birth_date, weight:c.birth_weight, ease:c.calving_ease, source:'calving'})),
+      ...importedOffspring.map(a=>({tag:a.tag, sex:a.sex, dob:a.dob, weight:null, ease:null, source:'animal', name:a.name}))
+    ].sort((a,b)=>(b.dob||'').localeCompare(a.dob||''));
+
+    content.innerHTML = allOffspring.length
+      ? '<div class="card">'+allOffspring.map(c=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)" onclick="openAnimalProfile('${c.tag}')" style="cursor:pointer"><div><strong>${c.tag}</strong>${c.name?' — '+c.name:''}<div style="font-size:12px;color:var(--gray)">${c.sex||'—'} · Born: ${c.dob||'—'}${c.weight?' · '+c.weight+' lb':''}</div></div>${c.ease?`<span class="badge ${c.ease>='3'?'badge-red':'badge-green'}" style="font-size:10px">Ease ${c.ease}</span>`:''}</div>`).join('')+'</div>'
       : '<div class="empty"><div class="empty-icon">🐄</div><p>No offspring on record.</p></div>';
   }
 
