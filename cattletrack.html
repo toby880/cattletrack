@@ -6399,15 +6399,22 @@ function parseNestedAssociationFile(headers, rows, preview) {
   let inCalves = false;
   const sexValues = ['COW','HEIFER','BULL','STEER','BLFK'];
 
-  for(const r of rows) {
+  for(let ri = 0; ri < rows.length; ri++) {
+    const r = rows[ri];
     const firstCol = r[0];
-    if(firstCol === 'Calves:') { inCalves = true; continue; }
-    if(firstCol === '# Calves:' || firstCol === 'EPD') { continue; }
-    if(!firstCol) continue;
-    const sex = sexIdx >= 0 ? r[sexIdx] : null;
-    if(!sexValues.includes(sex)) continue;
 
-    const reg = firstCol != null ? String(typeof firstCol === 'number' ? Math.round(firstCol) : firstCol) : '';
+    if(firstCol === 'Calves:') { inCalves = true; continue; }
+    if(firstCol === '# Calves:' || firstCol === 'EPD' || !firstCol) { continue; }
+
+    // Skip EPD label/value rows (non-numeric first col that isn't a sex value)
+    const sex = sexIdx >= 0 ? r[sexIdx] : null;
+    if(!sexValues.includes(sex)) {
+      // If we see a non-animal row that isn't Calves:/EPD, we may be between dams
+      // Don't reset inCalves here — let the Calves: marker control it
+      continue;
+    }
+
+    const reg = String(typeof firstCol === 'number' ? Math.round(firstCol) : firstCol);
     const prefix = prefixIdx >= 0 ? (r[prefixIdx]||'') : '';
     const tagId = tagIdx >= 0 ? (r[tagIdx]||'') : '';
     const animal = {
@@ -6420,15 +6427,15 @@ function parseNestedAssociationFile(headers, rows, preview) {
     };
 
     if(!inCalves) {
+      // This is a dam record — reset for new dam
       currentDam = {...animal, calves:[]};
       dams.push(currentDam);
     } else if(currentDam) {
       currentDam.calves.push({...animal, damTag: currentDam.tag, damPrefix: currentDam.prefix, damReg: currentDam.reg});
     }
-    inCalves = false; // reset after each non-marker animal row unless next is calf
-    // Check if next row is Calves: to set inCalves
-    const nextIdx = rows.indexOf(r) + 1;
-    if(nextIdx < rows.length && rows[nextIdx][0] === 'Calves:') inCalves = false; // handled by next loop
+    // DON'T reset inCalves here — only reset when we see a new dam (inCalves=false from start or after EPD rows)
+    // Check if next row is a new dam record (not preceded by Calves: marker)
+    // We stay in calves mode until we see a Calves: marker for the next dam
   }
 
   const totalCalves = dams.reduce((s,d) => s+d.calves.length, 0);
