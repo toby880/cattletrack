@@ -2836,7 +2836,7 @@ async function openProfile(animalId) {
 function closeProfile() { showPage('animals'); }
 
 async function showProfileTab(tab) {
-  const tabs = ['timeline','info','breeding','offspring','performance','health','pedigree','epds','embryo'];
+  const tabs = ['timeline','info','breeding','offspring','performance','health','measurements','pedigree','epds','embryo'];
   document.querySelectorAll('#page-profile .tab-bar .tab').forEach((b,i)=>b.classList.toggle('active',tabs[i]===tab));
   if(!currentAnimal) return;
   const content = document.getElementById('profile-content');
