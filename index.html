@@ -2,6 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-YTVZK0ZNRT"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-YTVZK0ZNRT');
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CattleTrack Analytics — Professional Ranch Management Software</title>
 <meta name="description" content="Complete ranch management software for cow-calf operations. Track calving, health, breeding, EPDs, weights, and sales. Works offline in the pasture.">
@@ -14,8 +22,6 @@
 }
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:var(--dark);background:var(--white)}
 a{color:inherit;text-decoration:none}
-
-/* NAV */
 nav{background:var(--dark);padding:0 24px;gap:16px;display:flex;align-items:center;justify-content:space-between;height:64px;position:sticky;top:0;z-index:100}
 .nav-logo{display:flex;align-items:center;gap:12px}
 .nav-logo img{height:36px}
@@ -26,8 +32,6 @@ nav{background:var(--dark);padding:0 24px;gap:16px;display:flex;align-items:cent
 .nav-links a:hover{color:white}
 .nav-cta{background:var(--orange);color:white;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:600;transition:background 0.15s}
 .nav-cta:hover{background:#C8621A;color:white}
-
-/* HERO */
 .hero{background:var(--dark);padding:80px 24px 100px;text-align:center;position:relative;overflow:hidden}
 .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 0%, rgba(232,117,26,0.15) 0%, transparent 70%);pointer-events:none;z-index:0}
 .hero>*{position:relative;z-index:1}
@@ -40,13 +44,9 @@ nav{background:var(--dark);padding:0 24px;gap:16px;display:flex;align-items:cent
 .btn-primary:hover{background:#C8621A;transform:translateY(-2px);box-shadow:0 8px 24px rgba(232,117,26,0.4)}
 .btn-secondary{background:rgba(255,255,255,0.1);color:white;padding:16px 32px;border-radius:10px;font-size:16px;font-weight:600;border:1px solid rgba(255,255,255,0.2);transition:all 0.15s;display:inline-block}
 .btn-secondary:hover{background:rgba(255,255,255,0.15)}
-
-/* SOCIAL PROOF */
 .proof{background:var(--bg);padding:24px;text-align:center;border-bottom:1px solid var(--border)}
 .proof p{font-size:14px;color:var(--gray);font-weight:500}
 .proof strong{color:var(--dark)}
-
-/* FEATURES */
 .features{padding:80px 24px;max-width:1100px;margin:0 auto}
 .section-label{font-size:13px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
 .section-title{font-size:clamp(28px,4vw,42px);font-weight:800;color:var(--dark);margin-bottom:16px;line-height:1.2}
@@ -59,8 +59,6 @@ nav{background:var(--dark);padding:0 24px;gap:16px;display:flex;align-items:cent
 .feature-card ul{list-style:none;margin-top:12px}
 .feature-card ul li{font-size:13px;color:var(--gray);padding:4px 0;padding-left:20px;position:relative}
 .feature-card ul li::before{content:'✓';position:absolute;left:0;color:var(--green);font-weight:700}
-
-/* OFFLINE HIGHLIGHT */
 .offline-section{background:var(--dark);padding:80px 24px;text-align:center}
 .offline-section h2{font-size:clamp(28px,4vw,42px);font-weight:800;color:white;margin-bottom:16px}
 .offline-section h2 span{color:var(--orange)}
@@ -68,8 +66,6 @@ nav{background:var(--dark);padding:0 24px;gap:16px;display:flex;align-items:cent
 .offline-badges{display:flex;gap:16px;justify-content:center;flex-wrap:wrap}
 .badge{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:white;padding:12px 20px;border-radius:10px;font-size:14px;font-weight:600}
 .badge span{color:var(--gold)}
-
-/* PRICING */
 .pricing{padding:80px 24px;max-width:1000px;margin:0 auto;text-align:center}
 .pricing-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;margin-top:48px;text-align:left}
 .plan{background:var(--white);border:2px solid var(--border);border-radius:16px;padding:28px;position:relative}
@@ -89,20 +85,14 @@ nav{background:var(--dark);padding:0 24px;gap:16px;display:flex;align-items:cent
 .plan-cta.primary:hover{background:#C8621A}
 .plan-cta.outline{border:2px solid var(--border);color:var(--dark)}
 .plan-cta.outline:hover{border-color:var(--orange);color:var(--orange)}
-
-/* TESTIMONIAL */
 .testimonial{background:var(--bg);padding:80px 24px;text-align:center}
 .testimonial blockquote{font-size:clamp(20px,3vw,28px);font-weight:600;color:var(--dark);max-width:700px;margin:0 auto 24px;line-height:1.5;font-style:italic}
 .testimonial cite{font-size:14px;color:var(--gray);font-weight:600}
-
-/* CTA SECTION */
 .cta-section{background:var(--orange);padding:80px 24px;text-align:center}
 .cta-section h2{font-size:clamp(28px,4vw,42px);font-weight:800;color:white;margin-bottom:16px}
 .cta-section p{font-size:18px;color:rgba(255,255,255,0.85);margin-bottom:32px}
 .btn-white{background:white;color:var(--orange);padding:16px 36px;border-radius:10px;font-size:16px;font-weight:700;display:inline-block;transition:all 0.15s}
 .btn-white:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,0.2)}
-
-/* FOOTER */
 footer{background:var(--dark);padding:40px 24px;text-align:center}
 footer .logo{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:16px}
 footer .logo-text{color:white;font-size:18px;font-weight:700}
@@ -111,8 +101,6 @@ footer p{font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:8px}
 footer .footer-links{display:flex;gap:20px;justify-content:center;margin-top:16px}
 footer .footer-links a{font-size:13px;color:rgba(255,255,255,0.4);transition:color 0.15s}
 footer .footer-links a:hover{color:white}
-
-/* MOBILE */
 @media(max-width:640px){
   .nav-links{display:none}
   .hero{padding:60px 20px 80px}
@@ -121,7 +109,6 @@ footer .footer-links a:hover{color:white}
 </style>
 </head>
 <body>
-
 <nav>
   <div class="nav-logo">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 56" height="40" width="260" style="overflow:visible;flex-shrink:0">
@@ -134,7 +121,6 @@ footer .footer-links a:hover{color:white}
   <text x="50" y="48" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="12" font-weight="600" fill="#E8751A" letter-spacing="3.5">ANALYTICS</text>
 </svg>
   </div>
-  </div>
   <div class="nav-links">
     <a href="#features">Features</a>
     <a href="#pricing">Pricing</a>
@@ -143,8 +129,6 @@ footer .footer-links a:hover{color:white}
     <a href="cattletrack.html" class="nav-cta">Sign In</a>
   </div>
 </nav>
-
-<!-- HERO -->
 <section class="hero">
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="-5 -8 325 70" height="72" width="auto" style="display:block;margin:0 auto 28px;pointer-events:none">
   <rect x="0" y="30" width="7" height="18" fill="#E8751A" rx="2" opacity="0.6"/>
@@ -163,18 +147,13 @@ footer .footer-links a:hover{color:white}
     <a href="#features" class="btn-secondary">See Features</a>
   </div>
 </section>
-
-<!-- SOCIAL PROOF -->
 <div class="proof">
   <p>Trusted by <strong>cow-calf operations</strong> across the country · Works on any phone, tablet, or computer · No app store required</p>
 </div>
-
-<!-- FEATURES -->
 <section class="features" id="features">
   <div class="section-label">Everything you need</div>
   <div class="section-title">One app for your whole operation</div>
   <div class="section-sub">Stop juggling spreadsheets, notebooks, and multiple apps. CattleTrack brings everything together in one place.</div>
-
   <div class="feature-grid">
     <div class="feature-card">
       <div class="feature-icon">🐄</div>
@@ -277,8 +256,6 @@ footer .footer-links a:hover{color:white}
     </div>
   </div>
 </section>
-
-<!-- OFFLINE -->
 <section class="offline-section">
   <h2>Works when you have <span>no signal</span></h2>
   <p>Log a calving, record a treatment, or move cattle between pastures — even when you're miles from cell service. Everything syncs automatically when you're back in range.</p>
@@ -289,13 +266,10 @@ footer .footer-links a:hover{color:white}
     <div class="badge"><span>💻</span> Any browser</div>
   </div>
 </section>
-
-<!-- PRICING -->
 <section class="pricing" id="pricing">
   <div class="section-label">Simple pricing</div>
   <div class="section-title">Pick the plan that fits your operation</div>
   <div class="section-sub" style="margin:0 auto 0">Start with a 30-day free trial. No credit card required.</div>
-
   <div class="pricing-grid">
     <div class="plan">
       <div class="plan-name">Basic</div>
@@ -316,7 +290,6 @@ footer .footer-links a:hover{color:white}
       </ul>
       <a href="cattletrack.html" class="plan-cta outline">Start Free Trial</a>
     </div>
-
     <div class="plan featured">
       <div class="plan-badge">Most Popular</div>
       <div class="plan-name">Pro</div>
@@ -336,7 +309,6 @@ footer .footer-links a:hover{color:white}
       </ul>
       <a href="cattletrack.html" class="plan-cta primary">Start Free Trial</a>
     </div>
-
     <div class="plan">
       <div class="plan-name">Elite</div>
       <div class="plan-price">$59<span>/month</span></div>
@@ -357,9 +329,6 @@ footer .footer-links a:hover{color:white}
     </div>
   </div>
 </section>
-
-<!-- CTA -->
-
 <section style="background:#1a1a1a;padding:60px 24px;text-align:center">
   <div style="max-width:700px;margin:0 auto">
     <div style="display:inline-block;background:rgba(232,117,26,0.2);color:#F5A623;border:1px solid rgba(232,117,26,0.3);padding:6px 16px;border-radius:20px;font-size:13px;font-weight:600;margin-bottom:20px">🌾 Also Available</div>
@@ -372,7 +341,6 @@ footer .footer-links a:hover{color:white}
     <p style="margin-top:20px;color:rgba(255,255,255,0.4);font-size:13px">$20/month standalone · $15/month add-on to any plan</p>
   </div>
 </section>
-
 <section class="cta-section" id="contact">
   <h2>Ready to get organized?</h2>
   <p>30-day free trial. No credit card. Cancel anytime.</p>
@@ -380,8 +348,6 @@ footer .footer-links a:hover{color:white}
   <p style="margin-top:24px;font-size:15px;opacity:0.85">Questions? We'd love to hear from you.</p>
   <a href="mailto:info@cattletrackanalytics.com" class="btn-white" style="margin-top:8px;background:transparent;border:2px solid white;color:white">✉️ info@cattletrackanalytics.com</a>
 </section>
-
-<!-- FOOTER -->
 <footer>
   <div class="logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 56" height="40" width="auto">
   <rect x="0" y="30" width="7" height="18" fill="#E8751A" rx="2" opacity="0.6"/>
@@ -392,7 +358,6 @@ footer .footer-links a:hover{color:white}
   <text x="50" y="32" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="28" font-weight="800" fill="white" letter-spacing="-0.5">CattleTrack</text>
   <text x="50" y="48" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="12" font-weight="600" fill="#E8751A" letter-spacing="3.5">ANALYTICS</text>
 </svg></div>
-  </div>
   <p>Professional ranch management software</p>
   <p style="margin-top:4px">Built for cow-calf operations of all sizes</p>
   <div class="footer-links">
@@ -403,6 +368,5 @@ footer .footer-links a:hover{color:white}
   </div>
   <p style="margin-top:24px">© 2026 CattleTrack Analytics. All rights reserved.</p>
 </footer>
-
 </body>
 </html>
