@@ -2375,6 +2375,17 @@ async function renderCowPerformance(content) {
 }
 
 // ── BREEDING SEASON PLANNER ────────────────────────────────────────────────
+// Breeding planner vaccine defaults
+const DEFAULT_VACCINES = [
+  { name: 'IBR/BVD/PI3/BRSV (MLV)', daysBeforeSync: 42, notes: 'Use MLV if open cows, killed if pregnant', required: true },
+  { name: '5-Way Leptospirosis', daysBeforeSync: 42, notes: 'Annual — revaccinate every 6 months', required: true },
+  { name: 'Vibrio (Campylobacter)', daysBeforeSync: 14, notes: 'Natural service only', naturalServiceOnly: true, required: false },
+  { name: 'Scours Vaccine (pre-calving)', daysBeforeCalving: 75, notes: 'Give 60-90 days before calving', preCalving: true, required: false },
+  { name: 'Lepto Booster at Preg Check', daysBeforeSync: -35, notes: 'Optional — given at preg check to maintain immunity through pregnancy', pregCheckOnly: true, required: false },
+];
+
+let plannerVaccines = JSON.parse(localStorage.getItem('plannerVaccines') || 'null') || DEFAULT_VACCINES.map(v=>({...v}));
+
 function renderBreedingPlanner(content) {
   const today = new Date().toISOString().split('T')[0];
   content.innerHTML = `
@@ -2416,16 +2427,42 @@ function renderBreedingPlanner(content) {
           </select>
         </div>
       </div>
-      <div class="form-group">
-        <label>Cow Type</label>
-        <select id="plan-cowtype" onchange="updateBreedingPlan()">
-          <option value="cow">Mature Cows (283 day gestation)</option>
-          <option value="heifer">Heifers (283 day gestation)</option>
-        </select>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Cow Type</label>
+          <select id="plan-cowtype" onchange="updateBreedingPlan()">
+            <option value="cow">Mature Cows (283 day gestation)</option>
+            <option value="heifer">Heifers (283 day gestation)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Herd Size (for supply calc)</label>
+          <input type="number" id="plan-herd-size" placeholder="# of cows" inputmode="numeric" onchange="updateBreedingPlan()" value="${(cache.get('animals')||[]).filter(a=>a.sex==='Cow'&&a.status==='active').length||''}">
+        </div>
+      </div>
+    </div>
+
+    <!-- Vaccine Protocol Card -->
+    <div class="card" style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div class="card-title" style="margin-bottom:0">💉 Vaccine Protocol</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" onclick="addPlannerVaccine()">+ Add</button>
+          <button class="btn btn-secondary btn-sm" onclick="resetPlannerVaccines()">Reset Defaults</button>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--gray);margin-bottom:10px">Based on university and veterinary recommendations. Adjust timing and vaccines to match your vet's protocol.</div>
+      <div id="planner-vaccines-list"></div>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+        <div style="font-size:11px;color:var(--gray);font-weight:600;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px">Upload Vet Protocol (PDF)</div>
+        <input type="file" id="plan-vet-pdf" accept=".pdf" style="font-size:12px" onchange="uploadVetProtocol(this.files[0])">
+        <div id="plan-vet-pdf-status" style="font-size:12px;color:var(--gray);margin-top:4px"></div>
       </div>
     </div>
 
     <div id="breeding-plan-output"></div>`;
+
+  renderPlannerVaccines();
 
   // Auto-calculate with default date (next spring)
   const nextSpring = new Date();
@@ -2433,6 +2470,106 @@ function renderBreedingPlanner(content) {
   nextSpring.setMonth(0); nextSpring.setDate(15);
   document.getElementById('plan-calving-start').value = nextSpring.toISOString().split('T')[0];
   updateBreedingPlan();
+}
+
+function renderPlannerVaccines() {
+  const el = document.getElementById('planner-vaccines-list');
+  if(!el) return;
+  el.innerHTML = plannerVaccines.map((v, i) => `
+    <div style="display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
+      <input type="checkbox" ${v.required||v.enabled!==false?'checked':''} onchange="togglePlannerVaccine(${i},this.checked)" style="accent-color:var(--orange);width:16px;height:16px;flex-shrink:0">
+      <div style="flex:2;min-width:120px">
+        <input type="text" value="${v.name}" onchange="updatePlannerVaccine(${i},'name',this.value)" style="font-size:13px;border:none;background:none;width:100%;font-family:inherit;font-weight:600;color:var(--dark);padding:0" placeholder="Vaccine name">
+        <div style="font-size:11px;color:var(--gray)">${v.notes||''}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+        ${v.preCalving ? `
+          <span style="font-size:11px;color:var(--gray)">Days before calving:</span>
+          <input type="number" value="${v.daysBeforeCalving||75}" onchange="updatePlannerVaccine(${i},'daysBeforeCalving',parseInt(this.value))" style="width:52px;font-size:13px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-family:inherit;text-align:center">
+        ` : `
+          <span style="font-size:11px;color:var(--gray)">Days before sync:</span>
+          <input type="number" value="${v.daysBeforeSync||42}" onchange="updatePlannerVaccine(${i},'daysBeforeSync',parseInt(this.value))" style="width:52px;font-size:13px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-family:inherit;text-align:center">
+        `}
+      </div>
+      <button onclick="removePlannerVaccine(${i})" style="background:none;border:none;color:var(--gray-lt);cursor:pointer;font-size:16px;flex-shrink:0">✕</button>
+    </div>`).join('') || '<div style="font-size:13px;color:var(--gray);padding:8px 0">No vaccines added yet.</div>';
+}
+
+function togglePlannerVaccine(i, checked) {
+  plannerVaccines[i].enabled = checked;
+  savePlannerVaccines();
+  updateBreedingPlan();
+}
+
+function updatePlannerVaccine(i, field, value) {
+  plannerVaccines[i][field] = value;
+  savePlannerVaccines();
+  updateBreedingPlan();
+}
+
+function addPlannerVaccine() {
+  plannerVaccines.push({ name: 'New Vaccine', daysBeforeSync: 42, notes: '', enabled: true });
+  savePlannerVaccines();
+  renderPlannerVaccines();
+  updateBreedingPlan();
+}
+
+function removePlannerVaccine(i) {
+  plannerVaccines.splice(i, 1);
+  savePlannerVaccines();
+  renderPlannerVaccines();
+  updateBreedingPlan();
+}
+
+function resetPlannerVaccines() {
+  if(!confirm('Reset vaccines to default protocol?')) return;
+  plannerVaccines = DEFAULT_VACCINES.map(v=>({...v}));
+  savePlannerVaccines();
+  renderPlannerVaccines();
+  updateBreedingPlan();
+}
+
+function savePlannerVaccines() {
+  try { localStorage.setItem('plannerVaccines', JSON.stringify(plannerVaccines)); } catch(e) {}
+}
+
+async function uploadVetProtocol(file) {
+  if(!file) return;
+  const statusEl = document.getElementById('plan-vet-pdf-status');
+  statusEl.textContent = '⏳ Reading vet protocol...';
+  try {
+    const base64 = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result.split(',')[1]);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6', max_tokens: 1000,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
+            { type: 'text', text: 'Extract the pre-breeding and pre-calving vaccine recommendations from this vet protocol. Return ONLY a JSON array like: [{"name":"vaccine name","daysBeforeSync":42,"notes":"any notes","preCalving":false,"daysBeforeCalving":75}]. For vaccines given before calving instead of before breeding, set preCalving:true. Return raw JSON only, no markdown.' }
+          ]
+        }]
+      })
+    });
+    const data = await response.json();
+    const text = data.content?.filter(c=>c.type==='text').map(c=>c.text).join('') || '';
+    const cleaned = text.replace(/```json|```/g, '').trim();
+    const vaccines = JSON.parse(cleaned);
+    plannerVaccines = vaccines.map(v => ({...v, enabled: true}));
+    savePlannerVaccines();
+    renderPlannerVaccines();
+    updateBreedingPlan();
+    statusEl.innerHTML = `<span style="color:var(--green)">✓ Imported ${vaccines.length} vaccines from vet protocol</span>`;
+  } catch(e) {
+    statusEl.innerHTML = `<span style="color:var(--red)">Error reading PDF: ${e.message}</span>`;
+  }
 }
 
 function updateBreedingPlan() {
@@ -2481,17 +2618,35 @@ function updateBreedingPlan() {
   const pregCheckDate = new Date(aiDate);
   pregCheckDate.setDate(pregCheckDate.getDate() + 35);
 
-  // Pre-breeding vaccination (50 days before sync start)
-  const vaccineDate = new Date(syncStart);
-  vaccineDate.setDate(vaccineDate.getDate() - 50);
-
   const fmt = d => d.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
   const daysBetween = (a,b) => Math.round((b-a)/86400000);
 
   const steps = [];
 
+  // Add vaccine steps from protocol
+  const herdSize = parseInt(document.getElementById('plan-herd-size')?.value) || 0;
+  const activeVaccines = plannerVaccines.filter(v => v.enabled !== false);
+
+  activeVaccines.forEach(v => {
+    if(v.naturalServiceOnly && method === 'ai-only') return;
+    if(v.pregCheckOnly) {
+      // Add at preg check date
+      const pregVacDate = new Date(pregCheckDate);
+      steps.push({icon:'💉', label:v.name, date:pregVacDate, detail:(v.notes||'')+(herdSize?` · ~${herdSize} doses needed`:''), color:'badge-blue', urgent: daysBetween(new Date(), pregVacDate) < 14});
+      return;
+    }
+    if(v.preCalving) {
+      const preCalvDate = new Date(calving);
+      preCalvDate.setDate(preCalvDate.getDate() - (v.daysBeforeCalving||75));
+      steps.push({icon:'💉', label:v.name+' (pre-calving)', date:preCalvDate, detail:(v.notes||'')+(herdSize?` · ~${herdSize} doses needed`:''), color:'badge-blue', urgent: daysBetween(new Date(), preCalvDate) < 14});
+      return;
+    }
+    const vDate = new Date(method === 'natural-only' ? bullTurnout : syncStart);
+    vDate.setDate(vDate.getDate() - (v.daysBeforeSync||42));
+    steps.push({icon:'💉', label:v.name, date:vDate, detail:(v.notes||'')+(herdSize?` · ~${herdSize} doses needed`:''), color:'badge-blue', urgent: daysBetween(new Date(), vDate) < 14});
+  });
+
   if(method !== 'natural-only') {
-    steps.push({icon:'💉', label:'Pre-breeding vaccinations', date:vaccineDate, detail:'BVD, vibrio, lepto — 50 days before sync start', color:'badge-blue', urgent: daysBetween(new Date(), vaccineDate) < 14});
     steps.push({icon:'🐄', label:'Cows must be 50+ days post-partum', date:previousCalvingNeeded, detail:`All cows must have calved by this date to be eligible for breeding`, color:'badge-orange', urgent: false});
     steps.push({icon:'💊', label:`Sync Start — Day 0`, date:syncStart, detail:protocol==='7and7'?'Insert CIDR + PGF₂α':protocol==='cosynch'?'Administer GnRH':'Insert CIDR + GnRH', color:'badge-orange', urgent: daysBetween(new Date(), syncStart) < 14});
 
@@ -2555,7 +2710,33 @@ function updateBreedingPlan() {
       }).join('')}
     </div>
 
-    <div style="display:flex;gap:10px">
+    <!-- Supply List -->
+    ${herdSize ? `
+    <div class="card" style="margin-top:10px">
+      <div class="card-title">🧾 Estimated Supplies Needed</div>
+      <div style="font-size:12px;color:var(--gray);margin-bottom:10px">Based on ${herdSize} cows. Verify with your vet before ordering.</div>
+      ${activeVaccines.filter(v=>v.enabled!==false&&!(v.naturalServiceOnly&&method==='ai-only')).map(v=>`
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+          <span>${v.name}</span>
+          <strong>${herdSize} doses</strong>
+        </div>`).join('')}
+      ${method !== 'ai-only' ? `
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+          <span>GnRH (AI Day)</span>
+          <strong>${herdSize} doses</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+          <span>PGF₂α (Lutalyse)</span>
+          <strong>${protocol==='7and7'?herdSize*2:herdSize} doses</strong>
+        </div>
+        ${protocol.includes('cidr')||protocol==='7and7'?`
+        <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:13px">
+          <span>CIDRs</span>
+          <strong>${herdSize} units</strong>
+        </div>`:''}`:''}
+    </div>` : ''}
+
+    <div style="display:flex;gap:10px;margin-top:10px">
       <button class="btn btn-primary" onclick="saveBreedingPlanToCalendar()" style="flex:1">📅 Add to Calendar</button>
       <button class="btn btn-secondary" onclick="printBreedingPlan()" style="flex:1">🖨 Print Plan</button>
     </div>`;
