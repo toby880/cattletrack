@@ -316,7 +316,7 @@ tr:hover td{background:var(--bg)}
 
   <nav class="nav">
     <button class="nav-btn active" onclick="showPage('dashboard')">Dashboard</button>
-    <button class="nav-btn" onclick="showPage('insights')">⚡ Insights</button>
+    <button class="nav-btn" onclick="showPage('insights')" style="position:relative" id="nav-insights-btn">⚡ Insights<span id="breeding-alert-badge" style="display:none;position:absolute;top:4px;right:4px;background:var(--red);color:white;border-radius:50%;width:16px;height:16px;font-size:10px;font-weight:700;line-height:16px;text-align:center"></span></button>
     <button class="nav-btn" onclick="showPage('animals')">Animals</button>
     <button class="nav-btn" onclick="showPage('calving')">Calving</button>
     <button class="nav-btn" onclick="showPage('measurements')">Chute Work</button>
@@ -2460,9 +2460,21 @@ function renderBreedingPlanner(content) {
       </div>
     </div>
 
+    <!-- Breeding Groups -->
+    <div class="card" style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div class="card-title" style="margin-bottom:0">🐄 Breeding Groups</div>
+        <button class="btn btn-primary btn-sm" onclick="addBreedingGroup()">+ Add Group</button>
+      </div>
+      <div style="font-size:12px;color:var(--gray);margin-bottom:10px">Split your herd into groups with different calving targets. Each group gets its own timeline and calendar alerts.</div>
+      <div id="breeding-groups-list"></div>
+    </div>
+
     <div id="breeding-plan-output"></div>`;
 
   renderPlannerVaccines();
+  renderBreedingGroups();
+  checkBreedingAlerts();
 
   // Auto-calculate with default date (next spring)
   const nextSpring = new Date();
@@ -2737,7 +2749,7 @@ function updateBreedingPlan() {
     </div>` : ''}
 
     <div style="display:flex;gap:10px;margin-top:10px">
-      <button class="btn btn-primary" onclick="saveBreedingPlanToCalendar()" style="flex:1">📅 Add to Calendar</button>
+      <button class="btn btn-primary" onclick="saveAllGroupsToCalendar()" style="flex:1">📅 Save All Groups to Calendar</button>
       <button class="btn btn-secondary" onclick="printBreedingPlan()" style="flex:1">🖨 Print Plan</button>
     </div>`;
 
@@ -2776,6 +2788,7 @@ function printBreedingPlan() {
 
 // ── DASHBOARD ──────────────────────────────────────────────────────────────
 async function loadDashboard() {
+  checkBreedingAlerts();
   const today = new Date();
   const todayStr = today.toISOString().split('T')[0];
   const yearAgo = new Date(); yearAgo.setFullYear(yearAgo.getFullYear()-1);
@@ -10310,6 +10323,206 @@ async function fixETRecipDams() {
   }
   await loadAnimals();
   statusEl.textContent = `✓ Fixed ${done} animals${errors?' · '+errors+' errors':''}`;
+}
+
+
+// ── BREEDING GROUPS ───────────────────────────────────────────────────────
+let breedingGroups = JSON.parse(localStorage.getItem('breedingGroups') || '[]');
+if(!breedingGroups.length) {
+  breedingGroups = [{
+    id: Date.now(),
+    name: 'Main Herd',
+    calvingStart: null,
+    color: '#E8751A',
+    smartGroupId: null,
+  }];
+}
+
+const GROUP_COLORS = ['#E8751A','#27AE60','#2980B9','#8E44AD','#E74C3C','#F39C12'];
+
+function saveBreedingGroups() {
+  try { localStorage.setItem('breedingGroups', JSON.stringify(breedingGroups)); } catch(e) {}
+}
+
+function addBreedingGroup() {
+  const color = GROUP_COLORS[breedingGroups.length % GROUP_COLORS.length];
+  breedingGroups.push({
+    id: Date.now(),
+    name: `Group ${breedingGroups.length + 1}`,
+    calvingStart: null,
+    color,
+    smartGroupId: null,
+  });
+  saveBreedingGroups();
+  renderBreedingGroups();
+  updateBreedingPlan();
+}
+
+function removeBreedingGroup(id) {
+  if(breedingGroups.length <= 1) { alert('Keep at least one group.'); return; }
+  breedingGroups = breedingGroups.filter(g => g.id !== id);
+  saveBreedingGroups();
+  renderBreedingGroups();
+  updateBreedingPlan();
+}
+
+function updateBreedingGroup(id, field, value) {
+  const g = breedingGroups.find(g => g.id === id);
+  if(g) { g[field] = value; saveBreedingGroups(); updateBreedingPlan(); }
+}
+
+function renderBreedingGroups() {
+  const el = document.getElementById('breeding-groups-list');
+  if(!el) return;
+  const savedGroups = cache.get('savedGroups') || [];
+
+  el.innerHTML = breedingGroups.map(g => `
+    <div style="background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:8px;border-left:4px solid ${g.color}">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="text" value="${g.name}" onchange="updateBreedingGroup(${g.id},'name',this.value)"
+          style="font-size:14px;font-weight:600;border:none;background:none;font-family:inherit;flex:1;min-width:100px;color:var(--dark)">
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          <label style="font-size:12px;color:var(--gray)">Calving Start:</label>
+          <input type="date" value="${g.calvingStart||''}" onchange="updateBreedingGroup(${g.id},'calvingStart',this.value)"
+            style="font-size:13px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit">
+        </div>
+        ${savedGroups.length ? `
+        <select onchange="updateBreedingGroup(${g.id},'smartGroupId',this.value)"
+          style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit">
+          <option value="">No smart group</option>
+          ${savedGroups.map(sg=>`<option value="${sg.id}" ${sg.id===g.smartGroupId?'selected':''}>${sg.name}</option>`).join('')}
+        </select>` : ''}
+        ${breedingGroups.length > 1 ? `<button onclick="removeBreedingGroup(${g.id})" style="background:none;border:none;color:var(--gray-lt);cursor:pointer;font-size:16px">✕</button>` : ''}
+      </div>
+    </div>`).join('');
+}
+
+// ── BREEDING ALERTS ───────────────────────────────────────────────────────
+async function checkBreedingAlerts() {
+  const today = new Date();
+  const in7 = new Date(today); in7.setDate(in7.getDate() + 7);
+  const todayStr = today.toISOString().split('T')[0];
+  const in7Str = in7.toISOString().split('T')[0];
+
+  // Check tasks table for breeding tasks due in next 7 days
+  const {data: tasks} = await sb.from('tasks')
+    .select('*')
+    .eq('ranch_id', currentRanch.id)
+    .eq('done', false)
+    .eq('category', 'breeding')
+    .gte('due_date', todayStr)
+    .lte('due_date', in7Str);
+
+  const count = (tasks||[]).length;
+  const badge = document.getElementById('breeding-alert-badge');
+  if(badge) {
+    badge.style.display = count > 0 ? 'block' : 'none';
+    badge.textContent = count > 9 ? '9+' : count;
+  }
+
+  // Show dashboard alert card if on dashboard
+  renderBreedingAlertCard(tasks||[]);
+}
+
+function renderBreedingAlertCard(tasks) {
+  const existing = document.getElementById('breeding-alert-card');
+  if(!tasks.length) { if(existing) existing.remove(); return; }
+
+  const dashboard = document.getElementById('dashboard-alerts');
+  if(!dashboard) return;
+
+  const card = existing || document.createElement('div');
+  card.id = 'breeding-alert-card';
+  card.style.cssText = 'background:white;border:2px solid var(--amber);border-radius:12px;padding:14px;margin-bottom:12px';
+  card.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <span style="font-size:20px">🗓️</span>
+      <div>
+        <div style="font-weight:700;font-size:14px">Breeding Tasks Due This Week</div>
+        <div style="font-size:12px;color:var(--gray)">${tasks.length} task${tasks.length>1?'s':''} coming up</div>
+      </div>
+    </div>
+    ${tasks.slice(0,5).map(t => {
+      const days = Math.ceil((new Date(t.due_date) - new Date()) / 86400000);
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
+        <span>${t.title}</span>
+        <span style="font-weight:600;color:${days<=2?'var(--red)':'var(--amber)'}">
+          ${days===0?'Today':days===1?'Tomorrow':days+'d'}
+        </span>
+      </div>`;
+    }).join('')}
+    ${tasks.length > 5 ? `<div style="font-size:12px;color:var(--gray);margin-top:6px">+${tasks.length-5} more</div>` : ''}
+    <button onclick="showPage('calendar')" class="btn btn-secondary btn-sm" style="width:100%;margin-top:10px">View Calendar →</button>`;
+
+  if(!existing) dashboard.prepend(card);
+}
+
+// ── SAVE ALL GROUPS TO CALENDAR ───────────────────────────────────────────
+async function saveAllGroupsToCalendar() {
+  const method = document.getElementById('plan-method')?.value || 'ai-natural';
+  const protocol = document.getElementById('plan-protocol')?.value || '7and7';
+  const cleanupDays = parseInt(document.getElementById('plan-cleanup')?.value || '45');
+  const cowType = document.getElementById('plan-cowtype')?.value || 'cow';
+  const herdSize = parseInt(document.getElementById('plan-herd-size')?.value) || 0;
+
+  let totalSaved = 0;
+  const gestation = 283;
+
+  for(const group of breedingGroups) {
+    const calvingDate = group.calvingStart || document.getElementById('plan-calving-start')?.value;
+    if(!calvingDate) continue;
+
+    const calving = new Date(calvingDate);
+    const conception = new Date(calving); conception.setDate(conception.getDate() - gestation);
+    const aiDate = new Date(conception);
+    const protocolDays = protocol === '7and7' ? 14 : 9;
+    const syncStart = new Date(aiDate); syncStart.setDate(syncStart.getDate() - protocolDays);
+    const bullTurnout = new Date(aiDate);
+    if(method === 'ai-natural') bullTurnout.setDate(bullTurnout.getDate() + 3);
+    const bullPull = new Date(bullTurnout); bullPull.setDate(bullPull.getDate() + cleanupDays);
+    const pregCheckDate = new Date(aiDate); pregCheckDate.setDate(pregCheckDate.getDate() + 35);
+
+    const groupSteps = [];
+
+    // Add vaccines
+    plannerVaccines.filter(v => v.enabled !== false).forEach(v => {
+      if(v.naturalServiceOnly && method === 'ai-only') return;
+      let date;
+      if(v.preCalving) { date = new Date(calving); date.setDate(date.getDate() - (v.daysBeforeCalving||75)); }
+      else if(v.pregCheckOnly) { date = new Date(pregCheckDate); }
+      else { date = new Date(syncStart); date.setDate(date.getDate() - (v.daysBeforeSync||42)); }
+      groupSteps.push({ date: date.toISOString().split('T')[0], title: `${group.name} — ${v.name}`, notes: v.notes||'', priority: 'high' });
+    });
+
+    // Add protocol steps
+    if(method !== 'natural-only') {
+      groupSteps.push({ date: syncStart.toISOString().split('T')[0], title: `${group.name} — Sync Start`, notes: protocol==='7and7'?'Insert CIDR + PGF₂α':'Administer GnRH', priority: 'high' });
+      const day7 = new Date(syncStart); day7.setDate(day7.getDate() + 7);
+      groupSteps.push({ date: day7.toISOString().split('T')[0], title: `${group.name} — Day 7`, notes: protocol==='7and7'?'Remove CIDR + PGF₂α':'PGF₂α', priority: 'high' });
+      groupSteps.push({ date: aiDate.toISOString().split('T')[0], title: `${group.name} — AI Day`, notes: 'GnRH + Breed all cows', priority: 'high' });
+    }
+    if(method !== 'ai-only') {
+      groupSteps.push({ date: bullTurnout.toISOString().split('T')[0], title: `${group.name} — Turn Out Bull`, notes: `Bull turnout — ${cleanupDays} days`, priority: 'high' });
+      groupSteps.push({ date: pregCheckDate.toISOString().split('T')[0], title: `${group.name} — Preg Check`, notes: 'Check AI-bred cows ~35 days post-breeding', priority: 'medium' });
+      groupSteps.push({ date: bullPull.toISOString().split('T')[0], title: `${group.name} — Pull Bull`, notes: `Remove bull after ${cleanupDays} days`, priority: 'high' });
+    }
+    groupSteps.push({ date: calvingDate, title: `${group.name} — First Calves Expected`, notes: 'Target calving start', priority: 'medium' });
+
+    for(const step of groupSteps) {
+      const {error} = await dbInsert('tasks', {
+        title: step.title,
+        category: 'breeding',
+        due_date: step.date,
+        priority: step.priority,
+        notes: step.notes,
+        done: false,
+      });
+      if(!error) totalSaved++;
+    }
+  }
+
+  await checkBreedingAlerts();
+  alert(`✅ ${totalSaved} tasks added to Calendar for ${breedingGroups.length} group${breedingGroups.length>1?'s':''}!`);
 }
 
 // ── INIT ───────────────────────────────────────────────────────────────────
