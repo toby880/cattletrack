@@ -4518,12 +4518,15 @@ async function showCalendarTab(tab) {
       dt.setHours(0,0,0,0);
       return Math.round((dt-today)/86400000);
     };
+    // Only show events from 1 year ago onwards to avoid ancient historical records
+    const oneYearAgo = new Date(); oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+    const oneYearAgoStr = oneYearAgo.toISOString().split('T')[0];
     const events=[
-      ...(tasks||[]).filter(t=>!t.done).map(t=>({date:t.due_date,icon:'📌',label:t.title+(t.animal_tag?' — '+t.animal_tag:''),type:t.category,priority:t.priority,taskId:t.id})),
-      ...(ai||[]).filter(r=>r.expected_calving).map(r=>({date:r.expected_calving,icon:'🐄',label:`Expected calving — ${r.cow_tag} (AI × ${r.sire||'—'})`,type:'calving'})),
-      ...(ns||[]).filter(r=>r.pull_date).map(r=>({date:r.pull_date,icon:'🐂',label:`Pull bull — ${r.bull_tag} from ${r.pasture||'pasture'}`,type:'breeding'})),
-      ...(health||[]).filter(h=>h.withdrawal_days>0).map(h=>{const c=new Date(h.event_date);c.setDate(c.getDate()+h.withdrawal_days);return{date:c.toISOString().split('T')[0],icon:'✅',label:`WD clear — ${h.animal_tag} (${h.product||h.event_type})`,type:'withdrawal'};}),
-    ].filter(e=>e.date).sort((a,b)=>new Date(a.date)-new Date(b.date));
+      ...(tasks||[]).filter(t=>!t.done&&t.due_date>=oneYearAgoStr).map(t=>({date:t.due_date,icon:'📌',label:t.title+(t.animal_tag?' — '+t.animal_tag:''),type:t.category,priority:t.priority,taskId:t.id})),
+      ...(ai||[]).filter(r=>r.expected_calving&&r.expected_calving>=oneYearAgoStr).map(r=>({date:r.expected_calving,icon:'🐄',label:`Expected calving — ${r.cow_tag} (AI × ${r.sire||'—'})`,type:'calving'})),
+      ...(ns||[]).filter(r=>r.pull_date&&r.pull_date>=oneYearAgoStr).map(r=>({date:r.pull_date,icon:'🐂',label:`Pull bull — ${r.bull_tag} from ${r.pasture||'pasture'}`,type:'breeding'})),
+      ...(health||[]).filter(h=>h.withdrawal_days>0).map(h=>{const c=new Date(h.event_date);c.setDate(c.getDate()+h.withdrawal_days);const dateStr=c.toISOString().split('T')[0];return{date:dateStr,icon:'✅',label:`WD clear — ${h.animal_tag} (${h.product||h.event_type})`,type:'withdrawal',skip:dateStr<oneYearAgoStr};}),
+    ].filter(e=>e.date&&!e.skip).sort((a,b)=>new Date(a.date)-new Date(b.date));
     const groups={};
     events.forEach(e=>{
       const d=daysUntil(e.date);
