@@ -4550,14 +4550,39 @@ async function showCalendarTab(tab) {
   if(tab==='tasks') {
     content.innerHTML='<div class="loading"><div class="spinner"></div>Loading...</div>';
     const {data:tasks}=await dbSelect('tasks');
-    content.innerHTML=(tasks||[]).length
-      ? (tasks||[]).map(t=>`<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;${t.done?'opacity:0.6':''}">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
-            <div style="flex:1"><div style="font-weight:600;font-size:14px;${t.done?'text-decoration:line-through':''}">${t.title}</div>
-            <div style="font-size:12px;color:var(--gray);margin-top:3px">${t.due_date} · ${t.priority} priority${t.animal_tag?' · '+t.animal_tag:''}</div></div>
+    if(!(tasks||[]).length) {
+      content.innerHTML='<div class="empty"><div class="empty-icon">✅</div><p>No tasks yet.</p></div>';
+      return;
+    }
+    // Group by category for filtering
+    const categories = [...new Set((tasks||[]).map(t=>t.category||'other'))].sort();
+    content.innerHTML = `
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="task-select-all" onchange="toggleSelectAllTasks(this.checked)" style="accent-color:var(--orange);width:16px;height:16px">
+          Select All
+        </label>
+        <select id="task-filter-cat" onchange="filterTasksByCategory()" style="font-size:13px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-family:inherit">
+          <option value="">All Categories</option>
+          ${categories.map(c=>`<option value="${c}">${c}</option>`).join('')}
+        </select>
+        <div style="flex:1"></div>
+        <button onclick="deleteSelectedTasks()" id="task-delete-btn" style="display:none;background:var(--red);color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🗑 Delete Selected</button>
+        <button onclick="markSelectedDone()" id="task-done-btn" style="display:none;background:var(--green);color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">✓ Mark Done</button>
+      </div>
+      <div id="task-list-items">
+        ${(tasks||[]).map(t=>`
+          <div class="task-item" data-id="${t.id}" data-cat="${t.category||'other'}" style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;${t.done?'opacity:0.6':''}display:flex;align-items:flex-start;gap:10px">
+            <input type="checkbox" class="task-checkbox" data-id="${t.id}" onchange="updateTaskSelection()" style="accent-color:var(--orange);width:18px;height:18px;margin-top:2px;flex-shrink:0">
+            <div style="flex:1">
+              <div style="font-weight:600;font-size:14px;${t.done?'text-decoration:line-through':''}">${t.title}</div>
+              <div style="font-size:12px;color:var(--gray);margin-top:3px">${t.due_date} · ${t.priority||'medium'} priority${t.animal_tag?' · '+t.animal_tag:''}${t.category?' · '+t.category:''}</div>
+              ${t.notes?`<div style="font-size:12px;color:var(--gray);margin-top:2px">${t.notes}</div>`:''}
+            </div>
             ${!t.done?`<button onclick="completeTask('${t.id}')" style="background:var(--green);color:white;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0">Done</button>`:'<span class="badge badge-green">✓</span>'}
-          </div></div>`).join('')
-      : '<div class="empty"><div class="empty-icon">✅</div><p>No tasks yet.</p></div>';
+          </div>`).join('')}
+      </div>`;
+    window._calendarTasks = tasks;
   }
   if(tab==='add') {
     const today=new Date().toISOString().split('T')[0];
@@ -4575,6 +4600,52 @@ async function showCalendarTab(tab) {
       <button class="btn btn-primary" onclick="saveTask()">Add Task</button>
     </div>`;
   }
+}
+
+
+function toggleSelectAllTasks(checked) {
+  document.querySelectorAll('.task-checkbox').forEach(cb => cb.checked = checked);
+  updateTaskSelection();
+}
+
+function filterTasksByCategory() {
+  const cat = document.getElementById('task-filter-cat')?.value || '';
+  document.querySelectorAll('.task-item').forEach(item => {
+    item.style.display = !cat || item.dataset.cat === cat ? 'flex' : 'none';
+  });
+  document.getElementById('task-select-all').checked = false;
+  updateTaskSelection();
+}
+
+function updateTaskSelection() {
+  const selected = document.querySelectorAll('.task-checkbox:checked').length;
+  const deleteBtn = document.getElementById('task-delete-btn');
+  const doneBtn = document.getElementById('task-done-btn');
+  if(deleteBtn) deleteBtn.style.display = selected > 0 ? 'block' : 'none';
+  if(doneBtn) doneBtn.style.display = selected > 0 ? 'block' : 'none';
+  if(deleteBtn && selected > 0) deleteBtn.textContent = `🗑 Delete ${selected} Selected`;
+  if(doneBtn && selected > 0) doneBtn.textContent = `✓ Mark ${selected} Done`;
+}
+
+async function deleteSelectedTasks() {
+  const ids = [...document.querySelectorAll('.task-checkbox:checked')].map(cb => cb.dataset.id);
+  if(!ids.length) return;
+  if(!confirm(`Delete ${ids.length} task${ids.length>1?'s':''}? This cannot be undone.`)) return;
+  for(const id of ids) {
+    await sb.from('tasks').delete().eq('id', id);
+  }
+  showCalendarTab('tasks');
+  checkBreedingAlerts();
+}
+
+async function markSelectedDone() {
+  const ids = [...document.querySelectorAll('.task-checkbox:checked')].map(cb => cb.dataset.id);
+  if(!ids.length) return;
+  for(const id of ids) {
+    await sb.from('tasks').update({done:true, completed_date: new Date().toISOString().split('T')[0]}).eq('id', id);
+  }
+  showCalendarTab('tasks');
+  checkBreedingAlerts();
 }
 
 async function saveTask() {
