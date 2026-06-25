@@ -365,7 +365,13 @@ tr:hover td{background:var(--bg)}
           <button class="btn btn-secondary btn-sm" onclick="openHerdImport()">📥 Import</button>
           <button class="btn btn-secondary btn-sm" onclick="openSmartGroups()">⚡ Smart Groups</button>
           <button class="btn btn-secondary btn-sm" onclick="openGroupAction()">Group Action</button>
-          <button class="btn btn-primary btn-sm" onclick="openAddAnimal()">+ Add</button>
+          <div style="position:relative;display:inline-block">
+            <button class="btn btn-primary btn-sm" onclick="toggleAddAnimalMenu()" id="add-animal-btn">+ Add ▾</button>
+            <div id="add-animal-menu" style="display:none;position:absolute;right:0;top:36px;background:var(--white);border:1px solid var(--border);border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.12);z-index:100;min-width:160px;overflow:hidden">
+              <button onclick="openAddAnimal();document.getElementById('add-animal-menu').style.display='none'" style="display:block;width:100%;text-align:left;padding:12px 16px;font-size:13px;font-weight:600;background:none;border:none;cursor:pointer;font-family:inherit;border-bottom:1px solid var(--border)">+ Add Single Animal</button>
+              <button onclick="openBulkAddAnimals();document.getElementById('add-animal-menu').style.display='none'" style="display:block;width:100%;text-align:left;padding:12px 16px;font-size:13px;font-weight:600;background:none;border:none;cursor:pointer;font-family:inherit">+ Bulk Add Animals</button>
+            </div>
+          </div>
         </div>
       </div>
       <div style="display:flex;gap:8px;margin-bottom:12px">
@@ -1165,6 +1171,106 @@ tr:hover td{background:var(--bg)}
       <div id="cm-final-summary" style="font-size:13px;color:var(--gray);margin-bottom:16px"></div>
       <button class="btn btn-primary" onclick="closeCattleMaxImport();showPage('animals')">View Animals →</button>
     </div>
+  </div>
+</div>
+
+<!-- BULK ADD ANIMALS MODAL -->
+<div class="modal-overlay" id="bulk-add-animals-modal">
+  <div class="modal" style="max-height:92vh;overflow-y:auto">
+    <div class="modal-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="modal-title" style="margin-bottom:0">Bulk Add Animals</div>
+      <button onclick="closeBulkAddAnimals()" style="background:var(--bg2);border:none;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer;font-family:inherit">✕</button>
+    </div>
+
+    <div style="font-size:13px;color:var(--gray);margin-bottom:14px">Set shared fields for the group, then add individual tags below. Useful for adding a calf crop, purchased load, or group of heifers.</div>
+
+    <!-- Shared fields -->
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">Shared Fields (applies to all)</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Sex / Class</label>
+          <select id="bulk-sex">
+            <option value="Cow">Cow</option>
+            <option value="Heifer">Heifer</option>
+            <option value="Bull">Bull</option>
+            <option value="Steer">Steer</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Breed</label>
+          <select id="bulk-breed">
+            <option value="Red Angus">Red Angus</option>
+            <option value="Angus">Angus</option>
+            <option value="Hereford">Hereford</option>
+            <option value="Beefmaster">Beefmaster</option>
+            <option value="Simmental">Simmental</option>
+            <option value="Charolais">Charolais</option>
+            <option value="Crossbred">Crossbred</option>
+            <option value="Commercial">Commercial</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Date of Birth</label>
+          <input type="date" id="bulk-dob">
+        </div>
+        <div class="form-group">
+          <label>Pasture / Location</label>
+          <select id="bulk-location">
+            <option value="">— None —</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Sire</label>
+          <input type="text" id="bulk-sire" placeholder="Sire tag or name">
+        </div>
+        <div class="form-group">
+          <label>Acquisition</label>
+          <select id="bulk-acquisition">
+            <option value="raised">Raised</option>
+            <option value="purchased">Purchased</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Status</label>
+          <select id="bulk-status">
+            <option value="active">Active</option>
+            <option value="sold">Sold</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Category</label>
+          <input type="text" id="bulk-category" placeholder="e.g. Replacement Heifers">
+        </div>
+      </div>
+    </div>
+
+    <!-- Individual tags -->
+    <div class="card" style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div class="card-title" style="margin-bottom:0">Individual Animals</div>
+        <button class="btn btn-secondary btn-sm" onclick="addBulkRow()">+ Add Row</button>
+      </div>
+      <div style="font-size:12px;color:var(--gray);margin-bottom:8px">Add one row per animal. Tag is required. Dam and name are optional.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px;margin-bottom:6px">
+        <div style="font-size:11px;font-weight:600;color:var(--gray);text-transform:uppercase;padding:0 4px">Tag *</div>
+        <div style="font-size:11px;font-weight:600;color:var(--gray);text-transform:uppercase;padding:0 4px">Dam</div>
+        <div style="font-size:11px;font-weight:600;color:var(--gray);text-transform:uppercase;padding:0 4px">Name</div>
+        <div></div>
+      </div>
+      <div id="bulk-rows"></div>
+      <button class="btn btn-secondary" style="width:100%;margin-top:8px" onclick="addBulkRow()">+ Add Another</button>
+    </div>
+
+    <div id="bulk-add-status" style="font-size:13px;margin-bottom:10px"></div>
+    <button class="btn btn-primary" style="width:100%" onclick="saveBulkAnimals()">✅ Add All Animals</button>
   </div>
 </div>
 
@@ -10597,6 +10703,96 @@ async function saveAllGroupsToCalendar() {
 
   await checkBreedingAlerts();
   alert(`✅ ${totalSaved} tasks added to Calendar for ${breedingGroups.length} group${breedingGroups.length>1?'s':''}!`);
+}
+
+
+// ── BULK ADD ANIMALS ──────────────────────────────────────────────────────
+function toggleAddAnimalMenu() {
+  const menu = document.getElementById('add-animal-menu');
+  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+  // Close on outside click
+  setTimeout(() => {
+    document.addEventListener('click', function closeMenu(e) {
+      if(!e.target.closest('#add-animal-btn') && !e.target.closest('#add-animal-menu')) {
+        menu.style.display = 'none';
+        document.removeEventListener('click', closeMenu);
+      }
+    });
+  }, 10);
+}
+
+async function openBulkAddAnimals() {
+  // Populate pasture dropdown
+  const pastures = cache.get('pastures') || [];
+  const locSelect = document.getElementById('bulk-location');
+  if(locSelect) {
+    locSelect.innerHTML = '<option value="">— None —</option>' +
+      pastures.map(p=>`<option value="${p.name}">${p.name}</option>`).join('');
+  }
+  // Add 3 starter rows
+  document.getElementById('bulk-rows').innerHTML = '';
+  for(let i=0; i<3; i++) addBulkRow();
+  document.getElementById('bulk-add-status').textContent = '';
+  document.getElementById('bulk-add-animals-modal').classList.add('open');
+}
+
+function closeBulkAddAnimals() {
+  document.getElementById('bulk-add-animals-modal').classList.remove('open');
+}
+
+function addBulkRow() {
+  const row = document.createElement('div');
+  row.className = 'bulk-row';
+  row.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px;margin-bottom:6px';
+  row.innerHTML = `
+    <input type="text" placeholder="Tag #" class="bulk-tag" style="font-size:14px;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:inherit" autocomplete="off" autocorrect="off" autocapitalize="off">
+    <input type="text" placeholder="Dam tag" class="bulk-dam" style="font-size:14px;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:inherit">
+    <input type="text" placeholder="Name" class="bulk-name" style="font-size:14px;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:inherit">
+    <button onclick="this.closest('.bulk-row').remove()" style="background:var(--red);color:white;border:none;border-radius:8px;padding:8px 10px;cursor:pointer;font-size:13px">✕</button>`;
+  document.getElementById('bulk-rows').appendChild(row);
+  row.querySelector('.bulk-tag').focus();
+}
+
+async function saveBulkAnimals() {
+  const sex = document.getElementById('bulk-sex')?.value;
+  const breed = document.getElementById('bulk-breed')?.value;
+  const dob = document.getElementById('bulk-dob')?.value || null;
+  const location = document.getElementById('bulk-location')?.value || null;
+  const sire = document.getElementById('bulk-sire')?.value?.trim() || null;
+  const acquisition = document.getElementById('bulk-acquisition')?.value || 'raised';
+  const status = document.getElementById('bulk-status')?.value || 'active';
+  const category = document.getElementById('bulk-category')?.value?.trim() || null;
+
+  const rows = document.querySelectorAll('.bulk-row');
+  const animals = [];
+  rows.forEach(row => {
+    const tag = row.querySelector('.bulk-tag')?.value?.trim();
+    const dam = row.querySelector('.bulk-dam')?.value?.trim() || null;
+    const name = row.querySelector('.bulk-name')?.value?.trim() || null;
+    if(tag) animals.push({ tag, dam, name, sex, breed, dob, location, sire, acquisition, status, category });
+  });
+
+  if(!animals.length) { alert('Add at least one animal tag.'); return; }
+
+  const statusEl = document.getElementById('bulk-add-status');
+  statusEl.textContent = `Adding ${animals.length} animals...`;
+
+  let saved = 0, errors = 0;
+  for(const a of animals) {
+    const {error} = await dbInsert('animals', a);
+    if(!error) saved++;
+    else errors++;
+  }
+
+  await loadAnimals();
+  statusEl.innerHTML = `<span style="color:var(--green)">✓ ${saved} animals added${errors?` · ${errors} errors`:''}</span>`;
+
+  if(saved > 0) {
+    setTimeout(() => {
+      closeBulkAddAnimals();
+      renderAnimals();
+    }, 1500);
+  }
 }
 
 // ── INIT ───────────────────────────────────────────────────────────────────
