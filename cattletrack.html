@@ -10797,27 +10797,7 @@ async function saveBulkAnimals() {
 
 // ── INIT ───────────────────────────────────────────────────────────────────
 async function init() {
-  // Register service worker for offline support
-  if('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').then(reg => {
-      // Check for updates
-      reg.addEventListener('updatefound', () => {
-        const newWorker = reg.installing;
-        newWorker.addEventListener('statechange', () => {
-          if(newWorker.state==='installed' && navigator.serviceWorker.controller) {
-            // New version available — show update banner
-            const banner = document.getElementById('syncBanner');
-            if(banner) {
-              banner.textContent = '🔄 Update available — tap to refresh';
-              banner.classList.add('show');
-              banner.style.cursor = 'pointer';
-              banner.onclick = () => { newWorker.postMessage('skipWaiting'); window.location.reload(); };
-            }
-          }
-        });
-      });
-    }).catch(err => console.log('SW registration failed:', err));
-  }
+  // Service worker disabled
 
   // Check for invite link in URL
   await checkForInvite();
