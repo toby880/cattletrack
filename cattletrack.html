@@ -676,6 +676,7 @@ tr:hover td{background:var(--bg)}
         <button class="tab active" onclick="showReportsTab('builder')">Custom Report</button>
         <button class="tab" onclick="showReportsTab('saved')">Saved Reports</button>
         <button class="tab" onclick="showReportsTab('quick')">Quick Reports</button>
+        <button class="tab" onclick="showReportsTab('raaa')">🐄 RAAA Export</button>
       </div>
 
       <!-- CUSTOM REPORT BUILDER -->
@@ -4846,7 +4847,53 @@ function showReportsTab(tab) {
     const el = document.getElementById('reports-'+t);
     if(el) el.style.display = t===tab?'block':'none';
   });
-  document.querySelectorAll('#page-reports .tab').forEach((b,i)=>b.classList.toggle('active',['builder','saved','quick'][i]===tab));
+  document.querySelectorAll('#page-reports .tab').forEach((b,i)=>b.classList.toggle('active',['builder','saved','quick','raaa'][i]===tab));
+  // RAAA tab uses dynamic content area
+  const raaaEl = document.getElementById('reports-raaa');
+  if(raaaEl) raaaEl.style.display = 'none';
+  const content = document.getElementById('report-output');
+  if(tab==='raaa') {
+    content.innerHTML = `
+      <div class="card" style="margin-bottom:10px">
+        <div class="card-title">🐄 RAAA Animal Registration Export</div>
+        <div style="font-size:13px;color:var(--gray);margin-bottom:14px">Export your calf crop data in the RAAA Animal Registration format. Download and upload directly to REDSPro.</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Calf Crop Year</label>
+            <select id="raaa-year">
+              ${[2026,2025,2024,2023].map(y=>`<option value="${y}" ${y===new Date().getFullYear()?'selected':''}>${y}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Season</label>
+            <select id="raaa-season">
+              <option value="spring">Spring (Jan-Jun)</option>
+              <option value="fall">Fall (Jul-Dec)</option>
+              <option value="all">All Year</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Sex Filter</label>
+            <select id="raaa-sex">
+              <option value="all">All Calves</option>
+              <option value="Bull">Bulls Only</option>
+              <option value="Heifer">Heifers Only</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>RAAA Account Number</label>
+            <input type="text" id="raaa-account" value="097491" placeholder="097491">
+          </div>
+        </div>
+        <div id="raaa-preview" style="font-size:13px;color:var(--gray);margin:10px 0"></div>
+        <div style="display:flex;gap:10px">
+          <button class="btn btn-secondary" onclick="previewRAAAExport()" style="flex:1">Preview</button>
+          <button class="btn btn-primary" onclick="exportRAAA()" style="flex:2">⬇ Download RAAA Export</button>
+        </div>
+      </div>`;
+  }
   if(tab==='builder') updateReportColumns();
   if(tab==='saved') renderSavedReports();
   document.getElementById('report-output').innerHTML='';
@@ -10793,6 +10840,194 @@ async function saveBulkAnimals() {
       renderAnimals();
     }, 1500);
   }
+}
+
+
+// ── RAAA EXPORT ───────────────────────────────────────────────────────────
+async function previewRAAAExport() {
+  const calves = await getRAAACalves();
+  const el = document.getElementById('raaa-preview');
+  if(!el) return;
+  el.innerHTML = `<strong>${calves.length} calves</strong> match these filters — ready to export.${calves.length?'<br><span style="color:var(--gray);font-size:12px">'+calves.slice(0,5).map(c=>c.tag).join(', ')+(calves.length>5?'...':'')+'</span>':''}`;
+}
+
+async function getRAAACalves() {
+  const year = parseInt(document.getElementById('raaa-year')?.value || new Date().getFullYear());
+  const season = document.getElementById('raaa-season')?.value || 'spring';
+  const sexFilter = document.getElementById('raaa-sex')?.value || 'all';
+
+  // Date range
+  let startMonth = 1, endMonth = 12;
+  if(season === 'spring') { startMonth = 1; endMonth = 6; }
+  if(season === 'fall') { startMonth = 7; endMonth = 12; }
+  const startDate = `${year}-${String(startMonth).padStart(2,'0')}-01`;
+  const endDate = `${year}-${String(endMonth).padStart(2,'0')}-31`;
+
+  const animals = (cache.get('animals') || []).filter(a => {
+    if(!a.dob) return false;
+    if(a.dob < startDate || a.dob > endDate) return false;
+    if(sexFilter !== 'all' && a.sex !== sexFilter) return false;
+    return true;
+  });
+
+  return animals;
+}
+
+async function exportRAAA() {
+  const calves = await getRAAACalves();
+  if(!calves.length) { alert('No calves match these filters.'); return; }
+
+  const year = document.getElementById('raaa-year')?.value || new Date().getFullYear();
+  const account = document.getElementById('raaa-account')?.value || '097491';
+  const prefix = currentRanch.herd_prefix || 'H2R';
+
+  // Load supporting data
+  const animals = cache.get('animals') || [];
+  const animalMap = Object.fromEntries(animals.map(a => [a.tag, a]));
+
+  // Load calving records for birth weight and CE
+  const {data: calvingRecs} = await sb.from('calving_records').select('*').eq('ranch_id', currentRanch.id).gte('birth_date', `${year}-01-01`).lte('birth_date', `${year}-12-31`);
+  const calvingMap = {};
+  (calvingRecs || []).forEach(c => { calvingMap[c.calf_tag] = c; });
+
+  // Load dam animals for reg numbers and names
+  const {data: damAnimals} = await sb.from('animals').select('tag,reg_number,name,dob,dam,sire').eq('ranch_id', currentRanch.id);
+  const damMap = Object.fromEntries((damAnimals||[]).map(a => [a.tag, a]));
+
+  // Load ET flush data
+  const {data: flushes} = await sb.from('et_flushes').select('*').eq('ranch_id', currentRanch.id);
+  const flushMap = {};
+  (flushes||[]).forEach(f => { flushMap[f.donor_tag+f.flush_date] = f; });
+
+  // Load pedigrees for dam sire reg numbers
+  const {data: pedigrees} = await sb.from('pedigrees').select('*').eq('ranch_id', currentRanch.id);
+  const pedigreeMap = Object.fromEntries((pedigrees||[]).map(p => [p.animal_tag, p]));
+
+  // Load semen inventory for sire reg numbers
+  const {data: semen} = await sb.from('semen_inventory').select('sire,reg_number').eq('ranch_id', currentRanch.id);
+  const semenMap = {};
+  (semen||[]).forEach(s => { if(s.sire) semenMap[s.sire.toUpperCase()] = s.reg_number; });
+
+  // Build CSV rows
+  const headers = [
+    'Dam Reg Nbr','Dam Prfx','Dam ID','Dam Birth Dt','Reg Nbr','EID','2nd ID','ID',
+    'Sire Reg No','Calf Disp','Calf Prfx','Birth Dt','Brth Year','Calf Year','Calf Sex',
+    'Birth Wt','CE','Cont Brdr','Brth Grp','Twin Code','Mating','Color','H/P/S','Reg Type',
+    'Print','Calf Name','Dam Name','Dam Sire Reg No','Dam Breeds','Dam Disp',
+    'Donor Dam Reg No','Donor Dam ID','Donor Dam Name','Donor Dam Breeds',
+    'Donor Dam BirthDt','Dnr Dam Sire Nbr','Dnr Dam Flush Dt'
+  ];
+
+  const fmtDate = d => {
+    if(!d) return '';
+    const dt = new Date(d+'T00:00:00');
+    return `${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')}/${dt.getFullYear()}`;
+  };
+
+  const rows = calves.map(calf => {
+    const calving = calvingMap[calf.tag] || {};
+    const damTag = calf.dam || calving.dam_tag || '';
+    const dam = damMap[damTag] || {};
+    const damPed = pedigreeMap[damTag] || {};
+    const isET = calf.conception_method === 'ET';
+
+    // Sex code: B=Bull, C=Cow/Heifer, S=Steer
+    const sexCode = calf.sex === 'Bull' ? 'B' : calf.sex === 'Steer' ? 'S' : 'C';
+
+    // Sire reg number - look up from semen inventory
+    const sireUpper = (calf.sire || '').toUpperCase();
+    const sireReg = semenMap[sireUpper] || '';
+
+    // Dam sire reg - from pedigree
+    const damSireReg = damPed.sire_reg || '';
+
+    // Name prefix from dam
+    const damName = dam.name || '';
+    const damNameParts = damName.split(' ');
+    const damPrefix = damNameParts.length > 0 && damNameParts[0].length <= 5 ? damNameParts[0] : prefix;
+
+    // Birth year
+    const birthYear = calf.dob ? new Date(calf.dob+'T00:00:00').getFullYear() : '';
+
+    // Donor dam info for ET calves
+    let donorReg='', donorId='', donorName='', donorBreeds='', donorDob='', donorSireReg='', flushDate='';
+    if(isET) {
+      donorId = calf.recip_dam || '';
+      // Try to find flush info
+      const donorAnimal = damMap[damTag] || {};
+      donorReg = donorAnimal.reg_number || '';
+      donorName = donorAnimal.name || '';
+      donorDob = fmtDate(donorAnimal.dob);
+      donorBreeds = '100% AR';
+    }
+
+    return [
+      dam.reg_number || '',         // Dam Reg Nbr
+      damPrefix,                     // Dam Prfx
+      damTag,                        // Dam ID
+      fmtDate(dam.dob),             // Dam Birth Dt
+      calf.reg_number || '',         // Reg Nbr
+      calf.eid_tag || '',            // EID
+      'I',                           // 2nd ID
+      calf.tag,                      // ID (ear tag)
+      sireReg,                       // Sire Reg No
+      '',                            // Calf Disp
+      prefix,                        // Calf Prfx
+      fmtDate(calf.dob),            // Birth Dt
+      birthYear,                     // Brth Year
+      birthYear,                     // Calf Year
+      sexCode,                       // Calf Sex
+      calving.birth_weight || calf.birth_weight || '',  // Birth Wt
+      calving.calving_ease || '',    // CE
+      account,                       // Cont Brdr
+      calving.birth_group || '',     // Brth Grp
+      calf.is_twin ? 1 : '',        // Twin Code
+      calf.conception_method === 'AI' ? 'A' : calf.conception_method === 'ET' ? 'E' : 'N',  // Mating
+      '',                            // Color
+      calf.horn_status === 'Polled' ? 'P' : calf.horn_status === 'Horned' ? 'H' : '',  // H/P/S
+      'R',                           // Reg Type
+      'Y',                           // Print
+      calf.name || '',               // Calf Name
+      dam.name || '',                // Dam Name
+      damSireReg,                    // Dam Sire Reg No
+      '100% AR',                     // Dam Breeds
+      '',                            // Dam Disp
+      donorReg,                      // Donor Dam Reg No
+      donorId,                       // Donor Dam ID
+      donorName,                     // Donor Dam Name
+      isET ? '100% AR' : '',        // Donor Dam Breeds
+      donorDob,                      // Donor Dam BirthDt
+      donorSireReg,                  // Dnr Dam Sire Nbr
+      flushDate,                     // Dnr Dam Flush Dt
+    ];
+  });
+
+  // Build CSV
+  const csvRows = [
+    ['Red Angus Association of America - Animal Registration'],
+    [],
+    [`Acct Number:${account}`],
+    [`Member Name:${currentRanch.name || 'HENDERSON RED ANGUS'}`],
+    [],
+    headers,
+    ...rows
+  ];
+
+  const csv = csvRows.map(row => row.map(cell => {
+    const s = String(cell ?? '');
+    return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+  }).join(',')).join('\n');
+
+  // Download
+  const blob = new Blob([csv], {type: 'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `RAAA_Registration_${year}_${document.getElementById('raaa-season')?.value||'spring'}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  alert(`✅ Exported ${rows.length} calves to RAAA format.\nUpload this CSV to REDSPro → Animal Entry → Options → Upload Spreadsheet.`);
 }
 
 // ── INIT ───────────────────────────────────────────────────────────────────
