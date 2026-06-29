@@ -536,7 +536,7 @@ tr:hover td{background:var(--bg)}
         <button class="tab" onclick="showBreedingTab('sync')">Sync Groups</button>
         <button class="tab" onclick="showBreedingTab('natural')">Natural Service</button>
         <button class="tab" onclick="showBreedingTab('et')">Conv. ET</button>
-        <button class="tab" onclick="showBreedingTab('ivf')">IVF</button>
+
         <button class="tab" onclick="showBreedingTab('pregcheck')">Preg Check</button>
         <button class="tab" onclick="showBreedingTab('history')">History</button>
       </div>
@@ -3868,7 +3868,7 @@ async function renderWithdrawal() {
 function showBreedingTab(tab) {
   const content = document.getElementById('breeding-content');
   document.querySelectorAll('#page-breeding .tab-bar .tab').forEach((b,i) => {
-    b.classList.toggle('active', ['semen','ai','sync','natural','et','ivf','pregcheck','history'][i]===tab);
+    b.classList.toggle('active', ['semen','ai','sync','natural','et','pregcheck','history'][i]===tab);
   });
   if(tab==='semen') renderSemenTab(content);
   else if(tab==='ai') renderAITab(content);
