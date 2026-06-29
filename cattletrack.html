@@ -1728,6 +1728,45 @@ tr:hover td{background:var(--bg)}
         <option value="dead">Dead</option>
       </select>
     </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>RAAA Season Disp Code</label>
+        <select id="ea-raaa-disp">
+          <option value="">— None —</option>
+          <option value="N">N — No Change</option>
+          <option value="30">30 — Aborted</option>
+          <option value="31">31 — Calf Not Found</option>
+          <option value="32">32 — ET Donor</option>
+          <option value="33">33 — ET Recipient</option>
+          <option value="34">34 — Exposed, Failed to Conceive</option>
+          <option value="35">35 — Not Exposed / Moved Season</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>RAAA Culling Reason</label>
+        <select id="ea-raaa-reas">
+          <option value="">— None (Active) —</option>
+          <option value="71">71 — Age</option>
+          <option value="72">72 — Appearance</option>
+          <option value="73">73 — Calf Died</option>
+          <option value="74">74 — Disposition</option>
+          <option value="75">75 — Genetic Defect</option>
+          <option value="77">77 — Genetic Merit</option>
+          <option value="78">78 — Herd Reduction</option>
+          <option value="79">79 — Hoof Condition</option>
+          <option value="80">80 — Weather/Accident/Injury</option>
+          <option value="81">81 — Production/Performance</option>
+          <option value="82">82 — Prolapse</option>
+          <option value="83">83 — Sickness/Disease</option>
+          <option value="84">84 — Structural Soundness</option>
+          <option value="85">85 — Udder Quality</option>
+          <option value="86">86 — Calving Difficulty</option>
+          <option value="87">87 — Sold Pregnant</option>
+          <option value="88">88 — Sold Open, Failed to Conceive</option>
+          <option value="89">89 — Sold Open, Unexposed</option>
+        </select>
+      </div>
+    </div>
     <div class="form-group"><label>Notes</label><textarea id="ea-notes" placeholder="Any notes..."></textarea></div>
     <div style="display:flex;gap:10px;margin-top:4px">
       <button class="btn btn-danger btn-sm" onclick="confirmDeleteAnimal()" style="flex:1">Delete</button>
@@ -3173,7 +3212,9 @@ async function showProfileTab(tab) {
     const a = currentAnimal;
     const row = (l,v) => v ? `<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:var(--gray)">${l}</span><strong style="text-align:right;max-width:60%">${v}</strong></div>` : '';
     content.innerHTML = `
-      <div class="card" style="margin-bottom:10px"><div class="card-title">General</div>${(()=>{const namePrefix=a.name?a.name.split(' ')[0]:'';const isPrefix=namePrefix.length>=2&&namePrefix.length<=5&&namePrefix===namePrefix.toUpperCase()&&!/\d/.test(namePrefix);return isPrefix?row('Herd Prefix',namePrefix):(currentRanch.herd_prefix&&a.acquisition!=='purchased'?row('Herd Prefix',currentRanch.herd_prefix):'');})()}${row('Ear Tag',a.tag)}${row('EID Tag',a.eid_tag)}${row('Name',a.name)}${row('Reg Number',a.reg_number)}${row('Tattoo Left',a.tattoo_left)}${row('Tattoo Right',a.tattoo_right)}${a.tattoo&&!a.tattoo_left?row('Tattoo',a.tattoo):''}${row('Conception Method',a.conception_method)}${row('Donor/Genetic',a.donor_genetic)}${a.recip_dam?row('Recip Dam',a.recip_dam):''}${a.is_twin?row('Twin','Yes'):''}</div>
+      <div class="card" style="margin-bottom:10px"><div class="card-title">General</div>${(()=>{const namePrefix=a.name?a.name.split(' ')[0]:'';const isPrefix=namePrefix.length>=2&&namePrefix.length<=5&&namePrefix===namePrefix.toUpperCase()&&!/\d/.test(namePrefix);return isPrefix?row('Herd Prefix',namePrefix):(currentRanch.herd_prefix&&a.acquisition!=='purchased'?row('Herd Prefix',currentRanch.herd_prefix):'');})()}${row('Ear Tag',a.tag)}${row('EID Tag',a.eid_tag)}${row('Name',a.name)}${row('Reg Number',a.reg_number)}${row('Tattoo Left',a.tattoo_left)}${row('Tattoo Right',a.tattoo_right)}${a.tattoo&&!a.tattoo_left?row('Tattoo',a.tattoo):''}${row('Conception Method',a.conception_method)}
+        ${a.raaa_disp_code?row('RAAA Season Disposition',`${a.raaa_disp_code} — ${{'N':'No Change','30':'Aborted','31':'Calf Not Found','32':'ET Donor','33':'ET Recipient','34':'Exposed-Failed to Conceive','35':'Not Exposed/Moved Season'}[a.raaa_disp_code]||a.raaa_disp_code}`):''}
+        ${a.raaa_reas_code?row('RAAA Culling Reason',a.raaa_reas_code):''}${row('Donor/Genetic',a.donor_genetic)}${a.recip_dam?row('Recip Dam',a.recip_dam):''}${a.is_twin?row('Twin','Yes'):''}</div>
       <div class="card" style="margin-bottom:10px"><div class="card-title">Descriptive</div>${row('Sex',a.sex)}${row('Breed',a.breed)}${row('Color',a.color)}${row('Horn Status',a.horn_status)}${row('Category',a.category)}</div>
       <div class="card" style="margin-bottom:10px"><div class="card-title">Status</div>${row('Status',a.status)}${row('Location / Pasture',a.location)}${row('Birth Date',a.dob)}${row('Weaning Date',a.weaning_date)}${row('Acquisition',a.acquisition)}${row('Purchase Price',a.purchase_price?'$'+parseFloat(a.purchase_price).toLocaleString():null)}${row('Purchased From',a.purchased_from)}${row('Sire',a.sire)}${row('Dam',a.dam)}</div>
       <div class="card"><div class="card-title">Records</div>${a.calfhood_vaccinated?row('Calfhood Vac','✓ '+( a.calfhood_vac_date||'on file')+(a.calfhood_vac_vet?' · '+a.calfhood_vac_vet:'')):row('Calfhood Vac','Not recorded')}${a.genomic_tested?row('Genomic Tested','✓ '+(a.genomic_lab||'')+(a.genomic_test_date?' · '+a.genomic_test_date:'')):''}</div>`;
@@ -3914,7 +3955,10 @@ async function renderAITab(content) {
   content.innerHTML = `
     <div class="card" style="margin-bottom:10px">
       <div class="card-title">Log AI Breeding</div>
-      <div class="form-group"><label>Cow / Heifer Tag</label><input type="text" id="ai-cow" placeholder="Tag #"></div>
+      <div class="form-group"><label>Cow / Heifer</label><select id="ai-cow">
+        <option value="">— Select Animal —</option>
+        ${(cache.get('animals')||[]).filter(a=>a.sex==='Cow'||a.sex==='Heifer').sort((a,b)=>a.tag.localeCompare(b.tag)).map(a=>`<option value="${a.tag}">${a.tag}${a.name?' — '+a.name:''}</option>`).join('')}
+      </select></div>
       <div class="form-row">
         <div class="form-group"><label>AI Date</label><input type="date" id="ai-date" value="${today}"></div>
         <div class="form-group"><label>Sire</label>
@@ -4145,7 +4189,10 @@ async function renderETTab(content) {
     <div id="et-sub-flush">
       <div class="card">
         <div class="card-title">Conventional ET \u2014 Flush Record</div>
-        <div class="form-group"><label>Donor Tag</label><input type="text" id="cet-donor" placeholder="e.g. H2R-K253"></div>
+        <div class="form-group"><label>Donor Cow</label><select id="cet-donor">
+          <option value="">— Select Donor —</option>
+          ${(cache.get('animals')||[]).filter(a=>a.sex==='Cow'||a.sex==='Heifer'||a.status==='donor').sort((a,b)=>a.tag.localeCompare(b.tag)).map(a=>`<option value="${a.tag}">${a.tag}${a.name?' — '+a.name:''}</option>`).join('')}
+        </select></div>
         <div class="form-row">
           <div class="form-group"><label>Flush Date</label><input type="date" id="cet-date" value="${today}"></div>
           <div class="form-group"><label>Sire Used</label><input type="text" id="cet-sire" placeholder="Bull / AI sire"></div>
@@ -4174,14 +4221,24 @@ async function renderETTab(content) {
     <div id="et-sub-transfer" style="display:none">
       <div class="card">
         <div class="card-title">Embryo Transfer</div>
-        <div class="form-group"><label>Recipient Tag</label><input type="text" id="tr-recip" placeholder="Recipient tag #"></div>
+        <div class="form-group"><label>Recipient Cow</label><select id="tr-recip">
+          <option value="">— Select Recipient —</option>
+          ${(cache.get('animals')||[]).filter(a=>a.sex==='Cow'||a.sex==='Heifer').sort((a,b)=>a.tag.localeCompare(b.tag)).map(a=>`<option value="${a.tag}">${a.tag}${a.name?' — '+a.name:''}</option>`).join('')}
+        </select></div>
         <div class="form-row">
           <div class="form-group"><label>Transfer Date</label><input type="date" id="tr-date" value="${today}"></div>
           <div class="form-group"><label>Source</label><select id="tr-source"><option value="own">Own flush</option><option value="purchased">Purchased</option></select></div>
         </div>
+        <div class="form-group"><label>Embryo Lot (from inventory)</label>
+          <select id="tr-embryo-lot" onchange="updateTransferGrade()">
+            <option value="">— Select from inventory —</option>
+            ${(embryos||[]).filter(e=>e.available>0).map(e=>`<option value="${e.id}" data-donor="${e.donor_tag}" data-sire="${e.sire||''}" data-grade="${e.grade||''}">${e.donor_tag} × ${e.sire||'?'} (${e.flush_date}) — ${e.available} available</option>`).join('')}
+            <option value="purchased">Purchased Embryo</option>
+          </select>
+        </div>
         <div class="form-row">
-          <div class="form-group"><label>Donor / Embryo ID</label><input type="text" id="tr-embryo" placeholder="Donor cow or lot #"></div>
-          <div class="form-group"><label>Grade</label><select id="tr-grade"><option value="1">Grade 1</option><option value="2">Grade 2</option><option value="purchased">Purchased</option></select></div>
+          <div class="form-group"><label>Donor Tag</label><input type="text" id="tr-embryo" placeholder="Auto-filled from lot" readonly style="background:var(--bg2)"></div>
+          <div class="form-group"><label>Grade</label><select id="tr-grade"><option value="1">Grade 1</option><option value="2">Grade 2</option><option value="IVF">IVF</option><option value="purchased">Purchased</option></select></div>
         </div>
         <div class="form-row">
           <div class="form-group"><label>Sync Protocol</label><select id="tr-sync"><option value="7&7">7&7</option><option value="7-day-co-synch">7-Day Co-Synch</option><option value="cidr">CIDR</option><option value="other">Other</option></select></div>
@@ -4241,10 +4298,13 @@ async function saveTransferCloud() {
   const recip=document.getElementById('tr-recip')?.value?.trim();
   const date=document.getElementById('tr-date')?.value;
   if(!recip||!date){alert('Recipient and date required.');return;}
+  const embryoLotId = document.getElementById('tr-embryo-lot')?.value;
+  const donorTag = document.getElementById('tr-embryo')?.value?.trim()||null;
   const {error}=await dbInsert('et_transfers',{
     recipient_tag:recip,transfer_date:date,transfer_type:'conventional',
     embryo_source:document.getElementById('tr-source')?.value,
-    donor_tag:document.getElementById('tr-embryo')?.value?.trim()||null,
+    donor_tag:donorTag,
+    embryo_lot_id:embryoLotId||null,
     embryo_grade:document.getElementById('tr-grade')?.value,
     sync_protocol:document.getElementById('tr-sync')?.value,
     cost:parseFloat(document.getElementById('tr-cost')?.value)||null,
@@ -4254,7 +4314,14 @@ async function saveTransferCloud() {
     notes:document.getElementById('tr-notes')?.value?.trim()||null,
   });
   if(error){alert('Error: '+error.message);return;}
-  alert(`\u2705 Transfer saved: ${recip}`);
+  // Deduct from embryo inventory
+  if(embryoLotId && embryoLotId !== 'purchased') {
+    const {data:lot} = await sb.from('embryo_inventory').select('available').eq('id',embryoLotId).single();
+    if(lot && lot.available > 0) {
+      await sb.from('embryo_inventory').update({available: lot.available - 1}).eq('id', embryoLotId);
+    }
+  }
+  alert(`\u2705 Transfer saved: ${recip}${embryoLotId&&embryoLotId!=='purchased'?' (1 embryo deducted from inventory)':''}`);
   showBreedingTab('et');
 }
 
@@ -4265,7 +4332,10 @@ async function renderIVFTab(content) {
   content.innerHTML=`
     <div class="card" style="margin-bottom:10px">
       <div class="card-title">IVF \u2014 OPU Record</div>
-      <div class="form-group"><label>Donor Cow Tag</label><input type="text" id="ivf-donor" placeholder="e.g. H2R-K253"></div>
+      <div class="form-group"><label>Donor Cow</label><select id="ivf-donor">
+        <option value="">— Select Donor —</option>
+        ${(cache.get('animals')||[]).filter(a=>a.sex==='Cow'||a.sex==='Heifer'||a.status==='donor').sort((a,b)=>a.tag.localeCompare(b.tag)).map(a=>`<option value="${a.tag}">${a.tag}${a.name?' — '+a.name:''}</option>`).join('')}
+      </select></div>
       <div class="form-row">
         <div class="form-group"><label>OPU Date</label><input type="date" id="ivf-date" value="${today}"></div>
         <div class="form-group"><label>Location / Lab</label><input type="text" id="ivf-location" placeholder="Partner Ranch \u2014 Mobile Lab"></div>
@@ -4328,10 +4398,14 @@ async function renderPregCheckTab(content) {
   content.innerHTML=`
     <div class="card" style="margin-bottom:10px">
       <div class="card-title">Record Pregnancy Check</div>
-      <div class="form-group"><label>Animal Tag</label><input type="text" id="pc-animal" placeholder="Cow / heifer tag #"></div>
+      <div class="form-group"><label>Animal</label><select id="pc-animal">
+        <option value="">— Select Animal —</option>
+        ${(cache.get('animals')||[]).filter(a=>a.sex==='Cow'||a.sex==='Heifer').sort((a,b)=>a.tag.localeCompare(b.tag)).map(a=>`<option value="${a.tag}">${a.tag}${a.name?' — '+a.name:''}</option>`).join('')}
+      </select></div>
       <div class="form-row">
         <div class="form-group"><label>Check Date</label><input type="date" id="pc-date" value="${today}"></div>
-        <div class="form-group"><label>Result</label><select id="pc-result"><option value="pregnant">Pregnant \u2713</option><option value="open">Open \u2717</option><option value="recheck">Recheck</option></select></div>
+        <div class="form-group"><label>Result</label><select id="pc-result" onchange="updatePregDispCode()"><option value="pregnant">Pregnant \u2713</option><option value="open">Open \u2717</option><option value="recheck">Recheck</option></select></div>
+        <div class="form-group" id="pc-disp-group" style="display:none"><label>RAAA Dam Disposition</label><select id="pc-disp-code"><option value="34" selected>34 — Exposed, Failed to Conceive</option><option value="N">N — No Change</option><option value="35">35 — Not Exposed / Moved Season</option><option value="30">30 — Aborted</option></select></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label>Breeding Type</label><select id="pc-type"><option value="ai">AI</option><option value="natural">Natural Service</option><option value="et">ET (Conv.)</option><option value="ivf">IVF</option><option value="unknown">Unknown</option></select></div>
@@ -4354,6 +4428,7 @@ async function savePregCheckCloud() {
   const date=document.getElementById('pc-date')?.value;
   if(!animal||!date){alert('Animal tag and date required.');return;}
   const result=document.getElementById('pc-result')?.value;
+  const dispCode = result==='open' ? (document.getElementById('pc-disp-code')?.value||'34') : null;
   const {error}=await dbInsert('preg_checks',{
     animal_tag:animal,check_date:date,result,
     breed_type:document.getElementById('pc-type')?.value,
@@ -4362,6 +4437,10 @@ async function savePregCheckCloud() {
     checked_by:document.getElementById('pc-by')?.value?.trim()||null,
     notes:document.getElementById('pc-notes')?.value?.trim()||null,
   });
+  // Update animal's RAAA disposition code if open
+  if(!error && dispCode) {
+    await sb.from('animals').update({raaa_disp_code: dispCode}).eq('tag', animal).eq('ranch_id', currentRanch.id);
+  }
   if(error){alert('Error: '+error.message);return;}
   const icon=result==='pregnant'?'\u2705':result==='open'?'\u274c':'\ud83d\udd04';
   alert(`${icon} Preg check saved: ${animal} \u2014 ${result}`);
@@ -5619,6 +5698,8 @@ function openEditAnimal() {
   document.getElementById('ea-breeder').value = a.purchased_from||'';
   document.getElementById('ea-status').value = a.status||'active';
   document.getElementById('ea-notes').value = a.notes||'';
+  if(document.getElementById('ea-raaa-disp')) document.getElementById('ea-raaa-disp').value = a.raaa_disp_code||'';
+  if(document.getElementById('ea-raaa-reas')) document.getElementById('ea-raaa-reas').value = a.raaa_reas_code||'';
   document.getElementById('ea-eid').value = a.eid_tag||'';
   document.getElementById('ea-tattoo-left').value = a.tattoo_left||'';
   document.getElementById('ea-tattoo-right').value = a.tattoo_right||'';
@@ -5667,6 +5748,8 @@ async function saveEditAnimal() {
     weaning_date: document.getElementById('ea-weaning-date').value||null,
     donor_genetic: document.getElementById('ea-donor-genetic').value.trim()||null,
     is_twin: document.getElementById('ea-is-twin').checked||false,
+    raaa_disp_code: document.getElementById('ea-raaa-disp')?.value||null,
+    raaa_reas_code: document.getElementById('ea-raaa-reas')?.value||null,
   };
   if(!updates.tag) { alert('Ear tag is required.'); return; }
 
@@ -11028,6 +11111,24 @@ async function exportRAAA() {
   URL.revokeObjectURL(url);
 
   alert(`✅ Exported ${rows.length} calves to RAAA format.\nUpload this CSV to REDSPro → Animal Entry → Options → Upload Spreadsheet.`);
+}
+
+
+function updatePregDispCode() {
+  const result = document.getElementById('pc-result')?.value;
+  const dispGroup = document.getElementById('pc-disp-group');
+  if(dispGroup) dispGroup.style.display = result === 'open' ? 'block' : 'none';
+}
+
+
+function updateTransferGrade() {
+  const sel = document.getElementById('tr-embryo-lot');
+  if(!sel) return;
+  const opt = sel.options[sel.selectedIndex];
+  if(opt && opt.dataset.donor) {
+    document.getElementById('tr-embryo').value = opt.dataset.donor;
+    if(opt.dataset.grade) document.getElementById('tr-grade').value = opt.dataset.grade;
+  }
 }
 
 // ── INIT ───────────────────────────────────────────────────────────────────
