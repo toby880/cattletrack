@@ -4737,7 +4737,10 @@ async function saveFlushCloud() {
       });
     }
     const {error:strawErr}=await sb.from('embryo_straws').insert(strawInserts);
-    if(strawErr) console.error('Straw insert error:',strawErr);
+    if(strawErr) {
+      alert('Straw insert error: '+strawErr.message+'\nCode: '+strawErr.code);
+      console.error('Straw insert error:',strawErr);
+    }
 
     // Legacy inventory record for backward compat
     await dbInsert('embryo_inventory',{
