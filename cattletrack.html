@@ -2126,13 +2126,41 @@ async function loadUserSession(user) {
   currentUser = user;
 
   // Check for pending invite and accept it first
-  if(localStorage.getItem('ct_invite_token')) {
+  if(localStorage.getItem('ct_invite_token') && navigator.onLine) {
     await acceptPendingInvite(user.id);
   }
 
-  const {data: profile} = await sb.from('profiles').select('*, ranches(*)').eq('id', user.id).single();
-  if(profile?.ranches) {
+  // OFFLINE: use cached ranch data instead of failing
+  if(!navigator.onLine) {
+    const cachedRanch = cache.get('currentRanch');
+    if(cachedRanch) {
+      currentRanch = cachedRanch;
+      showApp();
+      return;
+    }
+    // No cached ranch and offline — nothing we can do, but don't sign out
+    showAuthError('No connection and no cached data yet. Connect once to enable offline mode.');
+    return;
+  }
+
+  try {
+    const {data: profile, error: profileErr} = await sb.from('profiles').select('*, ranches(*)').eq('id', user.id).single();
+
+    if(profileErr || !profile?.ranches) {
+      // Network call failed (not a real "no ranch" case) — try cache before signing out
+      const cachedRanch = cache.get('currentRanch');
+      if(cachedRanch) {
+        currentRanch = cachedRanch;
+        showApp();
+        return;
+      }
+      showAuthError('Could not load ranch data. Please try again.');
+      await sb.auth.signOut();
+      return;
+    }
+
     currentRanch = profile.ranches;
+    cache.set('currentRanch', currentRanch); // cache for offline use
 
     // Set trial end date if this is a new account (no trial_ends_at yet)
     if(!currentRanch.trial_ends_at && !currentRanch.subscription_active) {
@@ -2142,7 +2170,7 @@ async function loadUserSession(user) {
         .update({trial_ends_at: trialEnd.toISOString()})
         .eq('id', currentRanch.id)
         .select().single();
-      if(updated) currentRanch = updated;
+      if(updated) { currentRanch = updated; cache.set('currentRanch', currentRanch); }
     }
 
     // Check if trial/subscription is valid
@@ -2151,15 +2179,20 @@ async function loadUserSession(user) {
     const trialValid = trialEnd && trialEnd > new Date();
 
     if(!isActive && !trialValid && trialEnd) {
-      // Trial expired — show locked screen
       showTrialExpired();
       return;
     }
 
     showApp();
-  } else {
+  } catch(e) {
+    // Network/fetch failure — fall back to cache
+    const cachedRanch = cache.get('currentRanch');
+    if(cachedRanch) {
+      currentRanch = cachedRanch;
+      showApp();
+      return;
+    }
     showAuthError('Could not load ranch data. Please try again.');
-    await sb.auth.signOut();
   }
 }
 
