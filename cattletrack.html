@@ -546,10 +546,11 @@ tr:hover td{background:var(--bg)}
     <!-- PASTURES -->
     <div class="page" id="page-pastures">
       <div class="tab-bar">
-        <button class="tab active" onclick="showPastureTab('overview')">Overview</button>
-        <button class="tab" onclick="showPastureTab('move')">Move Animals</button>
-        <button class="tab" onclick="showPastureTab('add')">Add Pasture</button>
-        <button class="tab" onclick="showPastureTab('history')">Move History</button>
+        <button class="tab active" onclick="showPastureTab('pastures')">Pastures</button>
+        <button class="tab" onclick="showPastureTab('paddocks')">Paddocks</button>
+        <button class="tab" onclick="showPastureTab('treatments')">Treatments</button>
+        <button class="tab" onclick="showPastureTab('plantings')">Plantings</button>
+        <button class="tab" onclick="showPastureTab('hay')">Hay</button>
       </div>
       <div id="pasture-content"><div class="loading"><div class="spinner"></div>Loading...</div></div>
     </div>
@@ -5068,7 +5069,7 @@ async function loadPastures() {
     <button class="btn btn-primary" onclick="savePasture()">Add Pasture</button></div>`;
 }
 
-function showPastureTab(tab) { loadPastures(); }
+function _pastureTabStub() {}
 
 async function savePasture() {
   const name = document.getElementById('pas-name')?.value?.trim();
