@@ -7361,24 +7361,10 @@ async function savePaddock() {
 async function openMoveHistory(paddockId) {
   const {data: moves} = await sb.from('paddock_moves').select('*').eq('paddock_id', paddockId).order('move_in_date', {ascending: false});
   const {data: paddock} = await sb.from('paddocks').select('name').eq('id', paddockId).single();
-  const html = moves?.length ? moves.map(m => {
-    const days = m.move_out_date
-      ? Math.floor((new Date(m.move_out_date) - new Date(m.move_in_date)) / 86400000)
-      : Math.floor((new Date() - new Date(m.move_in_date)) / 86400000);
-    return `<div style="padding:8px 0;border-bottom:1px solid var(--border)">
-      <div style="display:flex;justify-content:space-between">
-        <strong>${m.group_name}</strong>
-        <span style="font-size:12px;color:var(--gray)">${days}d</span>
-      </div>
-      <div style="font-size:12px;color:var(--gray)">${m.move_in_date} → ${m.move_out_date||'current'}${m.head_count?' · '+m.head_count+' head':''}</div>
-      ${m.notes?`<div style="font-size:12px;color:var(--gray-lt)">${m.notes}</div>`:''}
-    </div>`;
-  }).join('') : '<div style="color:var(--gray-lt);text-align:center;padding:16px">No history yet</div>';
-
   alert(`${paddock?.name||'Paddock'} History\n\n${moves?.map(m=>`${m.move_in_date} — ${m.group_name} (${m.head_count} head, ${m.move_out_date?Math.floor((new Date(m.move_out_date)-new Date(m.move_in_date))/86400000)+'d':'current'})`).join('\n') || 'No history'}`);
 }
 
-
+async function renderFieldTreatments(content) {
   const today = new Date().toISOString().split('T')[0];
   const {data:fields} = await sb.from('pasture_fields').select('*').eq('ranch_id',currentRanch.id).order('name');
   const {data:treatments} = await sb.from('field_treatments').select('*').eq('ranch_id',currentRanch.id).order('treatment_date',{ascending:false});
