@@ -6953,80 +6953,148 @@ async function showPastureTab(tab) {
 }
 
 async function renderPastureList(content) {
-  const {data:fields} = await sb.from('pasture_fields').select('*')
-    .eq('ranch_id',currentRanch.id).order('name');
+  const [fieldsRes, placesRes, paddockRes, moveRes] = await Promise.all([
+    sb.from('pasture_fields').select('*').eq('ranch_id',currentRanch.id).order('name'),
+    sb.from('places').select('*').eq('ranch_id',currentRanch.id).order('name'),
+    sb.from('paddocks').select('*').eq('ranch_id',currentRanch.id).order('name'),
+    sb.from('paddock_moves').select('*').eq('ranch_id',currentRanch.id).is('move_out_date',null),
+  ]);
+  const fields = fieldsRes.data || [];
+  const places = placesRes.data || [];
+  const paddocks = paddockRes.data || [];
+  const activeMoves = moveRes.data || [];
+
   const animals = (cache.get('animals')||[]).filter(a=>a.status!=='sold'&&a.status!=='dead');
+  const byPasture = {};
+  animals.forEach(a=>{ const loc=a.location||'Unassigned'; if(!byPasture[loc])byPasture[loc]=[]; byPasture[loc].push(a); });
   const typeIcon = {pasture:'🌿',wheat:'🌾',hay:'🟡',crop:'🌱'};
 
-  // Group animals by location
-  const byPasture = {};
-  animals.forEach(a=>{
-    const loc = a.location||'Unassigned';
-    if(!byPasture[loc]) byPasture[loc] = [];
-    byPasture[loc].push(a);
+  // Group fields by place
+  const fieldsByPlace = {};
+  fields.forEach(f => {
+    const key = f.place_id || 'unassigned';
+    if(!fieldsByPlace[key]) fieldsByPlace[key] = [];
+    fieldsByPlace[key].push(f);
   });
 
-  const classLabel = {Cow:'Cows',Heifer:'Heifers',Bull:'Bulls',Steer:'Steers',Calf:'Calves',Stocker:'Stockers'};
+  // Group paddocks by pasture
+  const paddocksByPasture = {};
+  paddocks.forEach(p => {
+    const key = p.pasture_id || 'unassigned';
+    if(!paddocksByPasture[key]) paddocksByPasture[key] = [];
+    paddocksByPasture[key].push(p);
+  });
 
-  const getBreakdown = (animals) => {
-    const counts = {};
-    animals.forEach(a=>{
-      const cls = a.sex==='Bull'?'Bulls':a.sex==='Steer'?'Steers':
-        a.animal_type==='Stocker'?'Stockers':
-        a.sex==='Female'&&a.dob&&(new Date()-new Date(a.dob))/86400000<365?'Calves':
-        a.sex==='Female'&&a.dob&&(new Date()-new Date(a.dob))/86400000<730?'Heifers':'Cows';
-      counts[cls] = (counts[cls]||0)+1;
-    });
-    return counts;
-  };
-
-  content.innerHTML = `
-    ${fields?.length ? fields.map(f=>{
-      const inPasture = byPasture[f.name]||[];
-      const breakdown = getBreakdown(inPasture);
-      return `
-      <div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${inPasture.length?'10px':'0'}">
+  const renderPaddockRow = (p) => {
+    const move = activeMoves.find(m => m.paddock_id === p.id);
+    const daysOn = move ? Math.floor((new Date()-new Date(move.move_in_date))/86400000) : null;
+    const target = p.target_grazing_days || 3;
+    const overdue = daysOn !== null && daysOn >= target;
+    const pct = daysOn !== null ? Math.min(100, Math.round(daysOn/target*100)) : 0;
+    return `
+      <div style="padding:8px 12px;margin:4px 0;background:${move?'var(--white)':'var(--bg2)'};border:1px solid ${overdue?'var(--red)':'var(--border)'};border-radius:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
           <div>
-            <div style="font-weight:700;font-size:15px">${typeIcon[f.type]||'🌿'} ${f.name}</div>
-            <div style="font-size:12px;color:var(--gray)">${f.acres?f.acres+' acres · ':''}${f.type||'pasture'}${f.soil_type?' · '+f.soil_type:''}</div>
+            <span style="font-size:13px;font-weight:600">${p.name}</span>
+            ${p.acres?`<span style="font-size:11px;color:var(--gray)"> · ${p.acres}ac</span>`:''}
+            ${move ? `<div style="font-size:11px;color:var(--gray);margin-top:2px">${move.group_name} · ${move.head_count} head${move.grass_height_in?' · '+move.grass_height_in+'" in':''}</div>` : `<div style="font-size:11px;color:var(--gray-lt)">Resting</div>`}
           </div>
-          <div style="text-align:right">
-            <div style="font-size:22px;font-weight:800;color:var(--orange)">${inPasture.length}</div>
-            <div style="font-size:11px;color:var(--gray)">head</div>
+          <div style="text-align:right;flex-shrink:0">
+            ${move ? `<div style="font-size:14px;font-weight:700;color:${overdue?'var(--red)':'var(--orange)'}">${daysOn}d</div>
+              <div style="font-size:10px;color:var(--gray)">of ${target}d</div>` :
+              `<button onclick="showPastureTab('paddocks')" style="font-size:11px;background:var(--green);color:white;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-family:inherit">Move In</button>`}
           </div>
         </div>
-        ${inPasture.length ? `
-        <div style="display:flex;flex-wrap:wrap;gap:6px">
-          ${Object.entries(breakdown).map(([cls,count])=>`
-          <div style="background:var(--bg2);border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600">
-            ${count} ${cls}
-          </div>`).join('')}
-        </div>` : '<div style="font-size:12px;color:var(--gray-lt)">No cattle assigned</div>'}
-        ${f.notes?`<div style="font-size:12px;color:var(--gray);margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">${f.notes}</div>`:''}
-      </div>`;}).join('') :
-    '<div class="empty"><div class="empty-icon">🌿</div><p>No pastures added yet.<br>Tap "+ Add Pasture" to get started.</p></div>'}
+        ${move && daysOn !== null ? `<div style="background:var(--bg2);border-radius:3px;height:4px;margin-top:6px">
+          <div style="background:${overdue?'var(--red)':'var(--orange)'};border-radius:3px;height:4px;width:${pct}%"></div>
+        </div>` : ''}
+      </div>`;
+  };
 
-    ${byPasture['Unassigned']?.length ? `
-    <div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px;opacity:0.7">
+  const renderField = (f) => {
+    const inPasture = byPasture[f.name]||[];
+    const fieldPaddocks = paddocksByPasture[f.id]||[];
+    return `
+      <div style="margin-bottom:10px;padding-left:12px;border-left:3px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <div>
+            <span style="font-size:14px;font-weight:600">${typeIcon[f.type]||'🌿'} ${f.name}</span>
+            <span style="font-size:11px;color:var(--gray);margin-left:6px">${f.acres?f.acres+' ac · ':''}${f.type||'pasture'}</span>
+            ${f.forage_mix?`<div style="font-size:11px;color:var(--green)">🌱 ${f.forage_mix}</div>`:''}
+          </div>
+          ${inPasture.length?`<span style="font-size:12px;font-weight:700;color:var(--orange)">${inPasture.length} head</span>`:''}
+        </div>
+        ${fieldPaddocks.length ? fieldPaddocks.map(renderPaddockRow).join('') :
+          `<div style="font-size:11px;color:var(--gray-lt);padding:4px 0">No paddocks — <button onclick="showPastureTab('paddocks')" style="background:none;border:none;color:var(--orange);font-size:11px;cursor:pointer;font-family:inherit">add paddocks</button></div>`}
+      </div>`;
+  };
+
+  let html = '';
+
+  // Render by place
+  places.forEach(place => {
+    const placeFields = fieldsByPlace[place.id] || [];
+    const totalHead = placeFields.reduce((s,f)=>s+(byPasture[f.name]?.length||0),0);
+    const totalPaddocks = placeFields.reduce((s,f)=>s+(paddocksByPasture[f.id]?.length||0),0);
+    html += `
+      <div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${placeFields.length?'12px':'0'}">
+          <div>
+            <div style="font-size:16px;font-weight:700">📍 ${place.name}</div>
+            <div style="font-size:11px;color:var(--gray)">${place.ownership==='leased'?'Leased':'Owned'}${place.acres?' · '+place.acres+' ac':''}${totalPaddocks?' · '+totalPaddocks+' paddocks':''}</div>
+          </div>
+          ${totalHead?`<div style="text-align:right"><div style="font-size:20px;font-weight:800;color:var(--orange)">${totalHead}</div><div style="font-size:10px;color:var(--gray)">head</div></div>`:''}
+        </div>
+        ${placeFields.length ? placeFields.map(renderField).join('') :
+          `<div style="font-size:12px;color:var(--gray-lt)">No pastures yet — <button onclick="openNewPasture()" style="background:none;border:none;color:var(--orange);font-size:12px;cursor:pointer;font-family:inherit">add a pasture</button></div>`}
+      </div>`;
+  });
+
+  // Unassigned fields
+  const unassignedFields = fieldsByPlace['unassigned'] || [];
+  if(unassignedFields.length) {
+    html += `<div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px;opacity:0.8">
+      <div style="font-size:14px;font-weight:600;margin-bottom:10px">❓ No Place Assigned</div>
+      ${unassignedFields.map(renderField).join('')}
+    </div>`;
+  }
+
+  if(!html) html = '<div class="empty"><div class="empty-icon">🌿</div><p>No pastures yet.</p></div>';
+
+  // Unassigned animals
+  if(byPasture['Unassigned']?.length) {
+    html += `<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px;opacity:0.7">
       <div style="display:flex;justify-content:space-between;align-items:center">
-        <div><div style="font-weight:700;font-size:15px">❓ Unassigned</div>
-        <div style="font-size:12px;color:var(--gray)">No pasture set</div></div>
-        <div style="font-size:22px;font-weight:800;color:var(--gray)">${byPasture['Unassigned'].length}</div>
+        <div><strong>❓ Unassigned Animals</strong><div style="font-size:12px;color:var(--gray)">No pasture set</div></div>
+        <div style="font-size:20px;font-weight:800;color:var(--gray)">${byPasture['Unassigned'].length}</div>
       </div>
-    </div>` : ''}`;
+    </div>`;
+  }
+
+  content.innerHTML = html;
 }
+
 
 function openNewPasture() {
   const modal = document.createElement('div');
   modal.className = 'modal-overlay open';
   modal.id = 'new-pasture-modal';
+  const places = [];
+  sb.from('places').select('*').eq('ranch_id',currentRanch.id).order('name').then(({data})=>{
+    const sel = document.getElementById('pf-place');
+    if(sel && data) data.forEach(p=>{ const o=document.createElement('option'); o.value=p.id; o.textContent=p.name; sel.appendChild(o); });
+  });
   modal.innerHTML = `
     <div class="modal">
       <div class="modal-handle"></div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
         <div class="modal-title" style="margin-bottom:0">Add Pasture / Field</div>
         <button onclick="document.getElementById('new-pasture-modal').remove()" style="background:var(--bg2);border:none;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer;font-family:inherit">Cancel</button>
+      </div>
+      <div class="form-group"><label>Place</label>
+        <select id="pf-place">
+          <option value="">— Select Place —</option>
+        </select>
       </div>
       <div class="form-group"><label>Name</label><input type="text" id="pf-name" placeholder="e.g. North Wheat, Home Pasture"></div>
       <div class="form-row">
@@ -7053,6 +7121,7 @@ async function saveNewPasture() {
   if(!name){alert('Name is required.');return;}
   const {error} = await dbInsert('pasture_fields',{
     name,
+    place_id: document.getElementById('pf-place')?.value || null,
     type: document.getElementById('pf-type')?.value||'pasture',
     acres: parseFloat(document.getElementById('pf-acres')?.value)||null,
     soil_type: document.getElementById('pf-soil')?.value?.trim()||null,
