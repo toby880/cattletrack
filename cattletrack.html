@@ -7041,6 +7041,7 @@ function openNewPasture() {
         <div class="form-group"><label>Acres</label><input type="number" id="pf-acres" placeholder="0" inputmode="decimal"></div>
       </div>
       <div class="form-group"><label>Soil Type (optional)</label><input type="text" id="pf-soil" placeholder="e.g. Sandy loam, Clay"></div>
+      <div class="form-group"><label>Forage Mix</label><input type="text" id="pf-forage" placeholder="e.g. Coastal Bermuda / Crabgrass Summer Mix"></div>
       <div class="form-group"><label>Notes</label><textarea id="pf-notes" placeholder="Any notes..."></textarea></div>
       <button class="btn btn-primary" style="width:100%" onclick="saveNewPasture()">Save Pasture</button>
     </div>`;
@@ -7055,6 +7056,7 @@ async function saveNewPasture() {
     type: document.getElementById('pf-type')?.value||'pasture',
     acres: parseFloat(document.getElementById('pf-acres')?.value)||null,
     soil_type: document.getElementById('pf-soil')?.value?.trim()||null,
+    forage_mix: document.getElementById('pf-forage')?.value?.trim()||null,
     notes: document.getElementById('pf-notes')?.value?.trim()||null,
   });
   if(error){alert('Error: '+error.message);return;}
@@ -7135,6 +7137,9 @@ async function renderPaddocksTab(content) {
               ${pasture ? `<span style="font-size:12px;color:var(--gray)"> · ${pasture.name}</span>` : ''}
               <div style="font-size:12px;color:var(--gray);margin-top:2px">
                 ${s.currentMove.group_name} · ${s.currentMove.head_count} head · In since ${s.currentMove.move_in_date}
+                ${s.currentMove.grass_height_in ? ` · Entry height: ${s.currentMove.grass_height_in}"` : ''}
+                ${p.target_exit_height ? ` · Exit target: ${p.target_exit_height}"` : ''}
+                ${pasture?.forage_mix ? `<br><span style="color:var(--green)">🌿 ${pasture.forage_mix}</span>` : ''}
               </div>
             </div>
             <div style="text-align:right;flex-shrink:0">
@@ -7211,8 +7216,13 @@ async function renderPaddocksTab(content) {
           <input type="number" id="pd-graze-days" placeholder="3" value="3" inputmode="numeric">
         </div>
       </div>
-      <div class="form-group"><label>Target Rest Days</label>
-        <input type="number" id="pd-rest-days" placeholder="21" value="21" inputmode="numeric">
+      <div class="form-row">
+        <div class="form-group"><label>Target Rest Days</label>
+          <input type="number" id="pd-rest-days" placeholder="21" value="21" inputmode="numeric">
+        </div>
+        <div class="form-group"><label>Target Exit Height (inches)</label>
+          <input type="number" id="pd-exit-height" placeholder="e.g. 3" step="0.5" inputmode="decimal">
+        </div>
       </div>
       <button class="btn btn-primary" onclick="savePaddock()">Add Paddock</button>
     </div>
@@ -7250,8 +7260,13 @@ async function renderPaddocksTab(content) {
         <div class="form-group"><label>Head Count</label>
           <input type="number" id="mi-head" placeholder="0" inputmode="numeric">
         </div>
-        <div class="form-group"><label>Move In Date</label>
-          <input type="date" id="mi-date" value="${today}">
+        <div class="form-row">
+          <div class="form-group"><label>Move In Date</label>
+            <input type="date" id="mi-date" value="${today}">
+          </div>
+          <div class="form-group"><label>Grass Height at Entry (inches)</label>
+            <input type="number" id="mi-grass" placeholder="e.g. 8" step="0.5" inputmode="decimal">
+          </div>
         </div>
         <div class="form-group"><label>Notes</label>
           <input type="text" id="mi-notes" placeholder="Grass height, condition...">
@@ -7310,6 +7325,7 @@ async function saveMoveIn() {
     group_name: group,
     head_count: head,
     move_in_date: date,
+    grass_height_in: parseFloat(document.getElementById('mi-grass').value) || null,
     notes: document.getElementById('mi-notes').value.trim() || null,
   });
   if(error) { alert('Error: ' + error.message); return; }
@@ -7353,6 +7369,7 @@ async function savePaddock() {
     acres: parseFloat(document.getElementById('pd-acres').value) || null,
     target_grazing_days: parseInt(document.getElementById('pd-graze-days').value) || 3,
     target_rest_days: parseInt(document.getElementById('pd-rest-days').value) || 21,
+    target_exit_height: parseFloat(document.getElementById('pd-exit-height').value) || null,
   });
   if(error) { alert('Error: ' + error.message); return; }
   document.getElementById('pd-name').value = '';
