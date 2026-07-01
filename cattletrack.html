@@ -7045,8 +7045,11 @@ async function renderPastureList(content) {
           </div>
           ${totalHead?`<div style="text-align:right"><div style="font-size:20px;font-weight:800;color:var(--orange)">${totalHead}</div><div style="font-size:10px;color:var(--gray)">head</div></div>`:''}
         </div>
-        ${placeFields.length ? placeFields.map(renderField).join('') :
-          `<div style="font-size:12px;color:var(--gray-lt)">No pastures yet — <button onclick="openNewPasture()" style="background:none;border:none;color:var(--orange);font-size:12px;cursor:pointer;font-family:inherit">add a pasture</button></div>`}
+        ${placeFields.length ? placeFields.map(renderField).join('') + 
+          `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+            <button onclick="openNewPasture('${place.id}')" style="background:none;border:none;color:var(--orange);font-size:12px;cursor:pointer;font-family:inherit;text-decoration:underline">+ Add Pasture to ${place.name}</button>
+          </div>` :
+          `<div style="font-size:12px;color:var(--gray-lt);padding:4px 0">No pastures yet — <button onclick="openNewPasture('${place.id}')" style="background:none;border:none;color:var(--orange);font-size:12px;cursor:pointer;font-family:inherit;text-decoration:underline">+ Add Pasture</button></div>`}
       </div>`;
   });
 
@@ -7075,14 +7078,21 @@ async function renderPastureList(content) {
 }
 
 
-function openNewPasture() {
+function openNewPasture(preselectedPlaceId) {
   const modal = document.createElement('div');
   modal.className = 'modal-overlay open';
   modal.id = 'new-pasture-modal';
-  const places = [];
   sb.from('places').select('*').eq('ranch_id',currentRanch.id).order('name').then(({data})=>{
     const sel = document.getElementById('pf-place');
-    if(sel && data) data.forEach(p=>{ const o=document.createElement('option'); o.value=p.id; o.textContent=p.name; sel.appendChild(o); });
+    if(sel && data) {
+      data.forEach(p=>{ 
+        const o=document.createElement('option'); 
+        o.value=p.id; 
+        o.textContent=p.name;
+        if(preselectedPlaceId && p.id===preselectedPlaceId) o.selected=true;
+        sel.appendChild(o); 
+      });
+    }
   });
   modal.innerHTML = `
     <div class="modal">
