@@ -654,6 +654,7 @@ tr:hover td{background:var(--bg)}
       </div>
       <div class="tab-bar">
         <button class="tab active" onclick="showPastureTab('pastures')">Pastures</button>
+        <button class="tab" onclick="showPastureTab('paddocks')">Paddocks</button>
         <button class="tab" onclick="showPastureTab('treatments')">Treatments</button>
         <button class="tab" onclick="showPastureTab('plantings')">Plantings</button>
         <button class="tab" onclick="showPastureTab('hay')">Hay</button>
@@ -6941,9 +6942,10 @@ let currentField = null;
 
 async function showPastureTab(tab) {
   document.querySelectorAll('#page-pastures .tab-bar .tab').forEach((b,i)=>
-    b.classList.toggle('active',['pastures','treatments','plantings','hay'][i]===tab));
+    b.classList.toggle('active',['pastures','paddocks','treatments','plantings','hay'][i]===tab));
   const content = document.getElementById('pasture-content');
   if(tab==='pastures') await renderPastureList(content);
+  else if(tab==='paddocks') await renderPaddocksTab(content);
   else if(tab==='treatments') await renderFieldTreatments(content);
   else if(tab==='plantings') await renderFieldPlantings(content);
   else if(tab==='hay') await renderHayCuttings(content);
@@ -7059,7 +7061,324 @@ async function saveNewPasture() {
   showPastureTab('pastures');
 }
 
-async function renderFieldTreatments(content) {
+async function renderPaddocksTab(content) {
+  const today = new Date().toISOString().split('T')[0];
+  const [paddockRes, moveRes, pastureRes] = await Promise.all([
+    sb.from('paddocks').select('*').eq('ranch_id', currentRanch.id).order('name'),
+    sb.from('paddock_moves').select('*').eq('ranch_id', currentRanch.id).order('move_in_date', {ascending: false}),
+    sb.from('pasture_fields').select('*').eq('ranch_id', currentRanch.id).order('name'),
+  ]);
+  const paddocks = paddockRes.data || [];
+  const moves = moveRes.data || [];
+  const pastures = pastureRes.data || [];
+
+  // Calculate current occupants and days for each paddock
+  const paddockStatus = {};
+  paddocks.forEach(p => {
+    const currentMove = moves.find(m => m.paddock_id === p.id && !m.move_out_date);
+    const lastMove = moves.find(m => m.paddock_id === p.id && m.move_out_date);
+    let daysOn = null, daysRest = null;
+    if(currentMove) {
+      daysOn = Math.floor((new Date() - new Date(currentMove.move_in_date)) / 86400000);
+    }
+    if(lastMove && !currentMove) {
+      daysRest = Math.floor((new Date() - new Date(lastMove.move_out_date)) / 86400000);
+    }
+    paddockStatus[p.id] = { currentMove, daysOn, daysRest };
+  });
+
+  const occupied = paddocks.filter(p => paddockStatus[p.id].currentMove);
+  const resting = paddocks.filter(p => !paddockStatus[p.id].currentMove);
+  const overTarget = occupied.filter(p => {
+    const s = paddockStatus[p.id];
+    return s.daysOn >= (p.target_grazing_days || 3);
+  });
+
+  content.innerHTML = `
+    <!-- Alert bar -->
+    ${overTarget.length ? `<div class="alert alert-warning" style="margin-bottom:12px">
+      ⚠️ <strong>${overTarget.length} paddock${overTarget.length>1?'s':''} ready to move:</strong> ${overTarget.map(p=>p.name).join(', ')}
+    </div>` : ''}
+
+    <!-- Summary row -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
+      <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:22px;font-weight:800;color:var(--orange)">${paddocks.length}</div>
+        <div style="font-size:11px;color:var(--gray)">Total Paddocks</div>
+      </div>
+      <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:22px;font-weight:800;color:var(--green)">${occupied.length}</div>
+        <div style="font-size:11px;color:var(--gray)">Occupied</div>
+      </div>
+      <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:22px;font-weight:800;color:var(--blue)">${resting.length}</div>
+        <div style="font-size:11px;color:var(--gray)">Resting</div>
+      </div>
+    </div>
+
+    <!-- Occupied paddocks -->
+    ${occupied.length ? `
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">🐄 Currently Occupied</div>
+      ${occupied.map(p => {
+        const s = paddockStatus[p.id];
+        const target = p.target_grazing_days || 3;
+        const pct = Math.min(100, Math.round(s.daysOn / target * 100));
+        const overdue = s.daysOn >= target;
+        const pasture = pastures.find(ps => ps.id === p.pasture_id);
+        return `
+        <div style="padding:12px 0;border-bottom:1px solid var(--border)">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+            <div>
+              <strong style="font-size:15px">${p.name}</strong>
+              ${pasture ? `<span style="font-size:12px;color:var(--gray)"> · ${pasture.name}</span>` : ''}
+              <div style="font-size:12px;color:var(--gray);margin-top:2px">
+                ${s.currentMove.group_name} · ${s.currentMove.head_count} head · In since ${s.currentMove.move_in_date}
+              </div>
+            </div>
+            <div style="text-align:right;flex-shrink:0">
+              <div style="font-size:20px;font-weight:800;color:${overdue?'var(--red)':'var(--orange)'}">${s.daysOn}d</div>
+              <div style="font-size:10px;color:var(--gray)">of ${target}d target</div>
+            </div>
+          </div>
+          <div style="background:var(--bg2);border-radius:4px;height:6px;margin-bottom:8px">
+            <div style="background:${overdue?'var(--red)':'var(--orange)'};border-radius:4px;height:6px;width:${pct}%;transition:width 0.3s"></div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button onclick="openMoveOut('${p.id}','${p.name}','${s.currentMove.id}','${s.currentMove.group_name}')" 
+              style="flex:1;background:var(--orange);color:white;border:none;border-radius:6px;padding:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">
+              Move Out →
+            </button>
+            <button onclick="openMoveHistory('${p.id}')"
+              style="background:var(--bg2);border:none;border-radius:6px;padding:7px 12px;font-size:12px;cursor:pointer;font-family:inherit">
+              History
+            </button>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>` : ''}
+
+    <!-- Resting paddocks -->
+    ${resting.length ? `
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">🌿 Resting</div>
+      ${resting.map(p => {
+        const s = paddockStatus[p.id];
+        const targetRest = p.target_rest_days || 21;
+        const pasture = pastures.find(ps => ps.id === p.pasture_id);
+        const readyToGraze = s.daysRest !== null && s.daysRest >= targetRest;
+        return `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+          <div>
+            <strong>${p.name}</strong>
+            ${pasture ? `<span style="font-size:12px;color:var(--gray)"> · ${pasture.name}</span>` : ''}
+            <div style="font-size:12px;color:var(--gray);margin-top:2px">
+              ${s.daysRest !== null ? `Resting ${s.daysRest}d of ${targetRest}d target` : 'Never grazed'}
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            ${readyToGraze ? `<span class="badge badge-green" style="font-size:10px">Ready</span>` : 
+              s.daysRest !== null ? `<span class="badge badge-gray" style="font-size:10px">${targetRest - s.daysRest}d left</span>` : ''}
+            <button onclick="openMoveIn('${p.id}','${p.name}')"
+              style="background:var(--green);color:white;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">
+              Move In
+            </button>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>` : ''}
+
+    <!-- Add Paddock -->
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">Add Paddock</div>
+      <div class="form-row">
+        <div class="form-group"><label>Paddock Name</label>
+          <input type="text" id="pd-name" placeholder="e.g. North 1, River A">
+        </div>
+        <div class="form-group"><label>Pasture (optional)</label>
+          <select id="pd-pasture">
+            <option value="">— None —</option>
+            ${pastures.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Acres</label>
+          <input type="number" id="pd-acres" placeholder="0" inputmode="decimal">
+        </div>
+        <div class="form-group"><label>Target Grazing Days</label>
+          <input type="number" id="pd-graze-days" placeholder="3" value="3" inputmode="numeric">
+        </div>
+      </div>
+      <div class="form-group"><label>Target Rest Days</label>
+        <input type="number" id="pd-rest-days" placeholder="21" value="21" inputmode="numeric">
+      </div>
+      <button class="btn btn-primary" onclick="savePaddock()">Add Paddock</button>
+    </div>
+
+    <!-- Recent Moves -->
+    ${moves.length ? `
+    <div class="card">
+      <div class="card-title">Recent Moves</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Date</th><th>Group</th><th>Head</th><th>Paddock</th><th>Days</th><th>Out</th></tr></thead>
+        <tbody>${moves.slice(0,15).map(m => {
+          const p = paddocks.find(pd => pd.id === m.paddock_id);
+          const days = m.move_out_date
+            ? Math.floor((new Date(m.move_out_date) - new Date(m.move_in_date)) / 86400000)
+            : Math.floor((new Date() - new Date(m.move_in_date)) / 86400000);
+          return `<tr>
+            <td>${m.move_in_date}</td>
+            <td><strong>${m.group_name}</strong></td>
+            <td>${m.head_count}</td>
+            <td>${p?.name||'—'}</td>
+            <td>${days}d</td>
+            <td>${m.move_out_date||'<span style="color:var(--green)">Current</span>'}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>
+    </div>` : ''}
+
+    <!-- Move In Modal -->
+    <div id="move-in-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;align-items:flex-end">
+      <div style="background:var(--white);border-radius:20px 20px 0 0;padding:20px 16px 32px;width:100%">
+        <div style="font-weight:700;font-size:16px;margin-bottom:14px">Move Into <span id="move-in-paddock-name"></span></div>
+        <div class="form-group"><label>Group Name</label>
+          <input type="text" id="mi-group" placeholder="e.g. Cow-Calf Pairs, Bulls">
+        </div>
+        <div class="form-group"><label>Head Count</label>
+          <input type="number" id="mi-head" placeholder="0" inputmode="numeric">
+        </div>
+        <div class="form-group"><label>Move In Date</label>
+          <input type="date" id="mi-date" value="${today}">
+        </div>
+        <div class="form-group"><label>Notes</label>
+          <input type="text" id="mi-notes" placeholder="Grass height, condition...">
+        </div>
+        <div style="display:flex;gap:10px;margin-top:4px">
+          <button onclick="closeMoveIn()" class="btn btn-secondary" style="flex:1">Cancel</button>
+          <button onclick="saveMoveIn()" class="btn btn-primary" style="flex:2">Confirm Move In</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Move Out Modal -->
+    <div id="move-out-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;align-items:flex-end">
+      <div style="background:var(--white);border-radius:20px 20px 0 0;padding:20px 16px 32px;width:100%">
+        <div style="font-weight:700;font-size:16px;margin-bottom:4px">Move Out of <span id="move-out-paddock-name"></span></div>
+        <div style="font-size:13px;color:var(--gray);margin-bottom:14px" id="move-out-group-label"></div>
+        <div class="form-group"><label>Move Out Date</label>
+          <input type="date" id="mo-date" value="${today}">
+        </div>
+        <div class="form-group"><label>Grass Height at Exit (inches, optional)</label>
+          <input type="number" id="mo-grass" placeholder="e.g. 3" inputmode="decimal" step="0.5">
+        </div>
+        <div class="form-group"><label>Notes</label>
+          <input type="text" id="mo-notes" placeholder="Condition, observations...">
+        </div>
+        <div style="display:flex;gap:10px;margin-top:4px">
+          <button onclick="closeMoveOut()" class="btn btn-secondary" style="flex:1">Cancel</button>
+          <button onclick="saveMoveOut()" class="btn btn-primary" style="flex:2">Confirm Move Out</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+let _activePaddockId = null, _activeMoveId = null;
+
+function openMoveIn(paddockId, paddockName) {
+  _activePaddockId = paddockId;
+  document.getElementById('move-in-paddock-name').textContent = paddockName;
+  document.getElementById('mi-group').value = '';
+  document.getElementById('mi-head').value = '';
+  document.getElementById('mi-notes').value = '';
+  document.getElementById('move-in-modal').style.display = 'flex';
+}
+
+function closeMoveIn() {
+  document.getElementById('move-in-modal').style.display = 'none';
+}
+
+async function saveMoveIn() {
+  const group = document.getElementById('mi-group').value.trim();
+  const head = parseInt(document.getElementById('mi-head').value) || 0;
+  const date = document.getElementById('mi-date').value;
+  if(!group || !date) { alert('Group name and date required.'); return; }
+  const {error} = await dbInsert('paddock_moves', {
+    paddock_id: _activePaddockId,
+    group_name: group,
+    head_count: head,
+    move_in_date: date,
+    notes: document.getElementById('mi-notes').value.trim() || null,
+  });
+  if(error) { alert('Error: ' + error.message); return; }
+  closeMoveIn();
+  await renderPaddocksTab(document.getElementById('pasture-content'));
+}
+
+function openMoveOut(paddockId, paddockName, moveId, groupName) {
+  _activePaddockId = paddockId;
+  _activeMoveId = moveId;
+  document.getElementById('move-out-paddock-name').textContent = paddockName;
+  document.getElementById('move-out-group-label').textContent = groupName;
+  document.getElementById('mo-grass').value = '';
+  document.getElementById('mo-notes').value = '';
+  document.getElementById('move-out-modal').style.display = 'flex';
+}
+
+function closeMoveOut() {
+  document.getElementById('move-out-modal').style.display = 'none';
+}
+
+async function saveMoveOut() {
+  const date = document.getElementById('mo-date').value;
+  if(!date) { alert('Move out date required.'); return; }
+  const {error} = await sb.from('paddock_moves').update({
+    move_out_date: date,
+    grass_height_out: parseFloat(document.getElementById('mo-grass').value) || null,
+    notes_out: document.getElementById('mo-notes').value.trim() || null,
+  }).eq('id', _activeMoveId);
+  if(error) { alert('Error: ' + error.message); return; }
+  closeMoveOut();
+  await renderPaddocksTab(document.getElementById('pasture-content'));
+}
+
+async function savePaddock() {
+  const name = document.getElementById('pd-name').value.trim();
+  if(!name) { alert('Paddock name required.'); return; }
+  const {error} = await dbInsert('paddocks', {
+    name,
+    pasture_id: document.getElementById('pd-pasture').value || null,
+    acres: parseFloat(document.getElementById('pd-acres').value) || null,
+    target_grazing_days: parseInt(document.getElementById('pd-graze-days').value) || 3,
+    target_rest_days: parseInt(document.getElementById('pd-rest-days').value) || 21,
+  });
+  if(error) { alert('Error: ' + error.message); return; }
+  document.getElementById('pd-name').value = '';
+  await renderPaddocksTab(document.getElementById('pasture-content'));
+}
+
+async function openMoveHistory(paddockId) {
+  const {data: moves} = await sb.from('paddock_moves').select('*').eq('paddock_id', paddockId).order('move_in_date', {ascending: false});
+  const {data: paddock} = await sb.from('paddocks').select('name').eq('id', paddockId).single();
+  const html = moves?.length ? moves.map(m => {
+    const days = m.move_out_date
+      ? Math.floor((new Date(m.move_out_date) - new Date(m.move_in_date)) / 86400000)
+      : Math.floor((new Date() - new Date(m.move_in_date)) / 86400000);
+    return `<div style="padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between">
+        <strong>${m.group_name}</strong>
+        <span style="font-size:12px;color:var(--gray)">${days}d</span>
+      </div>
+      <div style="font-size:12px;color:var(--gray)">${m.move_in_date} → ${m.move_out_date||'current'}${m.head_count?' · '+m.head_count+' head':''}</div>
+      ${m.notes?`<div style="font-size:12px;color:var(--gray-lt)">${m.notes}</div>`:''}
+    </div>`;
+  }).join('') : '<div style="color:var(--gray-lt);text-align:center;padding:16px">No history yet</div>';
+
+  alert(`${paddock?.name||'Paddock'} History\n\n${moves?.map(m=>`${m.move_in_date} — ${m.group_name} (${m.head_count} head, ${m.move_out_date?Math.floor((new Date(m.move_out_date)-new Date(m.move_in_date))/86400000)+'d':'current'})`).join('\n') || 'No history'}`);
+}
+
+
   const today = new Date().toISOString().split('T')[0];
   const {data:fields} = await sb.from('pasture_fields').select('*').eq('ranch_id',currentRanch.id).order('name');
   const {data:treatments} = await sb.from('field_treatments').select('*').eq('ranch_id',currentRanch.id).order('treatment_date',{ascending:false});
