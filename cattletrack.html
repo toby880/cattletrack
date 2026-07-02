@@ -2504,35 +2504,64 @@ async function renderCowPerformance(content) {
     if(totalHealthCost > 500) { score -= 15; flags.push(`High health costs ($${totalHealthCost.toFixed(0)})`); }
     else if(totalHealthCost > 200) { score -= 5; }
 
-    // Age — penalize very old cows (10+ years)
+    // Age and missed calvings
+    let age = null;
     if(cow.dob) {
-      const age = (new Date() - new Date(cow.dob)) / (365.25 * 24 * 3600 * 1000);
-      if(age > 12) { score -= 15; flags.push(`Age: ${age.toFixed(0)} years`); }
+      age = (new Date() - new Date(cow.dob)) / (365.25 * 24 * 3600 * 1000);
+      if(age > 12) { score -= 15; flags.push(`Age: ${age.toFixed(0)} yrs`); }
       else if(age > 10) { score -= 8; }
+      // Penalize missed calving years
+      const productiveYears = Math.max(0, age - 2);
+      const expectedCalves = Math.floor(productiveYears);
+      const missingCalves = Math.max(0, expectedCalves - totalCalves);
+      if(missingCalves > 0) {
+        score -= Math.min(25, missingCalves * 8);
+        flags.push(`${missingCalves} missed calving${missingCalves>1?'s':''}`);
+      }
     }
 
-    // Calf production — reward productivity
-    if(totalCalves > 0) score += Math.min(15, totalCalves * 3);
+    // Small bonus for calf production
+    if(totalCalves > 0) score += Math.min(10, totalCalves * 2);
 
     score = Math.max(0, Math.min(100, Math.round(score)));
 
     return {
-      tag: cow.tag,
-      name: cow.name,
-      dob: cow.dob,
+      tag: cow.tag, name: cow.name, dob: cow.dob,
+      age: age ? age.toFixed(1) : null,
       calves: totalCalves,
-      avgEase: avgEase.toFixed(1),
-      opens,
-      pregChecks: total,
-      healthCost: totalHealthCost,
-      score,
-      flags,
-      cull: score < 50,
+      avgEase: calvingHistory.length > 0 ? avgEase.toFixed(1) : null,
+      opens, pregChecks: total, healthCost: totalHealthCost,
+      score, flags, cull: score < 50,
     };
-  }).sort((a,b) => a.score - b.score); // worst first
+  }).sort((a,b) => a.score - b.score);
 
   const cullCandidates = cowScores.filter(c => c.cull);
   const scoreColor = s => s >= 75 ? 'var(--green)' : s >= 50 ? 'var(--orange)' : 'var(--red)';
+
+  let _sortCol = 'score', _sortDir = 1;
+  const renderCowTable = () => {
+    const rows = [...cowScores].sort((a,b) => {
+      const av = a[_sortCol], bv = b[_sortCol];
+      if(av===null||av===undefined) return 1;
+      if(bv===null||bv===undefined) return -1;
+      return _sortDir * (av < bv ? -1 : av > bv ? 1 : 0);
+    });
+    document.getElementById('cow-perf-tbody').innerHTML = rows.map(c => `
+      <tr style="${c.cull?'background:#FFF5F5':''}">
+        <td><strong>${c.tag}</strong>${c.name?`<div style="font-size:11px;color:var(--gray)">${c.name}</div>`:''}</td>
+        <td><span style="font-weight:800;color:${scoreColor(c.score)}">${c.score}</span></td>
+        <td>${c.calves}</td>
+        <td>${c.avgEase||'—'}</td>
+        <td>${c.age ? c.age+' yrs' : '—'}</td>
+        <td>${c.pregChecks>0?c.opens+'/'+c.pregChecks:'—'}</td>
+        <td>${c.healthCost>0?'$'+c.healthCost.toFixed(0):'—'}</td>
+        <td style="font-size:11px;color:var(--red)">${c.flags.join(', ')||'—'}</td>
+      </tr>`).join('');
+  };
+  window.cowSortBy = col => {
+    if(_sortCol===col) _sortDir*=-1; else {_sortCol=col;_sortDir=1;}
+    renderCowTable();
+  };
 
   content.innerHTML = `
     ${cullCandidates.length ? `
@@ -2542,42 +2571,25 @@ async function renderCowPerformance(content) {
       <div class="alert alert-success" style="margin-bottom:12px">
         ✅ No cull candidates identified — your herd is performing well!
       </div>`}
-
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <div style="font-size:13px;color:var(--gray)">${cowScores.length} cows ranked · Worst performers first</div>
+      <div style="font-size:13px;color:var(--gray)">${cowScores.length} cows · Click headers to sort</div>
       <div style="display:flex;gap:8px">
         <span style="font-size:11px;color:var(--green);font-weight:600">🟢 75+</span>
         <span style="font-size:11px;color:var(--orange);font-weight:600">🟡 50-74</span>
         <span style="font-size:11px;color:var(--red);font-weight:600">🔴 &lt;50</span>
       </div>
     </div>
-
-    <div class="card" style="padding:0">
-      <div class="table-wrap">
-        <table>
-          <thead><tr>
-            <th>Cow</th><th>Score</th><th>Calves</th><th>Avg Ease</th>
-            <th>Opens</th><th>Health $</th><th>Flags</th>
-          </tr></thead>
-          <tbody>
-            ${cowScores.map(c => `
-              <tr style="${c.cull?'background:#FFF5F5':''}">
-                <td><strong>${c.tag}</strong>${c.name?`<div style="font-size:11px;color:var(--gray)">${c.name}</div>`:''}</td>
-                <td><span style="font-weight:800;color:${scoreColor(c.score)}">${c.score}</span></td>
-                <td>${c.calves}</td>
-                <td>${c.calves>0?c.avgEase:'—'}</td>
-                <td>${c.pregChecks>0?c.opens+'/'+c.pregChecks:'—'}</td>
-                <td>${c.healthCost>0?'$'+c.healthCost.toFixed(0):'—'}</td>
-                <td style="font-size:11px;color:var(--red)">${c.flags.join(', ')||'—'}</td>
-              </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>
-
+    <div class="card" style="padding:0"><div class="table-wrap"><table>
+      <thead><tr>
+        ${[['tag','Cow'],['score','Score'],['calves','Calves'],['avgEase','Ease'],['age','Age'],['opens','Opens'],['healthCost','Health $'],['flags','Flags']].map(([col,label])=>
+          `<th onclick="cowSortBy('${col}')" style="cursor:pointer">${label} ⇅</th>`).join('')}
+      </tr></thead>
+      <tbody id="cow-perf-tbody"></tbody>
+    </table></div></div>
     <div style="margin-top:12px;padding:12px;background:var(--bg2);border-radius:8px;font-size:12px;color:var(--gray)">
-      <strong>How scores are calculated:</strong> Starts at 100. Deductions for difficult calvings, failed preg checks, high health costs, and age. Bonus points for calf production. Scores below 50 are flagged as cull candidates.
+      <strong>Scoring:</strong> Starts at 100. Deductions for missed calving years (based on age), difficult calvings, failed preg checks, high health costs, and age 10+.
     </div>`;
+  renderCowTable();
 }
 
 // ── BREEDING SEASON PLANNER ────────────────────────────────────────────────
