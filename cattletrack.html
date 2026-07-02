@@ -6710,80 +6710,128 @@ async function importAAAFile(file) {
   if(currentAnimal)showProfileTab('epds');
 }
 
-async function importLeachmanCSV(text) {
+async function importLeachmanCSV(text, statusCallback) {
+  const updateStatus = statusCallback || (msg => console.log(msg));
   const lines = text.split(/\r?\n/).filter(l=>l.trim());
   if(lines.length < 2){alert('No data found');return;}
 
-  // Parse headers - strip surrounding quotes
-  const clean = s => (s||'').replace(/^="?|"$/g,'').replace(/^"|"$/g,'').trim();
-  const headers = lines[0].split(',').map(h=>h.replace(/"/g,'').trim());
+  const clean = s => (s||'').replace(/^="?|"?$/g,'').replace(/^"|"$/g,'').trim();
 
+  function parseCSVLine(line) {
+    const vals = []; let cur = '', inQ = false;
+    for(let i=0;i<line.length;i++){
+      const c=line[i];
+      if(c==='"'){inQ=!inQ;}
+      else if(c===','&&!inQ){vals.push(cur);cur='';}
+      else cur+=c;
+    }
+    vals.push(cur);
+    return vals;
+  }
+
+  const headers = parseCSVLine(lines[0]).map(h=>h.replace(/"/g,'').trim());
   const col = name => headers.indexOf(name);
+
+  const iTag=col('Visual Tag'), iName=col('Name'), iReg=col('AR Registration');
+  const iSex=col('Sex'), iDOB=col('Birth Date'), iPrefix=col('AR Prefix');
+  const iSireTag=col('Sire Tag'), iDamTag=col('Dam Tag');
   const iProfit=col('LC $Profit'), iRanch=col('LC $Ranch');
   const iFeeder=col('LC $Feeder'), iTerminal=col('LC $Terminal');
   const iFert=col('LC ABC FERT'), iBS=col('LC ABC BS'), iTS=col('LC ABC TS');
-  const iTag=col('Visual Tag'), iPrefix=col('AR Prefix');
+  const iBW=col('AR EPD BW'), iWW=col('AR EPD WW'), iYW=col('AR EPD YW');
+  const iMilk=col('AR EPD MILK'), iCED=col('AR EPD CED'), iHPG=col('AR EPD HPG');
+  const iFat=col('AR EPD FAT'), iREA=col('AR EPD REA'), iMarb=col('AR EPD MARB');
+  const iHB=col('AR IDX HB'), iGM=col('AR IDX GM'), iPro=col('AR IDX ProS');
 
-
-  // Load animals for matching
+  updateStatus('Loading herd data...');
   const {data:freshAnimals}=await dbSelect('animals');
   if(freshAnimals)cache.set('animals',freshAnimals);
   const animals=cache.get('animals')||[];
 
-  let imported=0, skipped=0;
+  const {data:peds}=await sb.from('pedigrees').select('sire').eq('ranch_id',currentRanch.id);
+  const herdSireNames=new Set((peds||[]).map(p=>(p.sire||'').toUpperCase().trim()).filter(Boolean));
+
+  let updated=0, added=0, siresAdded=0, skipped=0;
+
   for(let i=1;i<lines.length;i++){
-    const vals=lines[i].split(',');
-    const tag=clean(vals[iTag]);
-    const prefix=clean(vals[iPrefix]);
+    const vals = parseCSVLine(lines[i]);
+    if(vals.length < 5) continue;
 
-    // Build full tag to match against animals
-    const fullTag=prefix?`${prefix}-${tag}`:tag;
+    const tag = clean(vals[iTag]||'');
+    const name = clean(vals[iName]||'');
+    const reg = clean(vals[iReg]||'');
+    const prefix = clean(vals[iPrefix]||'');
+    const sex = clean(vals[iSex]||'');
+    const dobRaw = clean(vals[iDOB]||'');
+    const sireTag = clean(vals[iSireTag]||'');
+    const damTag = clean(vals[iDamTag]||'');
 
-    // Try to match animal
-    const match=animals.find(a=>
-      a.tag===fullTag||
-      a.tag===tag||
-      a.tag==='H2R-'+tag
+    const fullTag = prefix&&tag ? `${prefix}-${tag}` : tag;
+    const match = animals.find(a=>
+      (fullTag && (a.tag===fullTag||a.tag===tag||a.tag==='H2R-'+tag)) ||
+      (reg && a.reg_number===reg)
     );
 
-    if(!match){skipped++;continue;}
+    const nameUpper = name.toUpperCase().trim();
+    const isSireWeNeed = !match && !tag && name && herdSireNames.has(nameUpper);
 
-    const profit=parseFloat(clean(vals[iProfit]))||null;
-    const ranch=parseFloat(clean(vals[iRanch]))||null;
-    const feeder=parseFloat(clean(vals[iFeeder]))||null;
-    const terminal=parseFloat(clean(vals[iTerminal]))||null;
-    const fert=parseFloat(clean(vals[iFert]))||null;
-    const bs=parseFloat(clean(vals[iBS]))||null;
-    const ts=parseFloat(clean(vals[iTS]))||null;
+    if(!match && !isSireWeNeed){skipped++;continue;}
 
-    if(!profit&&!ranch&&!feeder&&!terminal){skipped++;continue;}
+    let dob = null;
+    if(dobRaw) {
+      const parts = dobRaw.split('/');
+      if(parts.length===3) dob = `${parts[2]}-${parts[0].padStart(2,'0')}-${parts[1].padStart(2,'0')}`;
+    }
+    const sexMapped = sex==='Bull'?'Bull':sex==='Heifer'?'Heifer':sex==='Steer'?'Steer':'Cow';
+    const finalTag = match?.tag || fullTag || name.replace(/\s+/g,'-').substring(0,20);
 
-    // Check if EPD record exists
-    const {data:existingArr}=await sb.from('epds').select('id').eq('animal_tag',match.tag).eq('ranch_id',currentRanch.id);
-    const existing=existingArr&&existingArr.length>0?existingArr[0]:null;
-
-    let error;
-    if(existing){
-      // Update existing record
-      ({error}=await sb.from('epds').update({
-        lc_profit:profit,lc_ranch:ranch,
-        lc_feeder:feeder,lc_terminal:terminal,
-        lc_fert:fert,lc_bs:bs,lc_ts:ts,
-      }).eq('animal_tag',match.tag).eq('ranch_id',currentRanch.id));
-    } else {
-      // Insert new record with just Leachman data
-      ({error}=await sb.from('epds').insert({
-        animal_tag:match.tag,ranch_id:currentRanch.id,
-        lc_profit:profit,lc_ranch:ranch,
-        lc_feeder:feeder,lc_terminal:terminal,
-        lc_fert:fert,lc_bs:bs,lc_ts:ts,
-      }));
+    if(!match) {
+      const {error} = await dbInsert('animals',{
+        tag: finalTag, name: name||null, reg_number: reg||null,
+        sex: isSireWeNeed?'Bull':sexMapped, dob: dob||null,
+        breed: 'Red Angus', status: 'active',
+        sire: sireTag||null, dam: damTag||null,
+      });
+      if(!error){
+        isSireWeNeed?siresAdded++:added++;
+        animals.push({tag:finalTag,reg_number:reg,name});
+        cache.set('animals',animals);
+      } else { skipped++; continue; }
     }
 
-    if(!error)imported++;else{console.error('LC import error:',error);skipped++;}
+    const epds={};
+    const cv=v=>{const n=parseFloat(clean(v));return isNaN(n)?null:n;};
+    if(iBW>=0){const v=cv(vals[iBW]);if(v!==null)epds.bw=v;}
+    if(iWW>=0){const v=cv(vals[iWW]);if(v!==null)epds.ww=v;}
+    if(iYW>=0){const v=cv(vals[iYW]);if(v!==null)epds.yw=v;}
+    if(iMilk>=0){const v=cv(vals[iMilk]);if(v!==null)epds.milk=v;}
+    if(iCED>=0){const v=cv(vals[iCED]);if(v!==null)epds.ced=v;}
+    if(iHPG>=0){const v=cv(vals[iHPG]);if(v!==null)epds.hpg=v;}
+    if(iFat>=0){const v=cv(vals[iFat]);if(v!==null)epds.fat=v;}
+    if(iREA>=0){const v=cv(vals[iREA]);if(v!==null)epds.rea=v;}
+    if(iMarb>=0){const v=cv(vals[iMarb]);if(v!==null)epds.marbling=v;}
+    if(iHB>=0){const v=cv(vals[iHB]);if(v!==null)epds.hb=v;}
+    if(iGM>=0){const v=cv(vals[iGM]);if(v!==null)epds.gm=v;}
+    if(iPro>=0){const v=cv(vals[iPro]);if(v!==null)epds.pro=v;}
+    if(iProfit>=0){const v=cv(vals[iProfit]);if(v!==null)epds.lc_profit=v;}
+    if(iRanch>=0){const v=cv(vals[iRanch]);if(v!==null)epds.lc_ranch=v;}
+    if(iFeeder>=0){const v=cv(vals[iFeeder]);if(v!==null)epds.lc_feeder=v;}
+    if(iTerminal>=0){const v=cv(vals[iTerminal]);if(v!==null)epds.lc_terminal=v;}
+    if(iFert>=0){const v=cv(vals[iFert]);if(v!==null)epds.lc_fert=v;}
+    if(iBS>=0){const v=cv(vals[iBS]);if(v!==null)epds.lc_bs=v;}
+    if(iTS>=0){const v=cv(vals[iTS]);if(v!==null)epds.lc_ts=v;}
+
+    if(Object.keys(epds).length>0){
+      await sb.from('epds').upsert({...epds,animal_tag:finalTag,ranch_id:currentRanch.id},{onConflict:'animal_tag,ranch_id'});
+    }
+    if(match) updated++;
   }
 
-  alert(`✅ Leachman data imported for ${imported} animals.\n${skipped} skipped (no matching animal or no data).`);
+  const {data}=await dbSelect('animals');
+  if(data)cache.set('animals',data);
+  const msg = `✅ Leachman Import Complete!\n${updated} existing animals updated\n${added} new animals added\n${siresAdded} sires added\n${skipped} skipped`;
+  updateStatus(msg);
+  if(!statusCallback) alert(msg);
   if(currentAnimal)showProfileTab('epds');
 }
 
@@ -6792,21 +6840,67 @@ async function importSENFile(text) {
   if(!lines.length){alert('No data found in file');return;}
   const {data:freshAnimals}=await dbSelect('animals');
   if(freshAnimals)cache.set('animals',freshAnimals);
-  let imported=0,skipped=0;
+  let imported=0,added=0,skipped=0;
+
   for(const line of lines){
     try{
       const a=parseSENLine(line);
       if(!a||!a.reg_number){skipped++;continue;}
+
+      // Only process Henderson-owned animals (breeder code HENDERSON)
+      const isOurs = line.includes('HENDERSON');
+      if(!isOurs){skipped++;continue;}
+
       const animals=cache.get('animals')||[];
       const match=animals.find(x=>x.tag===a.herd_tag||x.tag===a.tag||x.reg_number===a.reg_number);
       const matchTag=match?.tag||a.herd_tag||a.tag;
-      if(!matchTag){skipped++;continue;}
+
+      if(!match && matchTag) {
+        // New animal — add to database
+        const sexCode = parseSENSex(line);
+        const sex = sexCode==='BULL'||sexCode==='1'?'Bull':
+                    sexCode==='COW'?'Cow':
+                    sexCode==='HEIFER'?'Heifer':'Cow';
+        const dobStr = a.dob || null;
+        const sireName = a.pedigree.sire_name || a.pedigree.sire || null;
+        const damName = a.pedigree.dam_name || a.pedigree.dam || null;
+
+        const {data:newAnimal, error} = await dbInsert('animals', {
+          tag: matchTag.trim(),
+          name: a.name || null,
+          reg_number: a.reg_number,
+          sex,
+          dob: dobStr,
+          breed: 'Red Angus',
+          status: 'active',
+          sire: sireName,
+          dam: damName,
+          herd_prefix: a.herd_prefix || currentRanch.herd_prefix || 'H2R',
+        });
+
+        if(!error) {
+          added++;
+          // Refresh cache so subsequent lookups find this animal
+          const updatedAnimals = cache.get('animals')||[];
+          updatedAnimals.push({tag: matchTag.trim(), reg_number: a.reg_number});
+          cache.set('animals', updatedAnimals);
+        } else {
+          console.error('Add error:', error);
+          skipped++;
+          continue;
+        }
+      }
+
+      // Update EPDs and pedigree for matched or newly added animal
+      const finalTag = match?.tag || matchTag;
+      if(!finalTag){skipped++;continue;}
+
       if(Object.keys(a.epds).length>0){
-        await sb.from('epds').upsert({...a.epds,animal_tag:matchTag,ranch_id:currentRanch.id},{onConflict:'animal_tag,ranch_id'});
+        await sb.from('epds').upsert({...a.epds,animal_tag:finalTag,ranch_id:currentRanch.id},{onConflict:'animal_tag,ranch_id'});
       }
       if(a.pedigree.sire||a.pedigree.dam){
         await sb.from('pedigrees').upsert({
-          animal_tag:matchTag,ranch_id:currentRanch.id,
+          animal_tag:finalTag,ranch_id:currentRanch.id,
           sire:a.pedigree.sire_name||a.pedigree.sire||null,
           dam:a.pedigree.dam_name||a.pedigree.dam||null,
           paternal_grandsire:a.pedigree.pgs_name||a.pedigree.pgs||null,
@@ -6819,10 +6913,23 @@ async function importSENFile(text) {
       imported++;
     }catch(e){console.error(e);skipped++;}
   }
+
   const {data}=await dbSelect('animals');
   if(data)cache.set('animals',data);
-  alert(`\u2705 Imported data for ${imported} animal(s).\nEPDs and pedigree updated.\n${skipped} skipped (no matching animal in your herd).`);
+  alert(`✅ Import complete!\n${added} new animals added\n${imported} existing animals updated (EPDs + pedigree)\n${skipped} skipped`);
   if(currentAnimal)showProfileTab('epds');
+}
+
+function parseSENSex(line) {
+  // Sex code appears around position 95-100 in the SEN format
+  // R=female registered, C/H/E=cow/heifer/etc, B=bull
+  const sexMatch = line.match(/R[A-Z][A-Z]\d\s/);
+  if(sexMatch) {
+    const code = sexMatch[0][1];
+    if(code==='A'||code==='B'||code==='C'||code==='E'||code==='F'||code==='G'||code==='H'||code==='I'||code==='J'||code==='K'||code==='L'||code==='M'||code==='N'||code==='Z') return 'COW';
+    if(code==='1') return 'BULL';
+  }
+  return 'COW';
 }
 
 function parseSENLine(line) {
@@ -7696,6 +7803,93 @@ async function saveHayCutting() {
 
 // ── HERD IMPORT ────────────────────────────────────────────────────────────
 function openHerdImport() {
+  // Open unified Import Center instead
+  openImportCenter();
+}
+
+function openImportCenter() {
+  const existing = document.getElementById('import-center-modal');
+  if(existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay open';
+  modal.id = 'import-center-modal';
+  modal.innerHTML = `
+    <div class="modal" style="max-height:90vh;overflow-y:auto">
+      <div class="modal-handle"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div class="modal-title" style="margin-bottom:0">📥 Import Center</div>
+        <button onclick="document.getElementById('import-center-modal').remove()" style="background:var(--bg2);border:none;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer;font-family:inherit">✕ Close</button>
+      </div>
+
+      <!-- RAAA Pro Extract -->
+      <div style="background:var(--bg2);border-radius:10px;padding:14px;margin-bottom:10px">
+        <div style="font-weight:700;font-size:14px;margin-bottom:4px">🔴 RAAA Pro Extract (.sen)</div>
+        <div style="font-size:12px;color:var(--gray);margin-bottom:10px">Adds new registered animals + updates EPDs and pedigree for existing animals</div>
+        <input type="file" id="ic-sen-file" accept=".sen,.txt" style="font-size:13px;margin-bottom:8px">
+        <button onclick="runICImport('sen')" class="btn btn-primary" style="width:100%">Import RAAA .sen File</button>
+        <div id="ic-sen-status" style="font-size:12px;margin-top:8px;color:var(--gray)"></div>
+      </div>
+
+      <!-- Leachman CSV -->
+      <div style="background:var(--bg2);border-radius:10px;padding:14px;margin-bottom:10px">
+        <div style="font-weight:700;font-size:14px;margin-bottom:4px">📊 Leachman CSV</div>
+        <div style="font-size:12px;color:var(--gray);margin-bottom:10px">Updates EPDs and LC indexes for your animals + adds sires used in your herd's pedigree</div>
+        <input type="file" id="ic-lc-file" accept=".csv" style="font-size:13px;margin-bottom:8px">
+        <button onclick="runICImport('leachman')" class="btn btn-primary" style="width:100%">Import Leachman CSV</button>
+        <div id="ic-lc-status" style="font-size:12px;margin-top:8px;color:var(--gray)"></div>
+      </div>
+
+      <!-- Smart Import -->
+      <div style="background:var(--bg2);border-radius:10px;padding:14px;margin-bottom:10px">
+        <div style="font-weight:700;font-size:14px;margin-bottom:4px">⚡ Smart Import (Any Spreadsheet)</div>
+        <div style="font-size:12px;color:var(--gray);margin-bottom:10px">Upload any CSV or Excel file — AI maps columns automatically. Good for AAA EPDs, custom formats, or one-off imports.</div>
+        <button onclick="document.getElementById('import-center-modal').remove();document.getElementById('herd-import-modal').classList.add('open');selectImportMethod('smart')" class="btn btn-secondary" style="width:100%">Open Smart Import →</button>
+      </div>
+
+      <!-- CattleMax -->
+      <div style="background:var(--bg2);border-radius:10px;padding:14px;margin-bottom:10px">
+        <div style="font-weight:700;font-size:14px;margin-bottom:4px">📦 CattleMax ZIP</div>
+        <div style="font-size:12px;color:var(--gray);margin-bottom:10px">Import full herd history from a CattleMax backup ZIP — animals, weights, health, breeding records</div>
+        <button onclick="document.getElementById('import-center-modal').remove();openCattleMaxImport()" class="btn btn-secondary" style="width:100%">Open CattleMax Import →</button>
+      </div>
+
+      <!-- Excel Template -->
+      <div style="background:var(--bg2);border-radius:10px;padding:14px;margin-bottom:10px">
+        <div style="font-weight:700;font-size:14px;margin-bottom:4px">📋 Excel Template</div>
+        <div style="font-size:12px;color:var(--gray);margin-bottom:10px">Download our template, fill it in, and upload to add animals manually in bulk</div>
+        <button onclick="downloadImportTemplate()" class="btn btn-secondary" style="width:100%">⬇️ Download Template</button>
+      </div>
+
+      <!-- Export -->
+      <div style="background:var(--bg2);border-radius:10px;padding:14px">
+        <div style="font-weight:700;font-size:14px;margin-bottom:4px">📤 Export</div>
+        <div style="font-size:12px;color:var(--gray);margin-bottom:10px">Export your registered calves for RAAA submission</div>
+        <button onclick="document.getElementById('import-center-modal').remove();showPage('reports');setTimeout(()=>showReportsTab('raaa'),300)" class="btn btn-secondary" style="width:100%">RAAA Registration CSV →</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+async function runICImport(type) {
+  if(type==='sen') {
+    const file = document.getElementById('ic-sen-file')?.files[0];
+    if(!file){alert('Please select a .sen file first');return;}
+    const statusEl = document.getElementById('ic-sen-status');
+    statusEl.textContent = '⏳ Reading file...';
+    const text = await file.text();
+    await importSENFile(text);
+    statusEl.textContent = '✅ Done — check Animals tab';
+  } else if(type==='leachman') {
+    const file = document.getElementById('ic-lc-file')?.files[0];
+    if(!file){alert('Please select a CSV file first');return;}
+    const statusEl = document.getElementById('ic-lc-status');
+    statusEl.textContent = '⏳ Reading file...';
+    const text = await file.text();
+    await importLeachmanCSV(text, msg => { statusEl.textContent = msg; });
+  }
+}
+
+function _openHerdImportLegacy() {
   document.getElementById('herd-import-modal').classList.add('open');
   document.getElementById('herd-import-step1').style.display='block';
   document.getElementById('herd-import-step2').style.display='none';
