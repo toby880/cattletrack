@@ -416,6 +416,7 @@ tr:hover td{background:var(--bg)}
         <button class="tab" onclick="showProfileTab('pedigree')">Pedigree</button>
         <button class="tab" onclick="showProfileTab('epds')">EPDs</button>
         <button class="tab" onclick="showProfileTab('embryo')">Embryo</button>
+        <button class="tab" onclick="showProfileTab('evaluation')" style="color:var(--orange)">⭐ Eval</button>
       </div>
       <div id="profile-content"><div class="loading"><div class="spinner"></div>Loading...</div></div>
     </div>
@@ -2613,10 +2614,16 @@ async function renderCowPerformance(content) {
     if(totalHealthCost > 500) { score -= 15; flags.push(`Health $${totalHealthCost.toFixed(0)}`); }
     else if(totalHealthCost > 200) { score -= 5; }
 
-    // 9. Age
-    if(age) {
-      if(age > 12) { score -= 15; flags.push(`Age ${age.toFixed(0)} yrs`); }
-      else if(age > 10) { score -= 8; }
+    // 9. Age — longevity bonus for productive older cows
+    if(age && age >= 8) {
+      const gapFlags = flags.filter(f=>f.includes('gap year'));
+      const majorFlags = flags.filter(f=>!f.includes('Teat score 7')&&!f.includes('Udder score 7'));
+      if(majorFlags.length === 0) {
+        // No major issues — reward longevity
+        const bonus = Math.min(10, Math.floor((age - 7) * 2));
+        score += bonus;
+        if(bonus >= 6) flags.push(`Longevity bonus +${bonus}`);
+      }
     }
 
     // 10. Small productivity bonus
@@ -3662,6 +3669,109 @@ async function showProfileTab(tab) {
     if((transfers||[]).length) html += '<div class="card"><div class="card-title">As Recipient</div>'+(transfers||[]).map(r=>`<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px"><strong>${r.transfer_date}</strong> · From: ${r.donor_tag||'—'} · ${r.outcome||'pending'}</div>`).join('')+'</div>';
     content.innerHTML = html || '<div class="empty"><div class="empty-icon">🧬</div><p>No embryo records for this animal.</p></div>';
   }
+  if(tab==='evaluation') {
+    await renderBreedingEvaluation(content, tag);
+  }
+}
+
+// ── BREEDING EVALUATION ────────────────────────────────────────────────────
+async function renderBreedingEvaluation(content, tag) {
+  const {data: eval_} = await sb.from('breeding_evaluations')
+    .select('*').eq('ranch_id', currentRanch.id).eq('animal_tag', tag).single();
+
+  const e = eval_ || {};
+  const checkBox = (field, label) => `
+    <label style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer">
+      <input type="checkbox" id="be-${field}" ${e[field]?'checked':''} style="width:18px;height:18px;accent-color:var(--orange)">
+      <span style="font-size:14px">${label}</span>
+    </label>`;
+
+  const ratingField = (field, label, max=10) => `
+    <div style="padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <label style="font-size:13px;font-weight:600">${label}</label>
+        <span id="be-${field}-val" style="font-size:16px;font-weight:800;color:var(--orange)">${e[field]||'—'}</span>
+      </div>
+      <input type="range" id="be-${field}" min="1" max="${max}" value="${e[field]||5}" 
+        oninput="document.getElementById('be-${field}-val').textContent=this.value"
+        style="width:100%;accent-color:var(--orange)">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--gray)">
+        <span>1 - Poor</span><span>${max} - Excellent</span>
+      </div>
+    </div>`;
+
+  const recOptions = ['Keep — Foundation Female','Keep — Commercial Cow','Flush Donor','Commercial Donor','Sell — Open','Sell — Bred','Cull'];
+
+  content.innerHTML = `
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">⭐ Breeding Evaluation</div>
+      <div style="font-size:12px;color:var(--gray);margin-bottom:12px">Your assessment of this animal based on years of ownership</div>
+
+      <div style="margin-bottom:12px">
+        <div style="font-size:12px;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:6px">Role / Classification</div>
+        ${checkBox('foundation_female','Foundation Female — keep in herd long term')}
+        ${checkBox('cow_maker','Cow Maker — daughters worth retaining')}
+        ${checkBox('bull_maker','Bull Maker — sons worth developing')}
+        ${checkBox('flush_donor','Flush Donor — ET program candidate')}
+        ${checkBox('commercial_donor','Commercial Donor — good ET recipient')}
+        ${checkBox('easy_fleshing','Easy Fleshing — maintains condition well')}
+      </div>
+
+      <div style="margin-bottom:12px">
+        <div style="font-size:12px;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:6px">Subjective Scores (1-10)</div>
+        ${ratingField('maternal_score','Maternal Ability')}
+        ${ratingField('feet_score','Feet & Legs')}
+        ${ratingField('udder_score_eval','Udder Quality')}
+        ${ratingField('disposition_score','Disposition / Temperament')}
+        ${ratingField('overall_score','Overall Score')}
+      </div>
+
+      <div style="margin-bottom:12px">
+        <div style="font-size:12px;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom-6px">Recommendation</div>
+        <select id="be-recommendation" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:14px;margin-top:6px;font-family:inherit">
+          <option value="">— Select recommendation —</option>
+          ${recOptions.map(r=>`<option value="${r}" ${e.recommendation===r?'selected':''}>${r}</option>`).join('')}
+        </select>
+      </div>
+
+      <div style="margin-bottom:12px">
+        <div style="font-size:12px;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:6px">Comments</div>
+        <textarea id="be-comments" placeholder="Notes on this animal's strengths, weaknesses, history..." 
+          style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:13px;min-height:80px;font-family:inherit;resize:vertical">${e.comments||''}</textarea>
+      </div>
+
+      ${e.updated_at ? `<div style="font-size:11px;color:var(--gray);margin-bottom:10px">Last updated: ${new Date(e.updated_at).toLocaleDateString()}</div>` : ''}
+
+      <button class="btn btn-primary" style="width:100%" onclick="saveBreedingEvaluation('${tag}')">Save Evaluation</button>
+    </div>`;
+}
+
+async function saveBreedingEvaluation(tag) {
+  const getCheck = id => document.getElementById(id)?.checked || false;
+  const getVal = id => parseInt(document.getElementById(id)?.value) || null;
+
+  const data = {
+    ranch_id: currentRanch.id,
+    animal_tag: tag,
+    foundation_female: getCheck('be-foundation_female'),
+    cow_maker: getCheck('be-cow_maker'),
+    bull_maker: getCheck('be-bull_maker'),
+    flush_donor: getCheck('be-flush_donor'),
+    commercial_donor: getCheck('be-commercial_donor'),
+    easy_fleshing: getCheck('be-easy_fleshing'),
+    maternal_score: getVal('be-maternal_score'),
+    feet_score: getVal('be-feet_score'),
+    udder_score_eval: getVal('be-udder_score_eval'),
+    disposition_score: getVal('be-disposition_score'),
+    overall_score: getVal('be-overall_score'),
+    recommendation: document.getElementById('be-recommendation')?.value || null,
+    comments: document.getElementById('be-comments')?.value?.trim() || null,
+    updated_at: new Date().toISOString(),
+  };
+
+  const {error} = await sb.from('breeding_evaluations').upsert(data, {onConflict: 'ranch_id,animal_tag'});
+  if(error) { alert('Error saving: ' + error.message); return; }
+  alert('✅ Evaluation saved!');
 }
 
 // ── CALVING ────────────────────────────────────────────────────────────────
