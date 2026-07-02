@@ -2454,7 +2454,9 @@ async function renderCowPerformance(content) {
   // Score each cow
   const cowScores = animals.map(cow => {
     // Match from calving_records by dam_tag
-    const calvingHistory = calving.filter(c => {
+    // Deduplicate calving records by calf tag
+    const calvingMap = new Map();
+    calving.filter(c => {
       const dt = (c.dam_tag||'').trim();
       const ct = (cow.tag||'').trim();
       return dt === ct || 
@@ -2462,7 +2464,11 @@ async function renderCowPerformance(content) {
              dt.replace('H2R-','') === ct ||
              ct === 'H2R-'+dt ||
              ct.replace('H2R-','') === dt;
+    }).forEach(c => {
+      const key = (c.calf_tag||'').replace('H2R-','');
+      if(!calvingMap.has(key)) calvingMap.set(key, c);
     });
+    const calvingHistory = Array.from(calvingMap.values());
     
     // Also match from animals table by dam field (catches imported/registered calves)
     const animalCalves = allAnimals.filter(a => {
@@ -2475,9 +2481,12 @@ async function renderCowPerformance(content) {
              ct.replace('H2R-','') === ad;
     });
     
-    // Combine and deduplicate calf count
-    const calvingTags = new Set(calvingHistory.map(c => c.calf_tag));
-    const animalCalvesTags = animalCalves.filter(a => !calvingTags.has(a.tag));
+    // Combine and deduplicate by calf tag
+    const seenTags = new Set(calvingHistory.map(c => (c.calf_tag||'').replace('H2R-','')));
+    const animalCalvesTags = animalCalves.filter(a => {
+      const t = (a.tag||'').replace('H2R-','');
+      return !seenTags.has(t);
+    });
     const totalCalves = calvingHistory.length + animalCalvesTags.length;
     const healthHistory = health.filter(h => h.animal_tag === cow.tag);
     const pregHistory = pregChecks.filter(p => p.animal_tag === cow.tag);
