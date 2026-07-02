@@ -2432,12 +2432,14 @@ async function renderSireAnalysis(content) {
 
 // ── COW PERFORMANCE ────────────────────────────────────────────────────────
 async function renderCowPerformance(content) {
-  const [animalsRes, calvingRes, healthRes, pregRes, allAnimalsRes] = await Promise.all([
+  const [animalsRes, calvingRes, healthRes, pregRes, allAnimalsRes, etRes, weightsRes] = await Promise.all([
     sb.from('animals').select('*').eq('ranch_id', currentRanch.id).in('sex',['Cow','Heifer']).neq('status','sold').neq('status','dead'),
     sb.from('calving_records').select('*').eq('ranch_id', currentRanch.id),
     sb.from('health_events').select('*').eq('ranch_id', currentRanch.id),
     sb.from('preg_checks').select('*').eq('ranch_id', currentRanch.id),
     sb.from('animals').select('tag,dam,dob,sex').eq('ranch_id', currentRanch.id),
+    sb.from('et_transfers').select('*').eq('ranch_id', currentRanch.id),
+    sb.from('weights').select('*').eq('ranch_id', currentRanch.id).eq('weight_type','weaning'),
   ]);
 
   const animals = animalsRes.data || [];
@@ -2445,98 +2447,201 @@ async function renderCowPerformance(content) {
   const health = healthRes.data || [];
   const pregChecks = pregRes.data || [];
   const allAnimals = allAnimalsRes.data || [];
+  const etTransfers = etRes.data || [];
+  const weaningWeights = weightsRes.data || [];
 
   if(!animals.length) {
     content.innerHTML = '<div class="empty"><div class="empty-icon">🐄</div><p>No cow records found.</p></div>';
     return;
   }
 
-  // Score each cow
+  // Calculate herd average weaning weight for ratio
+  const allWW = weaningWeights.map(w => parseFloat(w.weight_lbs)).filter(w => w > 0);
+  const herdAvgWW = allWW.length ? allWW.reduce((a,b)=>a+b,0)/allWW.length : null;
+
+  // Season helpers
+  const getSeason = date => {
+    if(!date) return null;
+    const m = new Date(date).getMonth() + 1; // 1-12
+    if(m >= 1 && m <= 5) return 'spring';
+    if(m >= 8 && m <= 11) return 'fall';
+    return 'other';
+  };
+  const getYear = date => date ? new Date(date).getFullYear() : null;
+
+  const scoreColor = s => s >= 75 ? 'var(--green)' : s >= 50 ? 'var(--orange)' : 'var(--red)';
+
   const cowScores = animals.map(cow => {
-    // Match from calving_records by dam_tag
-    // Deduplicate calving records by calf tag
-    // Match calving records by stripping H2R- prefix for comparison
+    const tag = (cow.tag||'').trim();
+    const tagBase = tag.replace('H2R-','');
+
+    // Match calving records
     const calvingMap = new Map();
     calving.filter(c => {
       const dt = (c.dam_tag||'').trim().replace('H2R-','');
-      const ct = (cow.tag||'').trim().replace('H2R-','');
-      return dt === ct;
+      return dt === tagBase;
     }).forEach(c => {
       const key = (c.calf_tag||'').replace('H2R-','');
       if(!calvingMap.has(key)) calvingMap.set(key, c);
     });
     const calvingHistory = Array.from(calvingMap.values());
 
-    // Also get calves from animals table NOT already in calving_records
+    // Animal calves not in calving records
     const calvingKeys = new Set(calvingMap.keys());
-    const animalCalvesTags = allAnimals.filter(a => {
+    const animalCalves = allAnimals.filter(a => {
       const ad = (a.dam||'').trim().replace('H2R-','');
-      const ct = (cow.tag||'').trim().replace('H2R-','');
       const at = (a.tag||'').trim().replace('H2R-','');
-      return ad === ct && !calvingKeys.has(at);
+      return ad === tagBase && !calvingKeys.has(at);
+    });
+    const totalCalves = calvingHistory.length + animalCalves.length;
+
+    // ET calves this cow produced as donor
+    const etCalvesProduced = etTransfers.filter(t => {
+      const dt = (t.donor_tag||'').replace('H2R-','');
+      return dt === tagBase;
     });
 
-    const totalCalves = calvingHistory.length + animalCalvesTags.length;
-    const healthHistory = health.filter(h => h.animal_tag === cow.tag);
-    const pregHistory = pregChecks.filter(p => p.animal_tag === cow.tag);
+    // Years with ET calves (donor activity)
+    const etYears = new Set(etCalvesProduced.map(t => getYear(t.transfer_date)).filter(Boolean));
 
-    // Scoring factors
+    // Calving history by year and season
+    const calvingByYear = {};
+    calvingHistory.forEach(c => {
+      const yr = getYear(c.birth_date);
+      const season = getSeason(c.birth_date);
+      if(!yr) return;
+      if(!calvingByYear[yr]) calvingByYear[yr] = [];
+      calvingByYear[yr].push(season);
+    });
+
+    // Health and preg data
+    const healthHistory = health.filter(h => {
+      const ht = (h.animal_tag||'').replace('H2R-','');
+      return ht === tagBase;
+    });
+    const pregHistory = pregChecks.filter(p => {
+      const pt = (p.animal_tag||'').replace('H2R-','');
+      return pt === tagBase;
+    });
+
+    // Weaning weights of her calves
+    const herCalfTags = new Set([
+      ...calvingHistory.map(c => (c.calf_tag||'').replace('H2R-','')),
+      ...animalCalves.map(a => (a.tag||'').replace('H2R-',''))
+    ]);
+    const herWW = weaningWeights
+      .filter(w => herCalfTags.has((w.animal_tag||'').replace('H2R-','')))
+      .map(w => parseFloat(w.weight_lbs)).filter(w => w > 0);
+    const avgWW = herWW.length ? herWW.reduce((a,b)=>a+b,0)/herWW.length : null;
+
+    // Age
+    let age = null;
+    if(cow.dob) age = (new Date() - new Date(cow.dob)) / (365.25 * 24 * 3600 * 1000);
+
+    // ── SCORING ──────────────────────────────────────────────────
     let score = 100;
-    let flags = [];
+    const flags = [];
 
-    // Calving ease — penalize difficult calvings
-    const easeScores = calvingHistory.map(c => parseInt(c.calving_ease)||1);
-    const avgEase = easeScores.length ? easeScores.reduce((a,b)=>a+b)/easeScores.length : 1;
-    if(avgEase > 2.5) { score -= 20; flags.push('Difficult calvings'); }
-    else if(avgEase > 1.5) { score -= 5; }
-
-    // Conception — penalize open cows
-    const opens = pregHistory.filter(p=>p.result==='open').length;
-    const total = pregHistory.length;
-    if(opens > 0 && total > 0) {
-      const openRate = opens/total;
-      score -= Math.round(openRate * 30);
-      if(openRate > 0.5) flags.push('Poor conception rate');
+    // 1. Calving ease — from calving records
+    const easeScores = calvingHistory.map(c => parseInt(c.calving_ease)||1).filter(e => e > 0);
+    const avgEase = easeScores.length ? easeScores.reduce((a,b)=>a+b,0)/easeScores.length : null;
+    if(avgEase) {
+      if(avgEase > 2.5) { score -= 20; flags.push('Difficult calvings'); }
+      else if(avgEase > 1.5) { score -= 8; }
     }
 
-    // Health costs — penalize high treatment costs
-    const totalHealthCost = healthHistory.reduce((s,h)=>s+(h.cost||0),0);
-    if(totalHealthCost > 500) { score -= 15; flags.push(`High health costs ($${totalHealthCost.toFixed(0)})`); }
-    else if(totalHealthCost > 200) { score -= 5; }
+    // 2. Calving season consistency
+    const seasons = calvingHistory.map(c => getSeason(c.birth_date)).filter(Boolean);
+    const springCount = seasons.filter(s=>s==='spring').length;
+    const fallCount = seasons.filter(s=>s==='fall').length;
+    const otherCount = seasons.filter(s=>s==='other').length;
+    if(otherCount > 0) { score -= otherCount * 5; flags.push('Off-season calves'); }
+    if(springCount > 0 && fallCount > 0) { score -= 10; flags.push('Mixed seasons'); }
 
-    // Age and missed calvings
-    let age = null;
-    if(cow.dob) {
-      age = (new Date() - new Date(cow.dob)) / (365.25 * 24 * 3600 * 1000);
-      if(age > 12) { score -= 15; flags.push(`Age: ${age.toFixed(0)} yrs`); }
-      else if(age > 10) { score -= 8; }
-      // Penalize missed calving years
-      const productiveYears = Math.max(0, age - 2);
-      const expectedCalves = Math.floor(productiveYears);
-      const missingCalves = Math.max(0, expectedCalves - totalCalves);
-      if(missingCalves > 0) {
-        score -= Math.min(25, missingCalves * 8);
-        flags.push(`${missingCalves} missed calving${missingCalves>1?'s':''}`);
+    // 3. Gap years — years with no calf and not a flush year
+    if(age && age > 2) {
+      const currentYear = new Date().getFullYear();
+      const birthYear = cow.dob ? new Date(cow.dob).getFullYear() : null;
+      const firstExpectedYear = birthYear ? birthYear + 2 : null;
+      if(firstExpectedYear) {
+        let gapYears = 0;
+        for(let yr = firstExpectedYear; yr <= currentYear - 1; yr++) {
+          const hadCalf = calvingByYear[yr] && calvingByYear[yr].length > 0;
+          const hadETActivity = etYears.has(yr);
+          if(!hadCalf && !hadETActivity) gapYears++;
+        }
+        if(gapYears > 0) {
+          score -= Math.min(30, gapYears * 10);
+          flags.push(`${gapYears} gap year${gapYears>1?'s':''}`);
+        }
       }
     }
 
-    // Small bonus for calf production
-    if(totalCalves > 0) score += Math.min(10, totalCalves * 2);
+    // 4. Preg checks
+    const opens = pregHistory.filter(p=>p.result==='open').length;
+    const pregTotal = pregHistory.length;
+    if(opens > 0 && pregTotal > 0) {
+      score -= Math.round((opens/pregTotal) * 25);
+      if(opens/pregTotal > 0.5) flags.push('Poor conception');
+    }
+
+    // 5. Weaning weight vs herd average
+    if(avgWW && herdAvgWW) {
+      const ratio = avgWW / herdAvgWW;
+      if(ratio >= 1.1) score += 8;
+      else if(ratio >= 1.0) score += 4;
+      else if(ratio < 0.9) { score -= 8; flags.push('Light calves'); }
+      else if(ratio < 0.95) score -= 4;
+    }
+
+    // 6. Teat score (1-9, higher=better, target >=7)
+    const teatScore = cow.teat_score;
+    if(teatScore) {
+      if(teatScore <= 5) { score -= 15; flags.push(`Teat score ${teatScore}`); }
+      else if(teatScore === 6) { score -= 8; flags.push(`Teat score ${teatScore}`); }
+    }
+
+    // 7. Udder score (1-9, higher=better, target >=7)
+    const udderScore = cow.udder_score;
+    if(udderScore) {
+      if(udderScore <= 5) { score -= 15; flags.push(`Udder score ${udderScore}`); }
+      else if(udderScore === 6) { score -= 8; flags.push(`Udder score ${udderScore}`); }
+    }
+
+    // 8. Health costs
+    const totalHealthCost = healthHistory.reduce((s,h)=>s+(parseFloat(h.cost)||0),0);
+    if(totalHealthCost > 500) { score -= 15; flags.push(`Health $${totalHealthCost.toFixed(0)}`); }
+    else if(totalHealthCost > 200) { score -= 5; }
+
+    // 9. Age
+    if(age) {
+      if(age > 12) { score -= 15; flags.push(`Age ${age.toFixed(0)} yrs`); }
+      else if(age > 10) { score -= 8; }
+    }
+
+    // 10. Small productivity bonus
+    if(totalCalves > 0) score += Math.min(8, totalCalves * 1.5);
 
     score = Math.max(0, Math.min(100, Math.round(score)));
 
     return {
-      tag: cow.tag, name: cow.name, dob: cow.dob,
+      tag, name: cow.name, dob: cow.dob,
       age: age ? age.toFixed(1) : null,
       calves: totalCalves,
-      avgEase: calvingHistory.length > 0 ? avgEase.toFixed(1) : null,
-      opens, pregChecks: total, healthCost: totalHealthCost,
-      score, flags, cull: score < 50,
+      avgEase: avgEase ? avgEase.toFixed(1) : null,
+      avgWW: avgWW ? avgWW.toFixed(0) : null,
+      wwRatio: (avgWW && herdAvgWW) ? (avgWW/herdAvgWW*100).toFixed(0) : null,
+      opens, pregTotal,
+      teat: teatScore || null,
+      udder: udderScore || null,
+      healthCost: totalHealthCost,
+      etDonor: etCalvesProduced.length > 0,
+      score, flags,
+      cull: score < 50,
     };
   }).sort((a,b) => a.score - b.score);
 
   const cullCandidates = cowScores.filter(c => c.cull);
-  const scoreColor = s => s >= 75 ? 'var(--green)' : s >= 50 ? 'var(--orange)' : 'var(--red)';
 
   let _sortCol = 'score', _sortDir = 1;
   const renderCowTable = () => {
@@ -2544,18 +2649,20 @@ async function renderCowPerformance(content) {
       const av = a[_sortCol], bv = b[_sortCol];
       if(av===null||av===undefined) return 1;
       if(bv===null||bv===undefined) return -1;
-      return _sortDir * (av < bv ? -1 : av > bv ? 1 : 0);
+      return _sortDir * (String(av) < String(bv) ? -1 : String(av) > String(bv) ? 1 : 0);
     });
     document.getElementById('cow-perf-tbody').innerHTML = rows.map(c => `
       <tr style="${c.cull?'background:#FFF5F5':''}">
-        <td><strong>${c.tag}</strong>${c.name?`<div style="font-size:11px;color:var(--gray)">${c.name}</div>`:''}</td>
+        <td><strong>${c.tag}</strong>${c.name?`<div style="font-size:10px;color:var(--gray)">${c.name}</div>`:''}${c.etDonor?'<span style="font-size:10px;color:var(--blue)">ET Donor</span>':''}
+        </td>
         <td><span style="font-weight:800;color:${scoreColor(c.score)}">${c.score}</span></td>
         <td>${c.calves}</td>
         <td>${c.avgEase||'—'}</td>
+        <td>${c.avgWW ? c.avgWW+' lb'+(c.wwRatio?` (${c.wwRatio}%)`:'') : '—'}</td>
         <td>${c.age ? c.age+' yrs' : '—'}</td>
-        <td>${c.pregChecks>0?c.opens+'/'+c.pregChecks:'—'}</td>
-        <td>${c.healthCost>0?'$'+c.healthCost.toFixed(0):'—'}</td>
-        <td style="font-size:11px;color:var(--red)">${c.flags.join(', ')||'—'}</td>
+        <td>${c.teat||'—'} / ${c.udder||'—'}</td>
+        <td>${c.pregTotal>0?c.opens+'/'+c.pregTotal:'—'}</td>
+        <td style="font-size:11px;color:var(--red);max-width:200px">${c.flags.join(', ')||'—'}</td>
       </tr>`).join('');
   };
   window.cowSortBy = col => {
@@ -2566,13 +2673,13 @@ async function renderCowPerformance(content) {
   content.innerHTML = `
     ${cullCandidates.length ? `
       <div class="alert alert-warning" style="margin-bottom:12px">
-        ⚠️ <strong>${cullCandidates.length} cull candidates</strong> identified based on performance score below 50.
+        ⚠️ <strong>${cullCandidates.length} cull candidates</strong> — score below 50
       </div>` : `
       <div class="alert alert-success" style="margin-bottom:12px">
         ✅ No cull candidates identified — your herd is performing well!
       </div>`}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <div style="font-size:13px;color:var(--gray)">${cowScores.length} cows · Click headers to sort</div>
+      <div style="font-size:13px;color:var(--gray)">${cowScores.length} cows · Click headers to sort${herdAvgWW?` · Herd avg wean wt: ${herdAvgWW.toFixed(0)} lb`:''}</div>
       <div style="display:flex;gap:8px">
         <span style="font-size:11px;color:var(--green);font-weight:600">🟢 75+</span>
         <span style="font-size:11px;color:var(--orange);font-weight:600">🟡 50-74</span>
@@ -2581,13 +2688,13 @@ async function renderCowPerformance(content) {
     </div>
     <div class="card" style="padding:0"><div class="table-wrap"><table>
       <thead><tr>
-        ${[['tag','Cow'],['score','Score'],['calves','Calves'],['avgEase','Ease'],['age','Age'],['opens','Opens'],['healthCost','Health $'],['flags','Flags']].map(([col,label])=>
-          `<th onclick="cowSortBy('${col}')" style="cursor:pointer">${label} ⇅</th>`).join('')}
+        ${[['tag','Cow'],['score','Score'],['calves','Calves'],['avgEase','Ease'],['avgWW','Wean Wt'],['age','Age'],['teat','Teat/Udder'],['opens','Opens'],['flags','Flags']].map(([col,label])=>
+          `<th onclick="cowSortBy('${col}')" style="cursor:pointer;white-space:nowrap">${label} ⇅</th>`).join('')}
       </tr></thead>
       <tbody id="cow-perf-tbody"></tbody>
     </table></div></div>
     <div style="margin-top:12px;padding:12px;background:var(--bg2);border-radius:8px;font-size:12px;color:var(--gray)">
-      <strong>Scoring:</strong> Starts at 100. Deductions for missed calving years (based on age), difficult calvings, failed preg checks, high health costs, and age 10+.
+      <strong>Scoring:</strong> Reproductive (calving ease, season consistency, gap years, preg checks) · Production (weaning weight vs herd avg, calf count) · Physical (teat/udder scores, age) · ET donor years excluded from gap year penalties.
     </div>`;
   renderCowTable();
 }
