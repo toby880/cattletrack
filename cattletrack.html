@@ -2432,17 +2432,19 @@ async function renderSireAnalysis(content) {
 
 // ── COW PERFORMANCE ────────────────────────────────────────────────────────
 async function renderCowPerformance(content) {
-  const [animalsRes, calvingRes, healthRes, pregRes] = await Promise.all([
+  const [animalsRes, calvingRes, healthRes, pregRes, allAnimalsRes] = await Promise.all([
     sb.from('animals').select('*').eq('ranch_id', currentRanch.id).in('sex',['Cow','Heifer']).neq('status','sold').neq('status','dead'),
     sb.from('calving_records').select('*').eq('ranch_id', currentRanch.id),
     sb.from('health_events').select('*').eq('ranch_id', currentRanch.id),
     sb.from('preg_checks').select('*').eq('ranch_id', currentRanch.id),
+    sb.from('animals').select('tag,dam,dob,sex').eq('ranch_id', currentRanch.id),
   ]);
 
   const animals = animalsRes.data || [];
   const calving = calvingRes.data || [];
   const health = healthRes.data || [];
   const pregChecks = pregRes.data || [];
+  const allAnimals = allAnimalsRes.data || [];
 
   if(!animals.length) {
     content.innerHTML = '<div class="empty"><div class="empty-icon">🐄</div><p>No cow records found.</p></div>';
@@ -2451,7 +2453,32 @@ async function renderCowPerformance(content) {
 
   // Score each cow
   const cowScores = animals.map(cow => {
-    const calvingHistory = calving.filter(c => c.dam_tag === cow.tag);
+    // Match from calving_records by dam_tag
+    const calvingHistory = calving.filter(c => {
+      const dt = (c.dam_tag||'').trim();
+      const ct = (cow.tag||'').trim();
+      return dt === ct || 
+             dt === 'H2R-'+ct || 
+             dt.replace('H2R-','') === ct ||
+             ct === 'H2R-'+dt ||
+             ct.replace('H2R-','') === dt;
+    });
+    
+    // Also match from animals table by dam field (catches imported/registered calves)
+    const animalCalves = allAnimals.filter(a => {
+      const ad = (a.dam||'').trim();
+      const ct = (cow.tag||'').trim();
+      return ad === ct ||
+             ad === 'H2R-'+ct ||
+             ad.replace('H2R-','') === ct ||
+             ct === 'H2R-'+ad ||
+             ct.replace('H2R-','') === ad;
+    });
+    
+    // Combine and deduplicate calf count
+    const calvingTags = new Set(calvingHistory.map(c => c.calf_tag));
+    const animalCalvesTags = animalCalves.filter(a => !calvingTags.has(a.tag));
+    const totalCalves = calvingHistory.length + animalCalvesTags.length;
     const healthHistory = health.filter(h => h.animal_tag === cow.tag);
     const pregHistory = pregChecks.filter(p => p.animal_tag === cow.tag);
 
@@ -2487,7 +2514,7 @@ async function renderCowPerformance(content) {
     }
 
     // Calf production — reward productivity
-    if(calvingHistory.length > 0) score += Math.min(15, calvingHistory.length * 3);
+    if(totalCalves > 0) score += Math.min(15, totalCalves * 3);
 
     score = Math.max(0, Math.min(100, Math.round(score)));
 
@@ -2495,7 +2522,7 @@ async function renderCowPerformance(content) {
       tag: cow.tag,
       name: cow.name,
       dob: cow.dob,
-      calves: calvingHistory.length,
+      calves: totalCalves,
       avgEase: avgEase.toFixed(1),
       opens,
       pregChecks: total,
