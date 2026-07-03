@@ -1821,7 +1821,11 @@ tr:hover td{background:var(--bg)}
     </div>
     <div class="form-row">
       <div class="form-group"><label>Category</label><input type="text" id="ea-category" placeholder="e.g. AI/ET Cows"></div>
-      <div class="form-group"><label>Location</label><input type="text" id="ea-location" placeholder="Current pasture"></div>
+      <div class="form-group"><label>Location / Pasture</label>
+        <select id="ea-location">
+          <option value="">— Select Pasture —</option>
+        </select>
+      </div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>Acquisition</label>
@@ -6695,6 +6699,18 @@ function gaSetAction(action) {
   const titles = {health:'💉 Health / Vaccination', natural:'🐂 Natural Service', weight:'⚖️ Weight Record', pregcheck:'🔍 Pregnancy Check', move:'🌾 Move to Pasture', category:'🏷️ Set Category'};
   document.getElementById('ga-form-title').textContent = titles[action];
 
+  // Populate pasture dropdown after rendering
+  if(action === 'move') {
+    setTimeout(async () => {
+      const sel = document.getElementById('gaf-to-pasture');
+      if(sel) {
+        const {data} = await sb.from('pasture_fields').select('name').eq('ranch_id', currentRanch.id).order('name');
+        sel.innerHTML = '<option value="">— Select Pasture —</option>' +
+          (data||[]).map(p=>`<option value="${p.name}">${p.name}</option>`).join('');
+      }
+    }, 100);
+  }
+
   const forms = {
     health: `
       <div class="form-group"><label>Product / Vaccine</label>
@@ -6764,7 +6780,9 @@ function gaSetAction(action) {
       <div class="form-group"><label>Notes</label><input type="text" id="gaf-notes" placeholder="Observations..."></div>`,
 
     move: `
-      <div class="form-group"><label>Move to Pasture</label><input type="text" id="gaf-to-pasture" placeholder="e.g. River, North, Home"></div>
+      <div class="form-group"><label>Move to Pasture</label>
+        <select id="gaf-to-pasture"><option value="">Loading pastures...</option></select>
+      </div>
       <div class="form-row">
         <div class="form-group"><label>Move Date</label><input type="date" id="gaf-date" value="${today}"></div>
         <div class="form-group"><label>Moved By</label><input type="text" id="gaf-by" placeholder="Name"></div>
@@ -7026,6 +7044,15 @@ function openEditAnimal() {
   document.getElementById('ea-sire').value = a.sire||'';
   document.getElementById('ea-dam').value = a.dam||'';
   document.getElementById('ea-category').value = a.category||'';
+  // Populate pasture dropdown
+  const locSelect = document.getElementById('ea-location');
+  if(locSelect) {
+    const {data: pastures} = await sb.from('pasture_fields').select('name').eq('ranch_id', currentRanch.id).order('name');
+    const currentLoc = a.location||'';
+    locSelect.innerHTML = '<option value="">— Select Pasture —</option>' +
+      (pastures||[]).map(p=>`<option value="${p.name}" ${p.name===currentLoc?'selected':''}>${p.name}</option>`).join('') +
+      (currentLoc && !(pastures||[]).find(p=>p.name===currentLoc) ? `<option value="${currentLoc}" selected>${currentLoc}</option>` : '');
+  }
   document.getElementById('ea-location').value = a.location||'';
   document.getElementById('ea-acquisition').value = a.acquisition||'raised';
   document.getElementById('ea-price').value = a.purchase_price||'';
