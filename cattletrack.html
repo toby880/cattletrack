@@ -3839,7 +3839,7 @@ async function calculateGeneticIntelligence(animalTag) {
   // Load all data in parallel
   const [animalRes, calvingRes, weightsRes, pregRes, measRes, epdsRes, healthRes, etRes] = await Promise.all([
     sb.from('animals').select('*').eq('ranch_id', currentRanch.id).or(`tag.eq.${tag},tag.eq.H2R-${tagBase}`).single(),
-    sb.from('calving_records').select('*').eq('ranch_id', currentRanch.id).or(`dam_tag.eq.${tag},dam_tag.eq.H2R-${tagBase},dam_tag.eq.${tagBase}`),
+    sb.from('calving_records').select('*').eq('ranch_id', currentRanch.id),
     sb.from('weights').select('*').eq('ranch_id', currentRanch.id).or(`animal_tag.eq.${tag},animal_tag.eq.H2R-${tagBase}`),
     sb.from('preg_checks').select('*').eq('ranch_id', currentRanch.id).or(`animal_tag.eq.${tag},animal_tag.eq.H2R-${tagBase}`),
     sb.from('measurements').select('*').eq('ranch_id', currentRanch.id).or(`animal_tag.eq.${tag},animal_tag.eq.H2R-${tagBase}`).order('measure_date', {ascending: false}),
@@ -3863,9 +3863,12 @@ async function calculateGeneticIntelligence(animalTag) {
   const allWW = (herdWeights||[]).map(w=>parseFloat(w.weight_lbs)).filter(w=>w>0);
   const herdAvgWW = allWW.length ? allWW.reduce((a,b)=>a+b,0)/allWW.length : null;
 
-  // Deduplicate calving records
+  // Deduplicate calving records with prefix-aware matching
   const calvingMap = new Map();
-  calving.forEach(c => {
+  (calvingRes.data||[]).filter(c => {
+    const dt = (c.dam_tag||'').trim().replace('H2R-','');
+    return dt === tagBase;
+  }).forEach(c => {
     const key = (c.calf_tag||'').replace('H2R-','');
     if(!calvingMap.has(key)) calvingMap.set(key, c);
   });
