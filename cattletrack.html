@@ -3839,7 +3839,7 @@ async function calculateGeneticIntelligence(animalTag) {
   // Load all data in parallel
   const [animalRes, calvingRes, weightsRes, pregRes, measRes, epdsRes, healthRes, etRes] = await Promise.all([
     sb.from('animals').select('*').eq('ranch_id', currentRanch.id).or(`tag.eq.${tag},tag.eq.H2R-${tagBase}`).single(),
-    sb.from('calving_records').select('*').eq('ranch_id', currentRanch.id).or(`dam_tag.eq.${tag},dam_tag.eq.H2R-${tagBase}`),
+    sb.from('calving_records').select('*').eq('ranch_id', currentRanch.id).or(`dam_tag.eq.${tag},dam_tag.eq.H2R-${tagBase},dam_tag.eq.${tagBase}`),
     sb.from('weights').select('*').eq('ranch_id', currentRanch.id).or(`animal_tag.eq.${tag},animal_tag.eq.H2R-${tagBase}`),
     sb.from('preg_checks').select('*').eq('ranch_id', currentRanch.id).or(`animal_tag.eq.${tag},animal_tag.eq.H2R-${tagBase}`),
     sb.from('measurements').select('*').eq('ranch_id', currentRanch.id).or(`animal_tag.eq.${tag},animal_tag.eq.H2R-${tagBase}`).order('measure_date', {ascending: false}),
@@ -4349,7 +4349,9 @@ async function renderBreedingEvaluation(content, tag) {
 }
 
 function calvingCount(giResult) {
-  return giResult?.scores?.fertility?.why?.find(w=>w.label==='Calving rate')?.detail?.split(' ')[0] || '0';
+  const detail = giResult?.scores?.fertility?.why?.find(w=>w.label==='Calving rate')?.detail || '';
+  const match = detail.match(/^(\d+)/);
+  return match ? match[1] : '0';
 }
 
 async function saveBreedingEvaluation(tag) {
