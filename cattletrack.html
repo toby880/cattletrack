@@ -4344,41 +4344,6 @@ async function saveBreedingEvaluation(tag) {
 
 
 
-  const e = eval_ || {};
-  const checkBox = (field, label) => `
-    <label style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer">
-      <input type="checkbox" id="be-${field}" ${e[field]?'checked':''} style="width:18px;height:18px;accent-color:var(--orange)">
-      <span style="font-size:14px">${label}</span>
-    </label>`;
-
-  const ratingField = (field, label, max=10) => `
-    <div style="padding:10px 0;border-bottom:1px solid var(--border)">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <label style="font-size:13px;font-weight:600">${label}</label>
-        <span id="be-${field}-val" style="font-size:16px;font-weight:800;color:var(--orange)">${e[field]||'—'}</span>
-      </div>
-      <input type="range" id="be-${field}" min="1" max="${max}" value="${e[field]||5}" 
-        oninput="document.getElementById('be-${field}-val').textContent=this.value"
-        style="width:100%;accent-color:var(--orange)">
-      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--gray)">
-        <span>1 - Poor</span><span>${max} - Excellent</span>
-      </div>
-    </div>`;
-
-  const recOptions = ['Keep — Foundation Female','Keep — Commercial Cow','Flush Donor','Commercial Donor','Sell — Open','Sell — Bred','Cull'];
-
-  content.innerHTML = `
-    <div class="card" style="margin-bottom:10px">
-      <div class="card-title">⭐ Breeding Evaluation</div>
-      <div style="font-size:12px;color:var(--gray);margin-bottom:12px">Your assessment of this animal based on years of ownership</div>
-
-      <div style="margin-bottom:12px">
-        <div style="font-size:12px;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:6px">Role / Classification</div>
-        ${checkBox('foundation_female','Foundation Female — keep in herd long term')}
-        ${checkBox('cow_maker','Cow Maker — daughters worth retaining')}
-        ${checkBox('bull_maker','Bull Maker — sons worth developing')}
-
-
 // ── CALVING ────────────────────────────────────────────────────────────────
 function showCalvingTab(tab) {
   document.getElementById('calving-log').style.display = tab==='log'?'block':'none';
