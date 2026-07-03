@@ -123,6 +123,7 @@ tr:hover td{background:var(--bg)}
 .badge-green{background:#E8F8EF;color:#1E8449}
 .badge-red{background:#FDEDEC;color:#C0392B}
 .badge-blue{background:#EBF5FB;color:#1A5276}
+.badge-brown{background:#F5EFE6;color:#6B3A2A}
 .badge-gray{background:var(--bg2);color:var(--gray)}
 
 /* SECTION HEADER */
@@ -3771,15 +3772,32 @@ async function showProfileTab(tab) {
   }
 
   if(tab==='breeding') {
-    const {data: ai} = await sb.from('ai_records').select('*').eq('ranch_id',currentRanch.id).eq('cow_tag',tag);
-    const {data: pc} = await sb.from('preg_checks').select('*').eq('ranch_id',currentRanch.id).eq('animal_tag',tag);
-    const {data: tr} = await sb.from('et_transfers').select('*').eq('ranch_id',currentRanch.id).eq('recipient_tag',tag);
-    const {data: obs} = await sb.from('tasks').select('*').eq('ranch_id',currentRanch.id).eq('animal_tag',tag).eq('title','Observed breeding').order('due_date',{ascending:false});
+    const tagBase = tag.replace('H2R-','');
+    const [aiRes, pcRes, trRes, obsRes, nsRes] = await Promise.all([
+      sb.from('ai_records').select('*').eq('ranch_id',currentRanch.id).or(`cow_tag.eq.${tag},cow_tag.eq.H2R-${tagBase},cow_tag.eq.${tagBase}`),
+      sb.from('preg_checks').select('*').eq('ranch_id',currentRanch.id).or(`animal_tag.eq.${tag},animal_tag.eq.H2R-${tagBase},animal_tag.eq.${tagBase}`),
+      sb.from('et_transfers').select('*').eq('ranch_id',currentRanch.id).or(`recipient_tag.eq.${tag},recipient_tag.eq.H2R-${tagBase},recipient_tag.eq.${tagBase}`),
+      sb.from('tasks').select('*').eq('ranch_id',currentRanch.id).or(`animal_tag.eq.${tag},animal_tag.eq.H2R-${tagBase}`).eq('title','Observed breeding').order('due_date',{ascending:false}),
+      sb.from('natural_service').select('*').eq('ranch_id',currentRanch.id),
+    ]);
+
+    // Match natural service records where this cow's location matches the pasture
+    const animal = (cache.get('animals')||[]).find(a=>a.tag===tag||a.tag==='H2R-'+tagBase);
+    const animalLocation = (animal?.location||'').toLowerCase();
+    const nsRecords = (nsRes.data||[]).filter(ns => {
+      const nsPasture = (ns.pasture||'').toLowerCase();
+      const turnout = ns.turnout_date;
+      const pull = ns.pull_date || new Date().toISOString().split('T')[0];
+      return nsPasture && animalLocation && nsPasture === animalLocation &&
+             turnout && tag; // cow was in this pasture during turnout
+    });
+
     const all = [
-      ...(ai||[]).map(r=>({date:r.ai_date,type:'AI',detail:`${r.sire} · ${r.sync_protocol}`,color:'badge-blue'})),
-      ...(pc||[]).map(r=>({date:r.check_date,type:'Preg Check',detail:`Result: ${r.result}${r.expected_calving?' · Calves '+r.expected_calving:''}`,color:r.result==='pregnant'?'badge-green':'badge-red'})),
-      ...(tr||[]).map(r=>({date:r.transfer_date,type:'ET Transfer',detail:`From: ${r.donor_tag||'—'} · ${r.outcome||'pending'}`,color:'badge-gray'})),
-      ...(obs||[]).map(r=>({date:r.due_date,type:'Observed',detail:r.notes||'Observed breeding',color:'badge-orange'})),
+      ...(aiRes.data||[]).map(r=>({date:r.ai_date,type:'AI',detail:`${r.sire||'—'}${r.sync_protocol&&r.sync_protocol!=='null'?' · '+r.sync_protocol:''}`,color:'badge-blue'})),
+      ...(pcRes.data||[]).map(r=>({date:r.check_date,type:'Preg Check',detail:`Result: ${r.result}${r.expected_calving?' · Calves '+r.expected_calving:''}`,color:r.result==='pregnant'?'badge-green':'badge-red'})),
+      ...(trRes.data||[]).map(r=>({date:r.transfer_date,type:'ET Transfer',detail:`Donor: ${r.donor_tag||'—'} · Straw ${r.straw_number?'#'+r.straw_number:'—'} · ${r.outcome||'pending'}`,color:'badge-gray'})),
+      ...(obsRes.data||[]).map(r=>({date:r.due_date,type:'Observed',detail:r.notes||'Observed breeding',color:'badge-orange'})),
+      ...nsRecords.map(r=>({date:r.turnout_date,type:'Natural Service',detail:`Bull: ${r.bull_tag||'—'} · ${r.pasture||'—'}${r.pull_date?' · Pulled '+r.pull_date:''}`,color:'badge-brown'})),
     ].sort((a,b)=>new Date(b.date)-new Date(a.date));
 
     const today = new Date().toISOString().split('T')[0];
@@ -6701,13 +6719,14 @@ function gaSetAction(action) {
 
   // Populate pasture dropdown after rendering
   if(action === 'move') {
-    setTimeout(async () => {
-      const sel = document.getElementById('gaf-to-pasture');
-      if(sel) {
-        const {data} = await sb.from('pasture_fields').select('name').eq('ranch_id', currentRanch.id).order('name');
-        sel.innerHTML = '<option value="">— Select Pasture —</option>' +
-          (data||[]).map(p=>`<option value="${p.name}">${p.name}</option>`).join('');
-      }
+    setTimeout(function() {
+      sb.from('pasture_fields').select('name').eq('ranch_id', currentRanch.id).order('name').then(({data}) => {
+        const sel = document.getElementById('gaf-to-pasture');
+        if(sel) {
+          sel.innerHTML = '<option value="">— Select Pasture —</option>' +
+            (data||[]).map(p=>`<option value="${p.name}">${p.name}</option>`).join('');
+        }
+      });
     }, 100);
   }
 
@@ -7046,12 +7065,13 @@ function openEditAnimal() {
   document.getElementById('ea-category').value = a.category||'';
   // Populate pasture dropdown
   const locSelect = document.getElementById('ea-location');
+  const currentLoc = a.location||'';
   if(locSelect) {
-    const {data: pastures} = await sb.from('pasture_fields').select('name').eq('ranch_id', currentRanch.id).order('name');
-    const currentLoc = a.location||'';
-    locSelect.innerHTML = '<option value="">— Select Pasture —</option>' +
-      (pastures||[]).map(p=>`<option value="${p.name}" ${p.name===currentLoc?'selected':''}>${p.name}</option>`).join('') +
-      (currentLoc && !(pastures||[]).find(p=>p.name===currentLoc) ? `<option value="${currentLoc}" selected>${currentLoc}</option>` : '');
+    sb.from('pasture_fields').select('name').eq('ranch_id', currentRanch.id).order('name').then(({data: pastures}) => {
+      locSelect.innerHTML = '<option value="">— Select Pasture —</option>' +
+        (pastures||[]).map(p=>`<option value="${p.name}" ${p.name===currentLoc?'selected':''}>${p.name}</option>`).join('') +
+        (currentLoc && !(pastures||[]).find(p=>p.name===currentLoc) ? `<option value="${currentLoc}" selected>${currentLoc}</option>` : '');
+    });
   }
   document.getElementById('ea-location').value = a.location||'';
   document.getElementById('ea-acquisition').value = a.acquisition||'raised';
