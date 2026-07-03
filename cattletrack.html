@@ -4191,6 +4191,9 @@ async function renderBreedingEvaluation(content, tag) {
     'Moderate':'var(--blue)','High':'var(--green)'
   }[confidence] || 'var(--gray)';
 
+  const programFit = e.cow_type_score || null;
+  const currentRec = e.recommendation || null;
+
   const checkBox = (field, label, sublabel='') => `
     <label style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer">
       <input type="checkbox" id="be-${field}" ${e[field]?'checked':''} style="width:18px;height:18px;accent-color:var(--orange);flex-shrink:0">
@@ -4231,21 +4234,43 @@ async function renderBreedingEvaluation(content, tag) {
   ];
 
   content.innerHTML = `
-    <div class="card" style="margin-bottom:10px">
-      <div class="card-title">⭐ Breeding Evaluation</div>
-      <div style="font-size:12px;color:var(--gray);margin-bottom:14px">Your assessment based on years of ownership — combined with objective data in Genetic Intelligence</div>
+    <!-- SUMMARY CARD -->
+    <div style="background:linear-gradient(135deg,var(--brown) 0%,#8B4513 100%);border-radius:14px;padding:16px;margin-bottom:12px;color:white">
+      <div style="font-size:11px;opacity:0.8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Breeding Evaluation — ${tag}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+        <div style="text-align:center">
+          <div style="font-size:22px;font-weight:800">${programFit ? programFit+'/10' : '—'}</div>
+          <div style="font-size:10px;opacity:0.8;margin-top:2px">Program Fit</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:16px">${confidenceStars}</div>
+          <div style="font-size:10px;opacity:0.8;margin-top:2px">Confidence</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:13px;font-weight:700;line-height:1.2">${currentRec || '—'}</div>
+          <div style="font-size:10px;opacity:0.8;margin-top:2px">Recommendation</div>
+        </div>
+      </div>
+    </div>
 
-      <!-- ROLE / CLASSIFICATION -->
+    <div class="card" style="margin-bottom:10px">
+
+      <!-- ROLE -->
       <div style="margin-bottom:14px">
-        <div style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">Role & Classification</div>
+        <div style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Role</div>
         ${checkBox('foundation_female','Foundation Female','Keep in herd long term — builds the family')}
         ${checkBox('cow_maker','Cow Maker','Daughters consistently worth retaining')}
         ${checkBox('bull_maker','Bull Maker','Sons worth developing as herd sires')}
-        ${checkBox('flush_donor','Flush Candidate','Elite ET donor — embryo program priority')}
+        ${checkBox('flush_donor','Flush Candidate','Has donor potential — evaluate for ET program')}
         ${checkBox('elite_donor','Elite Donor','Top-tier flush candidate — highest genetic value')}
         ${checkBox('commercial_donor','Commercial ET Donor','Good ET recipient cow')}
         ${checkBox('family_builder','Family Builder','Establishing a strong maternal line')}
         ${checkBox('embryo_program','Embryo Program','Active participant in ET program')}
+      </div>
+
+      <!-- TRAITS -->
+      <div style="margin-bottom:14px">
+        <div style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Traits</div>
         ${checkBox('easy_fleshing','Easy Fleshing','Maintains condition without extra feed')}
       </div>
 
@@ -4253,7 +4278,7 @@ async function renderBreedingEvaluation(content, tag) {
       <div style="margin-bottom:14px">
         <div style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">Breeder Scores</div>
         <div style="font-size:11px;color:var(--gray);margin-bottom:8px">Your conclusions after years of observation — not individual measurements</div>
-        ${ratingField('cow_type_score','Cow Type','1 = outside breeding goals · 10 = exactly the kind I\'m building')}
+        ${ratingField('cow_type_score','Program Fit','1 = outside breeding goals · 10 = exactly the kind I\'m building')}
         ${ratingField('maternal_score','Maternal Cow Quality','Raises calves well, breeds back, mothers up, good disposition')}
         ${ratingField('structural_function','Structural Function','Broader opinion on soundness beyond individual foot scores')}
         ${ratingField('disposition_score','Disposition / Temperament','Behavior in chute, pasture, and with calf')}
@@ -4264,30 +4289,46 @@ async function renderBreedingEvaluation(content, tag) {
         <div style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Recommendation</div>
         <select id="be-recommendation" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit">
           <option value="">— Select recommendation —</option>
-          ${recOptions.map(r=>`<option value="${r}" ${e.recommendation===r?'selected':''}>${r}</option>`).join('')}
+          <optgroup label="Retain">
+            <option value="Continue in Herd" ${e.recommendation==='Continue in Herd'?'selected':''}>Continue in Herd</option>
+            <option value="Retain Daughters" ${e.recommendation==='Retain Daughters'?'selected':''}>Retain Daughters</option>
+            <option value="Develop Sons" ${e.recommendation==='Develop Sons'?'selected':''}>Develop Sons</option>
+          </optgroup>
+          <optgroup label="Breeding">
+            <option value="Breed to Maternal" ${e.recommendation==='Breed to Maternal'?'selected':''}>Breed to Maternal</option>
+            <option value="Breed to Terminal" ${e.recommendation==='Breed to Terminal'?'selected':''}>Breed to Terminal</option>
+            <option value="AI Only" ${e.recommendation==='AI Only'?'selected':''}>AI Only</option>
+            <option value="Continue Natural Service" ${e.recommendation==='Continue Natural Service'?'selected':''}>Continue Natural Service</option>
+          </optgroup>
+          <optgroup label="Embryo Program">
+            <option value="Flush This Year" ${e.recommendation==='Flush This Year'?'selected':''}>Flush This Year</option>
+            <option value="Flush Next Season" ${e.recommendation==='Flush Next Season'?'selected':''}>Flush Next Season</option>
+            <option value="Embryo Program Only" ${e.recommendation==='Embryo Program Only'?'selected':''}>Embryo Program Only</option>
+          </optgroup>
+          <optgroup label="Monitor">
+            <option value="Monitor" ${e.recommendation==='Monitor'?'selected':''}>Monitor</option>
+          </optgroup>
+          <optgroup label="Remove">
+            <option value="Sell After Weaning" ${e.recommendation==='Sell After Weaning'?'selected':''}>Sell After Weaning</option>
+            <option value="Cull" ${e.recommendation==='Cull'?'selected':''}>Cull</option>
+          </optgroup>
         </select>
       </div>
 
-      <!-- CONFIDENCE -->
+      <!-- CONFIDENCE LEVEL -->
       <div style="background:var(--bg2);border-radius:10px;padding:14px;margin-bottom:14px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <div style="font-size:12px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px">Data Confidence</div>
+          <div style="font-size:12px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px">Confidence Level</div>
           <div style="display:flex;align-items:center;gap:8px">
             <span style="font-size:16px">${confidenceStars}</span>
             <span style="font-size:13px;font-weight:700;color:${confidenceColor}">${confidence}</span>
           </div>
         </div>
         <div style="font-size:12px;color:var(--gray)">
-          Based on ${dataPoints} data signals.
-          ${giResult?.scores ? `
-            ${calvingCount(giResult)} calves on record ·
-            ${giResult.dataPoints >= 4 ? 'Multiple seasons evaluated' : 'Limited seasons evaluated'}
-          ` : ''}
+          Based on ${dataPoints} data signals · ${calvingCount(giResult)} calves on record ·
+          ${dataPoints >= 4 ? 'Multiple seasons evaluated' : 'Limited seasons evaluated'}
         </div>
-        ${confidenceDetail.length ? `
-          <div style="margin-top:8px">
-            ${confidenceDetail.map(d=>`<div style="font-size:11px;color:var(--orange)">⚠ ${d}</div>`).join('')}
-          </div>` : ''}
+        ${confidenceDetail.length ? `<div style="margin-top:8px">${confidenceDetail.map(d=>`<div style="font-size:11px;color:var(--orange)">⚠ ${d}</div>`).join('')}</div>` : ''}
       </div>
 
       <!-- NOTES -->
