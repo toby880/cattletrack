@@ -4377,39 +4377,6 @@ async function saveBreedingEvaluation(tag) {
         ${checkBox('foundation_female','Foundation Female — keep in herd long term')}
         ${checkBox('cow_maker','Cow Maker — daughters worth retaining')}
         ${checkBox('bull_maker','Bull Maker — sons worth developing')}
-        ${checkBox('flush_donor','Flush Donor — ET program candidate')}
-        ${checkBox('commercial_donor','Commercial Donor — good ET recipient')}
-        ${checkBox('easy_fleshing','Easy Fleshing — maintains condition well')}
-      </div>
-
-      <div style="margin-bottom:12px">
-        <div style="font-size:12px;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:6px">Subjective Scores (1-10)</div>
-        ${ratingField('maternal_score','Maternal Ability')}
-        ${ratingField('feet_score','Feet & Legs')}
-        ${ratingField('udder_score_eval','Udder Quality')}
-        ${ratingField('disposition_score','Disposition / Temperament')}
-        ${ratingField('overall_score','Overall Score')}
-      </div>
-
-      <div style="margin-bottom:12px">
-        <div style="font-size:12px;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom-6px">Recommendation</div>
-        <select id="be-recommendation" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:14px;margin-top:6px;font-family:inherit">
-          <option value="">— Select recommendation —</option>
-          ${recOptions.map(r=>`<option value="${r}" ${e.recommendation===r?'selected':''}>${r}</option>`).join('')}
-        </select>
-      </div>
-
-      <div style="margin-bottom:12px">
-        <div style="font-size:12px;font-weight:700;color:var(--gray);text-transform:uppercase;margin-bottom:6px">Comments</div>
-        <textarea id="be-comments" placeholder="Notes on this animal's strengths, weaknesses, history..." 
-          style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:13px;min-height:80px;font-family:inherit;resize:vertical">${e.comments||''}</textarea>
-      </div>
-
-      ${e.updated_at ? `<div style="font-size:11px;color:var(--gray);margin-bottom:10px">Last updated: ${new Date(e.updated_at).toLocaleDateString()}</div>` : ''}
-
-      <button class="btn btn-primary" style="width:100%" onclick="saveBreedingEvaluation('${tag}')">Save Evaluation</button>
-    </div>`;
-}
 
 
 // ── CALVING ────────────────────────────────────────────────────────────────
