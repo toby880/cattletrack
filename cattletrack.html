@@ -3586,8 +3586,21 @@ async function showProfileTab(tab) {
         </div>
         <div class="form-row">
           <div class="form-group"><label>BCS (1-9)</label><input type="number" id="meas-bcs" min="1" max="9" step="0.5" placeholder="—" inputmode="decimal"></div>
-          <div class="form-group"><label>Frame Score</label><input type="number" id="meas-frame" min="1" max="9" step="0.1" placeholder="—" inputmode="decimal"></div>
+          <div class="form-group"><label>Frame Score (1-9)</label><input type="number" id="meas-frame" min="1" max="9" step="0.1" placeholder="—" inputmode="decimal"></div>
         </div>
+        <div class="form-row">
+          <div class="form-group"><label>Body Capacity (1-9)</label><input type="number" id="meas-body-cap" min="1" max="9" placeholder="—" inputmode="numeric"></div>
+          <div class="form-group"><label>Muscle Expression (1-9)</label><input type="number" id="meas-muscle" min="1" max="9" placeholder="—" inputmode="numeric"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Foot Angle (1-9)</label><input type="number" id="meas-foot-angle" min="1" max="9" placeholder="—" inputmode="numeric"></div>
+          <div class="form-group"><label>Heel Depth (1-9)</label><input type="number" id="meas-heel" min="1" max="9" placeholder="—" inputmode="numeric"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Claw Set (1-9)</label><input type="number" id="meas-claw" min="1" max="9" placeholder="—" inputmode="numeric"></div>
+          <div class="form-group"><label>Disposition (1-5)</label><input type="number" id="meas-disposition" min="1" max="5" placeholder="—" inputmode="numeric"></div>
+        </div>
+        <div class="form-group"><label>Structural Soundness (1-9)</label><input type="number" id="meas-structural" min="1" max="9" placeholder="—" inputmode="numeric"></div>
         <div class="form-group"><label>Notes</label><input type="text" id="meas-notes" placeholder="Any observations..."></div>
         <button class="btn btn-primary" onclick="saveMeasurement('${tag}')">Save Measurement</button>
       </div>`;
@@ -6361,21 +6374,36 @@ async function saveMeasurement(tag) {
   const hair = document.getElementById('meas-hair')?.value;
   const bcs = document.getElementById('meas-bcs')?.value;
   const frame = document.getElementById('meas-frame')?.value;
+  const bodyCap = document.getElementById('meas-body-cap')?.value;
+  const muscle = document.getElementById('meas-muscle')?.value;
+  const footAngle = document.getElementById('meas-foot-angle')?.value;
+  const heel = document.getElementById('meas-heel')?.value;
+  const claw = document.getElementById('meas-claw')?.value;
+  const disposition = document.getElementById('meas-disposition')?.value;
+  const structural = document.getElementById('meas-structural')?.value;
   const notes = document.getElementById('meas-notes')?.value?.trim();
   if(!date){alert('Date is required.');return;}
-  if(!bag&&!teat&&!hair&&!bcs&&!frame){alert('Enter at least one measurement.');return;}
+  const hasData = bag||teat||hair||bcs||frame||bodyCap||muscle||footAngle||heel||claw||disposition||structural;
+  if(!hasData){alert('Enter at least one measurement.');return;}
   const {error}=await dbInsert('measurements',{
-    animal_tag:tag,ranch_id:currentRanch.id,
+    animal_tag:tag, ranch_id:currentRanch.id,
     measure_date:date,
     bag_score:bag?parseInt(bag):null,
     teat_score:teat?parseInt(teat):null,
     hair_shed_score:hair?parseInt(hair):null,
     bcs:bcs?parseFloat(bcs):null,
     frame_score:frame?parseFloat(frame):null,
+    body_capacity:bodyCap?parseInt(bodyCap):null,
+    muscle_expression:muscle?parseInt(muscle):null,
+    foot_angle:footAngle?parseInt(footAngle):null,
+    heel_depth:heel?parseInt(heel):null,
+    claw_set:claw?parseInt(claw):null,
+    disposition:disposition?parseInt(disposition):null,
+    structural_soundness:structural?parseInt(structural):null,
     notes:notes||null,
   });
   if(error){alert('Error: '+error.message);return;}
-  alert('\u2705 Measurement saved for '+tag);
+  alert('✅ Measurement saved for '+tag);
   showProfileTab('measurements');
 }
 
