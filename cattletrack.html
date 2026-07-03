@@ -1027,6 +1027,97 @@ tr:hover td{background:var(--bg)}
         <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
       </div>
 
+      <!-- BREEDING PHILOSOPHY -->
+      <div class="card" style="margin-bottom:10px" id="breeding-philosophy-card">
+        <div class="card-title">🧬 Breeding Philosophy <span style="font-size:11px;font-weight:400;color:var(--orange);margin-left:6px">Elite</span></div>
+        <div style="font-size:13px;color:var(--gray);margin-bottom:14px">Define your breeding program goals. CattleTrack uses these to calculate personalized Genetic Intelligence scores for your herd.</div>
+
+        <!-- Breed -->
+        <div class="form-group"><label>Primary Breed</label>
+          <select id="bp-breed">
+            <option value="red_angus">Red Angus</option>
+            <option value="angus">Angus</option>
+            <option value="hereford">Hereford</option>
+            <option value="simmental">Simmental</option>
+            <option value="beefmaster">Beefmaster</option>
+            <option value="charolais">Charolais</option>
+            <option value="gelbvieh">Gelbvieh</option>
+            <option value="other">Other / Crossbred</option>
+          </select>
+        </div>
+
+        <!-- Breeding Objective -->
+        <div class="form-group"><label>Primary Breeding Objective</label>
+          <select id="bp-objective">
+            <option value="maternal">Maternal — Replacement females, longevity, moderate frame</option>
+            <option value="balanced">Balanced — Equal emphasis on maternal and growth</option>
+            <option value="seedstock">Seedstock — Genetic improvement, EPD accuracy</option>
+            <option value="commercial">Commercial Replacement — Replacement heifer production</option>
+            <option value="terminal">Terminal — Maximum growth and carcass merit</option>
+            <option value="carcass">Carcass — Marbling and quality grade focus</option>
+          </select>
+        </div>
+
+        <!-- Target Mature Weight -->
+        <div class="form-row">
+          <div class="form-group"><label>Target Mature Cow Weight (lb)</label>
+            <input type="number" id="bp-mature-weight" placeholder="e.g. 1300" inputmode="numeric">
+          </div>
+          <div class="form-group"><label>Target Milk Level</label>
+            <select id="bp-milk">
+              <option value="low">Low (&lt;20)</option>
+              <option value="moderate" selected>Moderate (20-28)</option>
+              <option value="high">High (&gt;28)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Replacement Strategy -->
+        <div class="form-group"><label>Replacement Strategy</label>
+          <select id="bp-replacement">
+            <option value="top25">Retain top 25% of heifers</option>
+            <option value="top33">Retain top 33% of heifers</option>
+            <option value="top50">Retain top 50% of heifers</option>
+            <option value="all">Retain all suitable heifers</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+
+        <!-- Score Weights -->
+        <div style="margin-top:16px;margin-bottom:8px">
+          <div style="font-size:12px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Genetic Intelligence Score Weights</div>
+          <div style="font-size:12px;color:var(--gray);margin-bottom:12px">Adjust sliders to reflect your breeding priorities. Must total 100%. Fertility is locked at minimum 20%.</div>
+
+          ${[
+            ['bp-w-fertility','Fertility ⭐','fertility','var(--green)',20],
+            ['bp-w-production','Production','production','var(--orange)',null],
+            ['bp-w-maternal','Maternal','maternal','var(--blue)',null],
+            ['bp-w-structural','Structural','structural','#8B5CF6',null],
+            ['bp-w-genetic','Genetic Potential','genetic','#EC4899',null],
+          ].map(([id,label,key,color,min])=>`
+          <div style="margin-bottom:12px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+              <label style="font-size:13px;font-weight:600">${label}</label>
+              <div style="display:flex;align-items:center;gap:6px">
+                <span id="${id}-val" style="font-size:16px;font-weight:800;color:${color}">20</span>
+                <span style="font-size:12px;color:var(--gray)">%</span>
+              </div>
+            </div>
+            <input type="range" id="${id}" min="${min||0}" max="60" value="20" 
+              oninput="updateWeightSliders('${id}')"
+              style="width:100%;accent-color:${color}">
+          </div>`).join('')}
+
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--bg2);border-radius:8px">
+            <span style="font-size:13px;font-weight:600">Total</span>
+            <span id="bp-weight-total" style="font-size:16px;font-weight:800;color:var(--green)">100%</span>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" style="margin-top:12px;width:100%" onclick="saveBreedingPhilosophy()">Save Breeding Philosophy</button>
+        <div id="bp-save-status" style="font-size:12px;color:var(--green);margin-top:8px;text-align:center"></div>
+      </div>
+
       <!-- TEAM MANAGEMENT -->
       <div class="card" style="margin-bottom:10px">
         <div class="card-title">Team Access</div>
@@ -2297,7 +2388,7 @@ function showPage(name) {
   if(name==='markets') showMarketsTab('prices');
   if(name==='reports') { setTimeout(()=>{ showReportsTab('builder'); updateReportColumns(); }, 50); }
   if(name==='measurements') { loadMeasurements(); showChuteTab('session'); }
-  if(name==='settings') loadSettings();
+  if(name==='settings') { loadSettings(); setTimeout(loadBreedingPhilosophy, 100); }
 }
 
 // ── INSIGHTS ───────────────────────────────────────────────────────────────
@@ -9954,6 +10045,77 @@ async function saveSettings() {
   document.getElementById('header-ranch-name').textContent=currentRanch.name;
   alert('✅ Settings saved');
 }
+
+function updateWeightSliders(changedId) {
+  // Update display value
+  const val = parseInt(document.getElementById(changedId)?.value)||0;
+  document.getElementById(changedId+'-val').textContent = val;
+
+  // Calculate total
+  const ids = ['bp-w-fertility','bp-w-production','bp-w-maternal','bp-w-structural','bp-w-genetic'];
+  const total = ids.reduce((s,id)=>s+(parseInt(document.getElementById(id)?.value)||0),0);
+  const totalEl = document.getElementById('bp-weight-total');
+  if(totalEl) {
+    totalEl.textContent = total+'%';
+    totalEl.style.color = total===100 ? 'var(--green)' : total>100 ? 'var(--red)' : 'var(--orange)';
+  }
+}
+
+async function saveBreedingPhilosophy() {
+  const ids = ['bp-w-fertility','bp-w-production','bp-w-maternal','bp-w-structural','bp-w-genetic'];
+  const total = ids.reduce((s,id)=>s+(parseInt(document.getElementById(id)?.value)||0),0);
+  if(total !== 100) { alert(`Weights must total 100% (currently ${total}%)`); return; }
+
+  const fertility = parseInt(document.getElementById('bp-w-fertility')?.value)||20;
+  if(fertility < 20) { alert('Fertility weight cannot be set below 20%.'); return; }
+
+  const philosophy = {
+    breed: document.getElementById('bp-breed')?.value,
+    objective: document.getElementById('bp-objective')?.value,
+    mature_weight_target: parseInt(document.getElementById('bp-mature-weight')?.value)||null,
+    milk_level: document.getElementById('bp-milk')?.value,
+    replacement_strategy: document.getElementById('bp-replacement')?.value,
+    w_fertility: parseInt(document.getElementById('bp-w-fertility')?.value)||20,
+    w_production: parseInt(document.getElementById('bp-w-production')?.value)||20,
+    w_maternal: parseInt(document.getElementById('bp-w-maternal')?.value)||20,
+    w_structural: parseInt(document.getElementById('bp-w-structural')?.value)||20,
+    w_genetic: parseInt(document.getElementById('bp-w-genetic')?.value)||20,
+  };
+
+  const {error} = await sb.from('ranches').update({
+    breeding_philosophy: philosophy
+  }).eq('id', currentRanch.id);
+
+  if(error) { alert('Error: '+error.message); return; }
+  currentRanch.breeding_philosophy = philosophy;
+  cache.set('currentRanch', currentRanch);
+  const status = document.getElementById('bp-save-status');
+  if(status) { status.textContent = '✅ Breeding philosophy saved'; setTimeout(()=>status.textContent='',3000); }
+}
+
+function loadBreedingPhilosophy() {
+  const p = currentRanch.breeding_philosophy;
+  if(!p) {
+    // Set defaults based on Red Angus maternal program
+    const defaults = {w_fertility:35,w_production:30,w_maternal:15,w_structural:10,w_genetic:10};
+    ['fertility','production','maternal','structural','genetic'].forEach(k=>{
+      const el = document.getElementById(`bp-w-${k}`);
+      if(el) { el.value = defaults[`w_${k}`]||20; updateWeightSliders(`bp-w-${k}`); }
+    });
+    return;
+  }
+  if(p.breed) document.getElementById('bp-breed').value = p.breed;
+  if(p.objective) document.getElementById('bp-objective').value = p.objective;
+  if(p.mature_weight_target) document.getElementById('bp-mature-weight').value = p.mature_weight_target;
+  if(p.milk_level) document.getElementById('bp-milk').value = p.milk_level;
+  if(p.replacement_strategy) document.getElementById('bp-replacement').value = p.replacement_strategy;
+  ['fertility','production','maternal','structural','genetic'].forEach(k=>{
+    const el = document.getElementById(`bp-w-${k}`);
+    if(el && p[`w_${k}`]) { el.value = p[`w_${k}`]; updateWeightSliders(`bp-w-${k}`); }
+  });
+}
+
+
 
 
 // ── BATCH MEASUREMENTS ─────────────────────────────────────────────────────
