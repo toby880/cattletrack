@@ -3778,10 +3778,530 @@ async function showProfileTab(tab) {
   }
 }
 
+// ── GENETIC INTELLIGENCE SCORING ENGINE ───────────────────────────────────
+// Phase 3: Five objective scores + GI Score + Why? breakdown
+
+async function calculateGeneticIntelligence(animalTag) {
+  const tag = (animalTag||'').trim();
+  const tagBase = tag.replace('H2R-','');
+  const p = currentRanch.breeding_philosophy || {};
+
+  // Weights (default to balanced if not set)
+  const weights = {
+    fertility:  p.w_fertility  || 35,
+    production: p.w_production || 30,
+    maternal:   p.w_maternal   || 15,
+    structural: p.w_structural || 10,
+    genetic:    p.w_genetic    || 10,
+  };
+
+  // Load all data in parallel
+  const [animalRes, calvingRes, weightsRes, pregRes, measRes, epdsRes, healthRes, etRes] = await Promise.all([
+    sb.from('animals').select('*').eq('ranch_id', currentRanch.id).or(`tag.eq.${tag},tag.eq.H2R-${tagBase}`).single(),
+    sb.from('calving_records').select('*').eq('ranch_id', currentRanch.id).or(`dam_tag.eq.${tag},dam_tag.eq.H2R-${tagBase}`),
+    sb.from('weights').select('*').eq('ranch_id', currentRanch.id).or(`animal_tag.eq.${tag},animal_tag.eq.H2R-${tagBase}`),
+    sb.from('preg_checks').select('*').eq('ranch_id', currentRanch.id).or(`animal_tag.eq.${tag},animal_tag.eq.H2R-${tagBase}`),
+    sb.from('measurements').select('*').eq('ranch_id', currentRanch.id).or(`animal_tag.eq.${tag},animal_tag.eq.H2R-${tagBase}`).order('measure_date', {ascending: false}),
+    sb.from('epds').select('*').eq('ranch_id', currentRanch.id).or(`animal_tag.eq.${tag},animal_tag.eq.H2R-${tagBase}`).single(),
+    sb.from('health_events').select('*').eq('ranch_id', currentRanch.id).or(`animal_tag.eq.${tag},animal_tag.eq.H2R-${tagBase}`),
+    sb.from('et_flushes').select('*').eq('ranch_id', currentRanch.id).or(`donor_tag.eq.${tag},donor_tag.eq.H2R-${tagBase}`),
+  ]);
+
+  const animal = animalRes.data;
+  const calving = calvingRes.data || [];
+  const allWeights = weightsRes.data || [];
+  const pregChecks = pregRes.data || [];
+  const measurements = measRes.data || [];
+  const epds = epdsRes.data || {};
+  const health = healthRes.data || [];
+  const etFlushes = etRes.data || [];
+  const latest = measurements[0] || {};
+
+  // Herd averages for ratio calculations
+  const {data: herdWeights} = await sb.from('weights').select('weight_lbs,weight_type').eq('ranch_id', currentRanch.id).eq('weight_type','weaning');
+  const allWW = (herdWeights||[]).map(w=>parseFloat(w.weight_lbs)).filter(w=>w>0);
+  const herdAvgWW = allWW.length ? allWW.reduce((a,b)=>a+b,0)/allWW.length : null;
+
+  // Deduplicate calving records
+  const calvingMap = new Map();
+  calving.forEach(c => {
+    const key = (c.calf_tag||'').replace('H2R-','');
+    if(!calvingMap.has(key)) calvingMap.set(key, c);
+  });
+  const calvingHistory = Array.from(calvingMap.values());
+
+  const age = animal?.dob ? (new Date()-new Date(animal.dob))/(365.25*24*3600*1000) : null;
+  const totalCalves = calvingHistory.length;
+
+  const getSeason = date => {
+    if(!date) return null;
+    const m = new Date(date).getMonth()+1;
+    if(m>=1&&m<=5) return 'spring';
+    if(m>=8&&m<=11) return 'fall';
+    return 'other';
+  };
+  const getYear = date => date ? new Date(date).getFullYear() : null;
+
+  // ── 1. FERTILITY SCORE (0-100) ─────────────────────────────────────────
+  const fertilityWhy = [];
+  let fertilityScore = 50; // baseline
+
+  // Calves per productive year
+  if(age && age > 2) {
+    const productiveYears = Math.max(1, age - 2);
+    const expectedCalves = Math.floor(productiveYears);
+    const actualCalves = totalCalves;
+    const calvingRate = Math.min(1, actualCalves / expectedCalves);
+    const calvingPts = Math.round(calvingRate * 40);
+    fertilityScore = calvingPts;
+    fertilityWhy.push({label:'Calving rate', pts:calvingPts, max:40, detail:`${actualCalves} calves / ${expectedCalves} expected years`});
+  }
+
+  // Preg check history
+  const opens = pregChecks.filter(p=>p.result==='open').length;
+  const pregTotal = pregChecks.length;
+  if(pregTotal > 0) {
+    const concRate = (pregTotal - opens) / pregTotal;
+    const pregPts = Math.round(concRate * 25);
+    fertilityScore += pregPts;
+    fertilityWhy.push({label:'Pregnancy rate', pts:pregPts, max:25, detail:`${pregTotal-opens}/${pregTotal} bred`});
+  } else {
+    fertilityScore += 15; // neutral if no data
+    fertilityWhy.push({label:'Pregnancy rate', pts:15, max:25, detail:'No preg check records'});
+  }
+
+  // Calving season consistency
+  const seasons = calvingHistory.map(c=>getSeason(c.birth_date)).filter(Boolean);
+  const springCount = seasons.filter(s=>s==='spring').length;
+  const fallCount = seasons.filter(s=>s==='fall').length;
+  const otherCount = seasons.filter(s=>s==='other').length;
+  let seasonPts = 20;
+  if(otherCount > 0) { seasonPts -= otherCount * 5; }
+  if(springCount > 0 && fallCount > 0) { seasonPts -= 10; }
+  seasonPts = Math.max(0, seasonPts);
+  fertilityScore += seasonPts;
+  fertilityWhy.push({label:'Calving consistency', pts:seasonPts, max:20, detail: otherCount>0?`${otherCount} off-season calves`:springCount>0&&fallCount>0?'Mixed seasons':'Consistent'});
+
+  // Longevity bonus
+  if(age && age >= 8 && totalCalves >= age-2) {
+    const longevityPts = Math.min(15, Math.floor((age-7)*2));
+    fertilityScore += longevityPts;
+    fertilityWhy.push({label:'Longevity bonus', pts:longevityPts, max:15, detail:`${age.toFixed(0)} yrs, still productive`});
+  }
+
+  fertilityScore = Math.max(0, Math.min(100, Math.round(fertilityScore)));
+
+  // ── 2. PRODUCTION SCORE (0-100) ────────────────────────────────────────
+  const productionWhy = [];
+  let productionScore = 0;
+
+  // Weaning weight ratio
+  const weaningWts = allWeights.filter(w=>w.weight_type==='weaning').map(w=>parseFloat(w.weight_lbs)).filter(w=>w>0);
+  if(weaningWts.length && herdAvgWW) {
+    const avgWW = weaningWts.reduce((a,b)=>a+b,0)/weaningWts.length;
+    const ratio = avgWW / herdAvgWW;
+    const wwPts = Math.min(30, Math.max(0, Math.round(ratio * 25 - 5)));
+    productionScore += wwPts;
+    productionWhy.push({label:'Weaning ratio', pts:wwPts, max:30, detail:`${(ratio*100).toFixed(0)}% of herd avg (${avgWW.toFixed(0)} lb)`});
+  } else {
+    productionScore += 15;
+    productionWhy.push({label:'Weaning ratio', pts:15, max:30, detail:'No weaning weight data'});
+  }
+
+  // Consistency (% of calves above herd avg)
+  if(weaningWts.length >= 2 && herdAvgWW) {
+    const aboveAvg = weaningWts.filter(w=>w>=herdAvgWW).length;
+    const consistencyRate = aboveAvg / weaningWts.length;
+    const consPts = Math.round(consistencyRate * 25);
+    productionScore += consPts;
+    productionWhy.push({label:'Consistency', pts:consPts, max:25, detail:`${aboveAvg}/${weaningWts.length} calves above herd avg`});
+  } else {
+    productionScore += 12;
+    productionWhy.push({label:'Consistency', pts:12, max:25, detail:'Insufficient data'});
+  }
+
+  // Total calves produced
+  const calfPts = Math.min(20, totalCalves * 2);
+  productionScore += calfPts;
+  productionWhy.push({label:'Total calves', pts:calfPts, max:20, detail:`${totalCalves} calves raised`});
+
+  // MPPA (if available)
+  if(epds.mppa) {
+    const mppaPts = Math.min(25, Math.max(0, Math.round((epds.mppa - 90) * 2.5)));
+    productionScore += mppaPts;
+    productionWhy.push({label:'MPPA', pts:mppaPts, max:25, detail:`MPPA: ${epds.mppa}`});
+  } else {
+    productionScore += 12;
+    productionWhy.push({label:'MPPA', pts:12, max:25, detail:'No MPPA data'});
+  }
+
+  productionScore = Math.max(0, Math.min(100, Math.round(productionScore)));
+
+  // ── 3. MATERNAL SCORE (0-100) ──────────────────────────────────────────
+  const maternalWhy = [];
+  let maternalScore = 0;
+
+  // Teat score (from latest measurement)
+  const teatScore = latest.teat_score || animal?.teat_score;
+  if(teatScore) {
+    const teatPts = Math.round((teatScore/9)*25);
+    maternalScore += teatPts;
+    maternalWhy.push({label:'Teat score', pts:teatPts, max:25, detail:`${teatScore}/9`});
+  } else {
+    maternalScore += 12;
+    maternalWhy.push({label:'Teat score', pts:12, max:25, detail:'No teat data'});
+  }
+
+  // Udder/bag score
+  const bagScore = latest.bag_score || animal?.udder_score;
+  if(bagScore) {
+    const bagPts = Math.round((bagScore/9)*20);
+    maternalScore += bagPts;
+    maternalWhy.push({label:'Udder score', pts:bagPts, max:20, detail:`${bagScore}/9`});
+  } else {
+    maternalScore += 10;
+    maternalWhy.push({label:'Udder score', pts:10, max:20, detail:'No udder data'});
+  }
+
+  // Milk EPD (target moderate 20-28)
+  if(epds.milk != null) {
+    let milkPts = 0;
+    const milk = epds.milk;
+    if(milk >= 20 && milk <= 28) milkPts = 20;
+    else if(milk >= 16 && milk <= 32) milkPts = 14;
+    else if(milk < 16) milkPts = 8;
+    else milkPts = 10; // too high
+    maternalScore += milkPts;
+    maternalWhy.push({label:'Milk EPD', pts:milkPts, max:20, detail:`Milk: ${milk} (target 20-28)`});
+  } else {
+    maternalScore += 10;
+    maternalWhy.push({label:'Milk EPD', pts:10, max:20, detail:'No EPD data'});
+  }
+
+  // Stay EPD
+  if(epds.stay != null) {
+    const stayPts = Math.min(20, Math.max(0, Math.round(epds.stay * 1.5)));
+    maternalScore += stayPts;
+    maternalWhy.push({label:'Stay EPD', pts:stayPts, max:20, detail:`Stay: ${epds.stay}`});
+  } else {
+    maternalScore += 10;
+    maternalWhy.push({label:'Stay EPD', pts:10, max:20, detail:'No Stay EPD'});
+  }
+
+  // Calving ease history
+  const easeScores = calvingHistory.map(c=>parseInt(c.calving_ease)||1).filter(e=>e>0);
+  const avgEase = easeScores.length ? easeScores.reduce((a,b)=>a+b,0)/easeScores.length : null;
+  if(avgEase) {
+    const easePts = avgEase <= 1.5 ? 15 : avgEase <= 2 ? 10 : avgEase <= 2.5 ? 5 : 0;
+    maternalScore += easePts;
+    maternalWhy.push({label:'Calving ease', pts:easePts, max:15, detail:`Avg ease: ${avgEase.toFixed(1)}`});
+  } else {
+    maternalScore += 8;
+    maternalWhy.push({label:'Calving ease', pts:8, max:15, detail:'No calving ease data'});
+  }
+
+  maternalScore = Math.max(0, Math.min(100, Math.round(maternalScore)));
+
+  // ── 4. STRUCTURAL SCORE (0-100) ────────────────────────────────────────
+  const structuralWhy = [];
+  let structuralScore = 0;
+  let structuralFields = 0;
+  let structuralTotal = 0;
+
+  const structFields = [
+    {key:'foot_angle', label:'Foot Angle', weight:20},
+    {key:'heel_depth', label:'Heel Depth', weight:15},
+    {key:'claw_set', label:'Claw Set', weight:15},
+    {key:'body_capacity', label:'Body Capacity', weight:20},
+    {key:'muscle_expression', label:'Muscle Expression', weight:15},
+    {key:'structural_soundness', label:'Structural Soundness', weight:15},
+  ];
+
+  structFields.forEach(f => {
+    const val = latest[f.key];
+    if(val != null) {
+      const pts = Math.round((val/9) * f.weight);
+      structuralTotal += pts;
+      structuralFields++;
+      structuralWhy.push({label:f.label, pts, max:f.weight, detail:`${val}/9`});
+    }
+  });
+
+  if(structuralFields > 0) {
+    // Scale up if not all fields measured
+    structuralScore = Math.round(structuralTotal * (structFields.length / structuralFields));
+  } else {
+    structuralScore = 50; // neutral if no data
+    structuralWhy.push({label:'No structural data', pts:50, max:100, detail:'Add chute measurements to improve this score'});
+  }
+
+  // BCS trend bonus
+  const bcsHistory = measurements.filter(m=>m.bcs!=null).map(m=>m.bcs);
+  if(bcsHistory.length >= 2) {
+    const bcsVariance = Math.max(...bcsHistory) - Math.min(...bcsHistory);
+    if(bcsVariance <= 1) { structuralScore = Math.min(100, structuralScore+5); structuralWhy.push({label:'BCS consistency', pts:5, max:5, detail:`BCS range: ${Math.min(...bcsHistory)}-${Math.max(...bcsHistory)}`}); }
+    else if(bcsVariance >= 3) { structuralScore = Math.max(0, structuralScore-5); structuralWhy.push({label:'BCS instability', pts:-5, max:0, detail:`BCS range: ${Math.min(...bcsHistory)}-${Math.max(...bcsHistory)}`}); }
+  }
+
+  structuralScore = Math.max(0, Math.min(100, Math.round(structuralScore)));
+
+  // ── 5. GENETIC POTENTIAL SCORE (0-100) ─────────────────────────────────
+  const geneticWhy = [];
+  let geneticScore = 0;
+  let geneticFields = 0;
+
+  // Red Angus default priorities — will be customizable by breed
+  const epdsToScore = [
+    {key:'hb', label:'Herd Builder (HB)', weight:25, direction:'higher', target:110},
+    {key:'stay', label:'Stayability', weight:20, direction:'higher', target:15},
+    {key:'hpg', label:'Heifer Pregnancy (HPG)', weight:20, direction:'higher', target:15},
+    {key:'lc_ranch', label:'$Ranch', weight:20, direction:'higher', target:110},
+    {key:'lc_fert', label:'LC Fertility', weight:15, direction:'higher', target:2.0},
+  ];
+
+  epdsToScore.forEach(e => {
+    const val = epds[e.key];
+    if(val != null) {
+      // Score relative to target (target = ~top 15%)
+      const ratio = Math.min(1.5, Math.max(0, val / e.target));
+      const pts = Math.round(ratio * e.weight);
+      geneticScore += pts;
+      geneticFields++;
+      geneticWhy.push({label:e.label, pts, max:e.weight, detail:`${val} (target: ${e.target})`});
+    }
+  });
+
+  if(geneticFields === 0) {
+    geneticScore = 50;
+    geneticWhy.push({label:'No EPD data', pts:50, max:100, detail:'Import EPDs to improve this score'});
+  } else if(geneticFields < epdsToScore.length) {
+    // Scale up proportionally for missing EPDs
+    geneticScore = Math.round(geneticScore * (epdsToScore.length / geneticFields));
+  }
+
+  geneticScore = Math.max(0, Math.min(100, Math.round(geneticScore)));
+
+  // ── GENETIC INTELLIGENCE SCORE ─────────────────────────────────────────
+  const wTotal = weights.fertility + weights.production + weights.maternal + weights.structural + weights.genetic;
+  const giScore = Math.round(
+    (fertilityScore  * weights.fertility  / wTotal) +
+    (productionScore * weights.production / wTotal) +
+    (maternalScore   * weights.maternal   / wTotal) +
+    (structuralScore * weights.structural / wTotal) +
+    (geneticScore    * weights.genetic    / wTotal)
+  );
+
+  // ── CONFIDENCE ─────────────────────────────────────────────────────────
+  let confidence = 'Low';
+  let confidenceDetail = [];
+  let dataPoints = 0;
+  if(calvingHistory.length >= 3) { dataPoints += 2; } else if(calvingHistory.length >= 1) { dataPoints += 1; }
+  if(pregChecks.length >= 2) dataPoints += 1;
+  if(weaningWts.length >= 2) dataPoints += 1;
+  if(measurements.length >= 1) dataPoints += 1;
+  if(epds && Object.keys(epds).length > 3) dataPoints += 1;
+  if(age && age >= 4) dataPoints += 1;
+
+  if(dataPoints >= 6) confidence = 'High';
+  else if(dataPoints >= 4) confidence = 'Moderate';
+  else if(dataPoints >= 2) confidence = 'Low';
+  else confidence = 'Very Low';
+
+  if(calvingHistory.length < 2) confidenceDetail.push('Limited calving history');
+  if(!measurements.length) confidenceDetail.push('No chute measurements');
+  if(!epds || Object.keys(epds).length < 3) confidenceDetail.push('Limited EPD data');
+
+  return {
+    tag, animal,
+    scores: {
+      fertility:  { score: fertilityScore,  why: fertilityWhy  },
+      production: { score: productionScore, why: productionWhy },
+      maternal:   { score: maternalScore,   why: maternalWhy   },
+      structural: { score: structuralScore, why: structuralWhy },
+      genetic:    { score: geneticScore,    why: geneticWhy    },
+    },
+    giScore,
+    weights,
+    confidence,
+    confidenceDetail,
+    dataPoints,
+  };
+}
+
 // ── BREEDING EVALUATION ────────────────────────────────────────────────────
 async function renderBreedingEvaluation(content, tag) {
-  const {data: eval_} = await sb.from('breeding_evaluations')
-    .select('*').eq('ranch_id', currentRanch.id).eq('animal_tag', tag).single();
+  const [{data: eval_}, giResult] = await Promise.all([
+    sb.from('breeding_evaluations').select('*').eq('ranch_id', currentRanch.id).eq('animal_tag', tag).single(),
+    calculateGeneticIntelligence(tag),
+  ]);
+
+  const e = eval_ || {};
+  const confidence = giResult?.confidence || 'Very Low';
+  const confidenceDetail = giResult?.confidenceDetail || [];
+  const dataPoints = giResult?.dataPoints || 0;
+
+  const confidenceStars = {
+    'Very Low': '⭐☆☆☆☆', 'Low': '⭐⭐☆☆☆',
+    'Moderate': '⭐⭐⭐☆☆', 'High': '⭐⭐⭐⭐⭐'
+  }[confidence] || '☆☆☆☆☆';
+
+  const confidenceColor = {
+    'Very Low':'var(--gray)','Low':'var(--orange)',
+    'Moderate':'var(--blue)','High':'var(--green)'
+  }[confidence] || 'var(--gray)';
+
+  const checkBox = (field, label, sublabel='') => `
+    <label style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer">
+      <input type="checkbox" id="be-${field}" ${e[field]?'checked':''} style="width:18px;height:18px;accent-color:var(--orange);flex-shrink:0">
+      <div>
+        <div style="font-size:14px;font-weight:500">${label}</div>
+        ${sublabel?`<div style="font-size:11px;color:var(--gray)">${sublabel}</div>`:''}
+      </div>
+    </label>`;
+
+  const ratingField = (field, label, sublabel='') => `
+    <div style="padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+        <div>
+          <label style="font-size:13px;font-weight:600">${label}</label>
+          ${sublabel?`<div style="font-size:11px;color:var(--gray)">${sublabel}</div>`:''}
+        </div>
+        <span id="be-${field}-val" style="font-size:18px;font-weight:800;color:var(--orange)">${e[field]||'5'}</span>
+      </div>
+      <input type="range" id="be-${field}" min="1" max="10" value="${e[field]||5}"
+        oninput="document.getElementById('be-${field}-val').textContent=this.value"
+        style="width:100%;accent-color:var(--orange)">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--gray)">
+        <span>1 — Poor</span><span>10 — Excellent</span>
+      </div>
+    </div>`;
+
+  const recOptions = [
+    'Continue in Herd',
+    'Retain Daughters',
+    'Flush Candidate',
+    'Bull-Producing Female',
+    'Commercial ET Donor',
+    'Breed to Terminal',
+    'Breed to Maternal',
+    'Monitor',
+    'Sell After Weaning',
+    'Cull',
+  ];
+
+  content.innerHTML = `
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">⭐ Breeding Evaluation</div>
+      <div style="font-size:12px;color:var(--gray);margin-bottom:14px">Your assessment based on years of ownership — combined with objective data in Genetic Intelligence</div>
+
+      <!-- ROLE / CLASSIFICATION -->
+      <div style="margin-bottom:14px">
+        <div style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">Role & Classification</div>
+        ${checkBox('foundation_female','Foundation Female','Keep in herd long term — builds the family')}
+        ${checkBox('cow_maker','Cow Maker','Daughters consistently worth retaining')}
+        ${checkBox('bull_maker','Bull Maker','Sons worth developing as herd sires')}
+        ${checkBox('flush_donor','Flush Candidate','Elite ET donor — embryo program priority')}
+        ${checkBox('elite_donor','Elite Donor','Top-tier flush candidate — highest genetic value')}
+        ${checkBox('commercial_donor','Commercial ET Donor','Good ET recipient cow')}
+        ${checkBox('family_builder','Family Builder','Establishing a strong maternal line')}
+        ${checkBox('embryo_program','Embryo Program','Active participant in ET program')}
+        ${checkBox('easy_fleshing','Easy Fleshing','Maintains condition without extra feed')}
+      </div>
+
+      <!-- BREEDER SCORES -->
+      <div style="margin-bottom:14px">
+        <div style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">Breeder Scores</div>
+        <div style="font-size:11px;color:var(--gray);margin-bottom:8px">Your conclusions after years of observation — not individual measurements</div>
+        ${ratingField('cow_type_score','Cow Type','1 = outside breeding goals · 10 = exactly the kind I\'m building')}
+        ${ratingField('maternal_score','Maternal Cow Quality','Raises calves well, breeds back, mothers up, good disposition')}
+        ${ratingField('structural_function','Structural Function','Broader opinion on soundness beyond individual foot scores')}
+        ${ratingField('disposition_score','Disposition / Temperament','Behavior in chute, pasture, and with calf')}
+      </div>
+
+      <!-- RECOMMENDATION -->
+      <div style="margin-bottom:14px">
+        <div style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Recommendation</div>
+        <select id="be-recommendation" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit">
+          <option value="">— Select recommendation —</option>
+          ${recOptions.map(r=>`<option value="${r}" ${e.recommendation===r?'selected':''}>${r}</option>`).join('')}
+        </select>
+      </div>
+
+      <!-- CONFIDENCE -->
+      <div style="background:var(--bg2);border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="font-size:12px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px">Data Confidence</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:16px">${confidenceStars}</span>
+            <span style="font-size:13px;font-weight:700;color:${confidenceColor}">${confidence}</span>
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--gray)">
+          Based on ${dataPoints} data signals.
+          ${giResult?.scores ? `
+            ${calvingCount(giResult)} calves on record ·
+            ${giResult.dataPoints >= 4 ? 'Multiple seasons evaluated' : 'Limited seasons evaluated'}
+          ` : ''}
+        </div>
+        ${confidenceDetail.length ? `
+          <div style="margin-top:8px">
+            ${confidenceDetail.map(d=>`<div style="font-size:11px;color:var(--orange)">⚠ ${d}</div>`).join('')}
+          </div>` : ''}
+      </div>
+
+      <!-- NOTES -->
+      <div style="margin-bottom:14px">
+        <div style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Family Notes</div>
+        <textarea id="be-family-notes" placeholder="Observations about this cow's family line, daughters, tendencies..."
+          style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:13px;min-height:60px;font-family:inherit;resize:vertical">${e.family_notes||''}</textarea>
+      </div>
+      <div style="margin-bottom:14px">
+        <div style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Breeder Notes</div>
+        <textarea id="be-comments" placeholder="Individual animal notes — history, observations, quirks..."
+          style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:13px;min-height:60px;font-family:inherit;resize:vertical">${e.comments||''}</textarea>
+      </div>
+
+      ${e.updated_at ? `<div style="font-size:11px;color:var(--gray);margin-bottom:10px">Last updated: ${new Date(e.updated_at).toLocaleDateString()}</div>` : ''}
+      <button class="btn btn-primary" style="width:100%" onclick="saveBreedingEvaluation('${tag}')">Save Evaluation</button>
+    </div>`;
+}
+
+function calvingCount(giResult) {
+  return giResult?.scores?.fertility?.why?.find(w=>w.label==='Calving rate')?.detail?.split(' ')[0] || '0';
+}
+
+async function saveBreedingEvaluation(tag) {
+  const getCheck = id => document.getElementById(id)?.checked || false;
+  const getVal = id => parseInt(document.getElementById(id)?.value) || null;
+
+  const data = {
+    ranch_id: currentRanch.id,
+    animal_tag: tag,
+    foundation_female: getCheck('be-foundation_female'),
+    cow_maker: getCheck('be-cow_maker'),
+    bull_maker: getCheck('be-bull_maker'),
+    flush_donor: getCheck('be-flush_donor'),
+    elite_donor: getCheck('be-elite_donor'),
+    commercial_donor: getCheck('be-commercial_donor'),
+    family_builder: getCheck('be-family_builder'),
+    embryo_program: getCheck('be-embryo_program'),
+    easy_fleshing: getCheck('be-easy_fleshing'),
+    cow_type_score: getVal('be-cow_type_score'),
+    maternal_score: getVal('be-maternal_score'),
+    structural_function: getVal('be-structural_function'),
+    disposition_score: getVal('be-disposition_score'),
+    recommendation: document.getElementById('be-recommendation')?.value || null,
+    family_notes: document.getElementById('be-family-notes')?.value?.trim() || null,
+    comments: document.getElementById('be-comments')?.value?.trim() || null,
+    updated_at: new Date().toISOString(),
+  };
+
+  const {error} = await sb.from('breeding_evaluations').upsert(data, {onConflict: 'ranch_id,animal_tag'});
+  if(error) { alert('Error saving: ' + error.message); return; }
+  alert('✅ Evaluation saved!');
+}
+
+
 
   const e = eval_ || {};
   const checkBox = (field, label) => `
@@ -3850,33 +4370,6 @@ async function renderBreedingEvaluation(content, tag) {
     </div>`;
 }
 
-async function saveBreedingEvaluation(tag) {
-  const getCheck = id => document.getElementById(id)?.checked || false;
-  const getVal = id => parseInt(document.getElementById(id)?.value) || null;
-
-  const data = {
-    ranch_id: currentRanch.id,
-    animal_tag: tag,
-    foundation_female: getCheck('be-foundation_female'),
-    cow_maker: getCheck('be-cow_maker'),
-    bull_maker: getCheck('be-bull_maker'),
-    flush_donor: getCheck('be-flush_donor'),
-    commercial_donor: getCheck('be-commercial_donor'),
-    easy_fleshing: getCheck('be-easy_fleshing'),
-    maternal_score: getVal('be-maternal_score'),
-    feet_score: getVal('be-feet_score'),
-    udder_score_eval: getVal('be-udder_score_eval'),
-    disposition_score: getVal('be-disposition_score'),
-    overall_score: getVal('be-overall_score'),
-    recommendation: document.getElementById('be-recommendation')?.value || null,
-    comments: document.getElementById('be-comments')?.value?.trim() || null,
-    updated_at: new Date().toISOString(),
-  };
-
-  const {error} = await sb.from('breeding_evaluations').upsert(data, {onConflict: 'ranch_id,animal_tag'});
-  if(error) { alert('Error saving: ' + error.message); return; }
-  alert('✅ Evaluation saved!');
-}
 
 // ── CALVING ────────────────────────────────────────────────────────────────
 function showCalvingTab(tab) {
