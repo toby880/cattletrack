@@ -4582,6 +4582,7 @@ function computeGIFromContext(animalTag, ctx) {
     confidence,
     confidenceDetail,
     dataPoints,
+    totalCalves,
   };
 }
 
@@ -4797,7 +4798,7 @@ async function renderBreedingEvaluation(content, tag) {
           </div>
         </div>
         <div style="font-size:12px;color:var(--gray)">
-          Based on ${dataPoints} data signals · ${calvingCount(giResult)} calves on record ·
+          Based on ${dataPoints} data signals · ${giResult?.totalCalves ?? 0} calves on record ·
           ${dataPoints >= 4 ? 'Multiple seasons evaluated' : 'Limited seasons evaluated'}
         </div>
         ${confidenceDetail.length ? `<div style="margin-top:8px">${confidenceDetail.map(d=>`<div style="font-size:11px;color:var(--orange)">⚠ ${d}</div>`).join('')}</div>` : ''}
@@ -4885,12 +4886,6 @@ function closeGIWhySheet() {
   const overlay = document.getElementById('gi-sheet-overlay');
   if(sheet) sheet.style.transform = 'translateY(100%)';
   setTimeout(()=>{ if(overlay) overlay.style.display='none'; }, 250);
-}
-
-function calvingCount(giResult) {
-  const detail = giResult?.scores?.fertility?.why?.find(w=>w.label==='Calving rate')?.detail || '';
-  const match = detail.match(/^(\d+)/);
-  return match ? match[1] : '0';
 }
 
 async function saveBreedingEvaluation(tag) {
