@@ -3476,12 +3476,42 @@ function renderAnimals(data) {
           <span class="badge ${typeColor[a.animal_type]||'badge-gray'}" style="font-size:10px">${a.animal_type==='Registered'?'Reg':'Comm'}</span>
           ${a.status==='sold'?'<span class="badge badge-red" style="font-size:10px">Sold</span>':''}
           ${a.status==='donor'?'<span class="badge badge-blue" style="font-size:10px">Donor</span>':''}
+          <span id="gi-badge-${a.id}"></span>
         </div>
         <div style="font-size:12px;color:var(--gray)">${a.sex?`${sexIcon[a.sex]||''} ${a.sex} · `:''}${a.dam?`Dam: ${a.dam} · `:''}Born: ${a.dob||'—'}${a.location?' · 📍'+a.location:''}${a.category?' · '+a.category:''}${a.eid_tag?' · EID: '+a.eid_tag:''}</div>
         ${a.name?`<div style="font-size:12px;color:var(--gray-lt)">${a.name}</div>`:''}
       </div>
       <div style="color:var(--gray-lt);font-size:20px">›</div>
     </div>`).join('');
+
+  attachGIBadges(filtered);
+}
+
+function giScoreColor(s) {
+  return s>=75?'var(--green)':s>=60?'var(--blue)':s>=40?'var(--orange)':'var(--red)';
+}
+
+// Fills in GI score badges on the animal list asynchronously, after the list
+// itself has already painted, using one batch-loaded herd context rather
+// than per-animal queries.
+async function attachGIBadges(animals) {
+  if(!animals || !animals.length) return;
+  let ctx;
+  try {
+    ctx = await loadHerdGIContext();
+  } catch(err) {
+    console.error('GI badge load failed', err);
+    return;
+  }
+  animals.forEach(a => {
+    const el = document.getElementById('gi-badge-'+a.id);
+    if(!el) return; // list may have been re-rendered/filtered since this kicked off
+    let result;
+    try { result = computeGIFromContext(a.tag, ctx); } catch(err) { return; }
+    if(!result || result.confidence === 'Very Low') return; // not enough data yet to be meaningful
+    const color = giScoreColor(result.giScore);
+    el.innerHTML = `<span title="Genetic Intelligence score" style="font-size:10px;font-weight:800;color:${color};border:1px solid ${color};border-radius:6px;padding:1px 6px">GI ${result.giScore}</span>`;
+  });
 }
 
 function openProfileByTag(tag) {
@@ -3843,8 +3873,73 @@ async function showProfileTab(tab) {
 
 // ── GENETIC INTELLIGENCE SCORING ENGINE ───────────────────────────────────
 // Phase 3: Five objective scores + GI Score + Why? breakdown
+// Phase 4b: Split into a batch context loader (one round of ranch-wide queries)
+// + a pure per-animal computer, so the animal list can show GI badges for
+// every animal without firing N sets of queries.
+
+let _herdGIContextCache = null;
+let _herdGIContextTime = 0;
+const GI_CONTEXT_TTL_MS = 2 * 60 * 1000; // 2 minutes
+
+async function loadHerdGIContext(forceRefresh) {
+  if(!forceRefresh && _herdGIContextCache && (Date.now() - _herdGIContextTime) < GI_CONTEXT_TTL_MS) {
+    return _herdGIContextCache;
+  }
+
+  const [animalsRes, calvingRes, weightsRes, pregRes, measRes, epdsRes, healthRes, etRes] = await Promise.all([
+    sb.from('animals').select('*').eq('ranch_id', currentRanch.id),
+    sb.from('calving_records').select('*').eq('ranch_id', currentRanch.id),
+    sb.from('weights').select('*').eq('ranch_id', currentRanch.id),
+    sb.from('preg_checks').select('*').eq('ranch_id', currentRanch.id),
+    sb.from('measurements').select('*').eq('ranch_id', currentRanch.id).order('measure_date', {ascending: false}),
+    sb.from('epds').select('*').eq('ranch_id', currentRanch.id),
+    sb.from('health_events').select('*').eq('ranch_id', currentRanch.id),
+    sb.from('et_flushes').select('*').eq('ranch_id', currentRanch.id),
+  ]);
+
+  const norm = t => (t||'').trim().replace('H2R-','');
+  const groupBy = (arr, keyFn) => {
+    const m = new Map();
+    (arr||[]).forEach(r => {
+      const k = keyFn(r);
+      if(!k) return;
+      if(!m.has(k)) m.set(k, []);
+      m.get(k).push(r);
+    });
+    return m;
+  };
+
+  const animalsByTag = new Map();
+  (animalsRes.data||[]).forEach(a => animalsByTag.set(norm(a.tag), a));
+  const epdsByTag = new Map();
+  (epdsRes.data||[]).forEach(r => { const k = norm(r.animal_tag); if(!epdsByTag.has(k)) epdsByTag.set(k, r); });
+
+  const allWW = (weightsRes.data||[]).filter(w=>w.weight_type==='weaning').map(w=>parseFloat(w.weight_lbs)).filter(w=>w>0);
+  const herdAvgWW = allWW.length ? allWW.reduce((a,b)=>a+b,0)/allWW.length : null;
+
+  _herdGIContextCache = {
+    animalsByTag,
+    calvingAll: calvingRes.data || [],
+    weightsByTag: groupBy(weightsRes.data, r=>norm(r.animal_tag)),
+    pregByTag: groupBy(pregRes.data, r=>norm(r.animal_tag)),
+    measByTag: groupBy(measRes.data, r=>norm(r.animal_tag)), // already ordered desc by measure_date
+    epdsByTag,
+    healthByTag: groupBy(healthRes.data, r=>norm(r.animal_tag)),
+    etByTag: groupBy(etRes.data, r=>norm(r.donor_tag)),
+    herdAvgWW,
+  };
+  _herdGIContextTime = Date.now();
+  return _herdGIContextCache;
+}
+
+function invalidateHerdGIContext() { _herdGIContextCache = null; }
 
 async function calculateGeneticIntelligence(animalTag) {
+  const ctx = await loadHerdGIContext();
+  return computeGIFromContext(animalTag, ctx);
+}
+
+function computeGIFromContext(animalTag, ctx) {
   const tag = (animalTag||'').trim();
   const tagBase = tag.replace('H2R-','');
   const p = currentRanch.breeding_philosophy || {};
@@ -3858,36 +3953,19 @@ async function calculateGeneticIntelligence(animalTag) {
     genetic:    p.w_genetic    || 10,
   };
 
-  // Load all data in parallel
-  const [animalRes, calvingRes, weightsRes, pregRes, measRes, epdsRes, healthRes, etRes] = await Promise.all([
-    sb.from('animals').select('*').eq('ranch_id', currentRanch.id).or(`tag.eq.${tag},tag.eq.H2R-${tagBase}`).single(),
-    sb.from('calving_records').select('*').eq('ranch_id', currentRanch.id),
-    sb.from('weights').select('*').eq('ranch_id', currentRanch.id).or(`animal_tag.eq.${tag},animal_tag.eq.H2R-${tagBase}`),
-    sb.from('preg_checks').select('*').eq('ranch_id', currentRanch.id).or(`animal_tag.eq.${tag},animal_tag.eq.H2R-${tagBase}`),
-    sb.from('measurements').select('*').eq('ranch_id', currentRanch.id).or(`animal_tag.eq.${tag},animal_tag.eq.H2R-${tagBase}`).order('measure_date', {ascending: false}),
-    sb.from('epds').select('*').eq('ranch_id', currentRanch.id).or(`animal_tag.eq.${tag},animal_tag.eq.H2R-${tagBase}`).single(),
-    sb.from('health_events').select('*').eq('ranch_id', currentRanch.id).or(`animal_tag.eq.${tag},animal_tag.eq.H2R-${tagBase}`),
-    sb.from('et_flushes').select('*').eq('ranch_id', currentRanch.id).or(`donor_tag.eq.${tag},donor_tag.eq.H2R-${tagBase}`),
-  ]);
-
-  const animal = animalRes.data;
-  const calving = calvingRes.data || [];
-  const allWeights = weightsRes.data || [];
-  const pregChecks = pregRes.data || [];
-  const measurements = measRes.data || [];
-  const epds = epdsRes.data || {};
-  const health = healthRes.data || [];
-  const etFlushes = etRes.data || [];
+  const animal = ctx.animalsByTag.get(tagBase);
+  const allWeights = ctx.weightsByTag.get(tagBase) || [];
+  const pregChecks = ctx.pregByTag.get(tagBase) || [];
+  const measurements = ctx.measByTag.get(tagBase) || [];
+  const epds = ctx.epdsByTag.get(tagBase) || {};
+  const health = ctx.healthByTag.get(tagBase) || [];
+  const etFlushes = ctx.etByTag.get(tagBase) || [];
   const latest = measurements[0] || {};
-
-  // Herd averages for ratio calculations
-  const {data: herdWeights} = await sb.from('weights').select('weight_lbs,weight_type').eq('ranch_id', currentRanch.id).eq('weight_type','weaning');
-  const allWW = (herdWeights||[]).map(w=>parseFloat(w.weight_lbs)).filter(w=>w>0);
-  const herdAvgWW = allWW.length ? allWW.reduce((a,b)=>a+b,0)/allWW.length : null;
+  const herdAvgWW = ctx.herdAvgWW;
 
   // Deduplicate calving records with prefix-aware matching
   const calvingMap = new Map();
-  (calvingRes.data||[]).filter(c => {
+  ctx.calvingAll.filter(c => {
     const dt = (c.dam_tag||'').trim().replace('H2R-','');
     return dt === tagBase;
   }).forEach(c => {
@@ -4219,6 +4297,60 @@ async function renderBreedingEvaluation(content, tag) {
   const programFit = e.cow_type_score || null;
   const currentRec = e.recommendation || null;
 
+  // ── Phase 4: Objective View (GI scores + Why? breakdowns) ──────────────
+  window._giResults = window._giResults || {};
+  window._giResults[tag] = giResult;
+
+  const scoreColor = s => s>=75?'var(--green)':s>=60?'var(--blue)':s>=40?'var(--orange)':'var(--red)';
+
+  const scoreRow = (key, label, icon) => {
+    const s = giResult.scores[key];
+    if(!s) return '';
+    const color = scoreColor(s.score);
+    return `
+      <div style="margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+          <span style="font-size:13px;font-weight:600">${icon} ${label}</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:16px;font-weight:800;color:${color}">${s.score}</span>
+            <button onclick="toggleGIWhy('${tag}','${key}')" style="background:none;border:1px solid var(--border);border-radius:6px;padding:3px 9px;font-size:11px;color:var(--gray);cursor:pointer;font-family:inherit">Why?</button>
+          </div>
+        </div>
+        <div style="height:6px;background:var(--bg2);border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${s.score}%;background:${color}"></div>
+        </div>
+        <div id="gi-why-${key}" style="display:none;margin-top:8px;background:var(--bg2);border-radius:8px;padding:10px 12px">
+          ${s.why.map(w=>`
+            <div style="display:flex;justify-content:space-between;gap:10px;padding:5px 0;font-size:12px;border-bottom:1px solid var(--border)">
+              <span style="color:var(--gray)">${w.label}</span>
+              <span style="text-align:right;flex-shrink:0">
+                <strong style="color:${w.pts<0?'var(--red)':'var(--dark)'}">${w.pts>=0?'+':''}${w.pts}/${w.max}</strong>
+                <div style="font-size:10px;color:var(--gray-lt)">${w.detail}</div>
+              </span>
+            </div>`).join('')}
+        </div>
+      </div>`;
+  };
+
+  const objectiveViewHtml = `
+    <div class="card" style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px">Genetic Intelligence — Objective View</div>
+          <div style="font-size:11px;color:var(--gray-lt);margin-top:2px">Calculated from herd records, not breeder opinion</div>
+        </div>
+        <div style="text-align:center;flex-shrink:0;margin-left:10px">
+          <div style="font-size:26px;font-weight:800;color:${scoreColor(giResult.giScore)}">${giResult.giScore}</div>
+          <div style="font-size:10px;color:var(--gray)">GI Score</div>
+        </div>
+      </div>
+      ${scoreRow('fertility','Fertility','🍼')}
+      ${scoreRow('production','Production','⚖️')}
+      ${scoreRow('maternal','Maternal','🐄')}
+      ${scoreRow('structural','Structural','🦴')}
+      ${scoreRow('genetic','Genetic Potential','🧬')}
+    </div>`;
+
   const checkBox = (field, label, sublabel='') => `
     <label style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer">
       <input type="checkbox" id="be-${field}" ${e[field]?'checked':''} style="width:18px;height:18px;accent-color:var(--orange);flex-shrink:0">
@@ -4259,6 +4391,7 @@ async function renderBreedingEvaluation(content, tag) {
   ];
 
   content.innerHTML = `
+    ${objectiveViewHtml}
     <!-- SUMMARY CARD -->
     <div style="background:linear-gradient(135deg,var(--brown) 0%,#8B4513 100%);border-radius:14px;padding:16px;margin-bottom:12px;color:white">
       <div style="font-size:11px;opacity:0.8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Breeding Evaluation — ${tag}</div>
@@ -4371,6 +4504,73 @@ async function renderBreedingEvaluation(content, tag) {
       ${e.updated_at ? `<div style="font-size:11px;color:var(--gray);margin-bottom:10px">Last updated: ${new Date(e.updated_at).toLocaleDateString()}</div>` : ''}
       <button class="btn btn-primary" style="width:100%" onclick="saveBreedingEvaluation('${tag}')">Save Evaluation</button>
     </div>`;
+}
+
+function toggleGIWhy(tag, key) {
+  const isMobile = window.innerWidth < 700;
+  const giResult = (window._giResults||{})[tag];
+  if(!giResult) return;
+  const s = giResult.scores[key];
+  if(!s) return;
+
+  if(isMobile) {
+    showGIWhySheet(key, s);
+    return;
+  }
+
+  // Desktop: accordion — opening one closes the others
+  const allKeys = ['fertility','production','maternal','structural','genetic'];
+  const target = document.getElementById('gi-why-'+key);
+  const wasOpen = target && target.style.display === 'block';
+  allKeys.forEach(k => {
+    const el = document.getElementById('gi-why-'+k);
+    if(el) el.style.display = 'none';
+  });
+  if(target && !wasOpen) target.style.display = 'block';
+}
+
+const GI_LABELS = {fertility:'🍼 Fertility', production:'⚖️ Production', maternal:'🐄 Maternal', structural:'🦴 Structural', genetic:'🧬 Genetic Potential'};
+
+function showGIWhySheet(key, s) {
+  let overlay = document.getElementById('gi-sheet-overlay');
+  if(!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'gi-sheet-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9998;display:none;transition:opacity 0.25s ease';
+    overlay.onclick = closeGIWhySheet;
+    document.body.appendChild(overlay);
+
+    const sheet = document.createElement('div');
+    sheet.id = 'gi-sheet';
+    sheet.style.cssText = 'position:fixed;left:0;right:0;bottom:0;background:var(--white);border-radius:16px 16px 0 0;z-index:9999;max-height:70vh;overflow-y:auto;padding:16px;padding-bottom:28px;transform:translateY(100%);transition:transform 0.25s ease;box-shadow:0 -4px 20px rgba(0,0,0,0.15)';
+    sheet.onclick = e => e.stopPropagation();
+    document.body.appendChild(sheet);
+  }
+  const sheet = document.getElementById('gi-sheet');
+  sheet.innerHTML = `
+    <div style="width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 14px"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="font-size:15px;font-weight:700">${GI_LABELS[key]||key} — ${s.score}/100</div>
+      <button onclick="closeGIWhySheet()" style="background:none;border:none;font-size:20px;color:var(--gray);cursor:pointer;line-height:1;padding:4px">✕</button>
+    </div>
+    ${s.why.map(w=>`
+      <div style="display:flex;justify-content:space-between;gap:10px;padding:8px 0;font-size:13px;border-bottom:1px solid var(--border)">
+        <span style="color:var(--gray)">${w.label}</span>
+        <span style="text-align:right;flex-shrink:0">
+          <strong style="color:${w.pts<0?'var(--red)':'var(--dark)'}">${w.pts>=0?'+':''}${w.pts}/${w.max}</strong>
+          <div style="font-size:11px;color:var(--gray-lt)">${w.detail}</div>
+        </span>
+      </div>`).join('')}
+  `;
+  overlay.style.display = 'block';
+  requestAnimationFrame(()=>{ sheet.style.transform = 'translateY(0)'; });
+}
+
+function closeGIWhySheet() {
+  const sheet = document.getElementById('gi-sheet');
+  const overlay = document.getElementById('gi-sheet-overlay');
+  if(sheet) sheet.style.transform = 'translateY(100%)';
+  setTimeout(()=>{ if(overlay) overlay.style.display='none'; }, 250);
 }
 
 function calvingCount(giResult) {
