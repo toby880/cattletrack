@@ -1028,6 +1028,13 @@ tr:hover td{background:var(--bg)}
         <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
       </div>
 
+      <!-- DATA TOOLS -->
+      <div class="card" style="margin-bottom:10px">
+        <div class="card-title">🛠️ Data Tools</div>
+        <div style="font-size:13px;color:var(--gray);margin-bottom:12px">Registered/Commercial classification is derived from ear tag: anything with H2R, or a letter in front of the number, is Registered. Use this if animals are showing the wrong type — for example after importing from another system.</div>
+        <button class="btn btn-secondary" style="width:100%" onclick="previewAnimalTypeFix()">Check Registered/Commercial Classification</button>
+      </div>
+
       <!-- BREEDING PHILOSOPHY -->
       <div class="card" style="margin-bottom:10px" id="breeding-philosophy-card">
         <div class="card-title">🧬 Breeding Philosophy <span style="font-size:11px;font-weight:400;color:var(--orange);margin-left:6px">Elite</span></div>
@@ -1417,7 +1424,7 @@ tr:hover td{background:var(--bg)}
     <div class="modal-handle"></div>
     <div class="modal-title">Add Animal</div>
     <div class="form-row">
-      <div class="form-group"><label>Ear Tag</label><input type="text" id="aa-tag" placeholder="e.g. H2R-K253"></div>
+      <div class="form-group"><label>Ear Tag</label><input type="text" id="aa-tag" placeholder="e.g. H2R-K253" oninput="suggestAnimalType()"></div>
       <div class="form-group"><label>Name (optional)</label><input type="text" id="aa-name" placeholder="Registered name"></div>
     </div>
     <div class="form-row">
@@ -1429,7 +1436,7 @@ tr:hover td{background:var(--bg)}
         <select id="aa-sex"><option value="Cow">Cow</option><option value="Heifer">Heifer</option><option value="Bull">Bull</option><option value="Steer">Steer</option></select>
       </div>
       <div class="form-group"><label>Type</label>
-        <select id="aa-type"><option value="Registered">Registered</option><option value="Commercial">Commercial</option></select>
+        <select id="aa-type" data-user-set="0" onchange="this.dataset.userSet='1'"><option value="Registered">Registered</option><option value="Commercial">Commercial</option></select>
       </div>
     </div>
     <div class="form-row">
@@ -3425,6 +3432,42 @@ async function loadDashboard() {
 }
 
 // ── ANIMALS ────────────────────────────────────────────────────────────────
+async function previewAnimalTypeFix() {
+  const {data: animals, error} = await sb.from('animals').select('id,tag,animal_type').eq('ranch_id', currentRanch.id);
+  if(error) { alert('Could not load animals: ' + error.message); return; }
+
+  const changes = [];
+  (animals||[]).forEach(a => {
+    const suggested = deriveAnimalType(a.tag);
+    if(suggested && suggested !== a.animal_type) changes.push({id:a.id, tag:a.tag, from:a.animal_type||'—', to:suggested});
+  });
+
+  if(!changes.length) { alert('✅ No changes needed — every animal already matches the tag-based rule.'); return; }
+
+  const toReg = changes.filter(c=>c.to==='Registered').length;
+  const toComm = changes.filter(c=>c.to==='Commercial').length;
+  const sample = changes.slice(0,8).map(c=>`${c.tag}: ${c.from} → ${c.to}`).join('\n');
+  const more = changes.length > 8 ? `\n...and ${changes.length-8} more` : '';
+
+  const proceed = confirm(
+    `${changes.length} animal(s) don't match the tag-based rule:\n` +
+    `${toReg} will become Registered · ${toComm} will become Commercial\n\n` +
+    `${sample}${more}\n\nApply these changes?`
+  );
+  if(proceed) await applyAnimalTypeFix(changes);
+}
+
+async function applyAnimalTypeFix(changes) {
+  let updated=0, errors=0;
+  for(const c of changes) {
+    const {error} = await sb.from('animals').update({animal_type:c.to}).eq('id', c.id).eq('ranch_id', currentRanch.id);
+    if(!error) updated++; else errors++;
+  }
+  await loadAnimals();
+  invalidateHerdGIContext();
+  alert(`✅ Classification updated!\n${updated} animal(s) fixed${errors?` · ${errors} error(s)`:''}`);
+}
+
 async function loadAnimals() {
   const {data} = await dbSelect('animals');
   cache.set('animals', data);
@@ -3485,6 +3528,26 @@ function renderAnimals(data) {
     </div>`).join('');
 
   attachGIBadges(filtered);
+}
+
+// ── ANIMAL TYPE CLASSIFICATION ─────────────────────────────────────────────
+// Rule (per Toby): H2R-prefixed tags are Registered; any tag with a letter
+// in front of the number is Registered; otherwise Commercial.
+function deriveAnimalType(tag) {
+  const t = (tag||'').trim();
+  if(!t) return null;
+  if(/H2R/i.test(t)) return 'Registered';
+  const idPart = t.replace(/^H2R-?/i,'').trim();
+  if(/^[A-Za-z]/.test(idPart)) return 'Registered';
+  return 'Commercial';
+}
+
+function suggestAnimalType() {
+  const typeSelect = document.getElementById('aa-type');
+  if(!typeSelect || typeSelect.dataset.userSet==='1') return; // don't override a manual choice
+  const tag = document.getElementById('aa-tag')?.value || '';
+  const suggested = deriveAnimalType(tag);
+  if(suggested) typeSelect.value = suggested;
 }
 
 function giScoreColor(s) {
@@ -9363,6 +9426,7 @@ async function runHerdImport() {
     const animal = {};
     fields.forEach(f=>{ if(colMap[f]!=null) { const v=String(row[colMap[f]]||'').trim(); if(v) animal[f]=f==='purchase_price'?parseFloat(v)||null:v; } });
     animal.tag=tag; animal.status=animal.status||defaultStatus;
+    if(!animal.animal_type) animal.animal_type = deriveAnimalType(tag) || 'Commercial';
     if(isDupe&&!skipDupes) {
       const {error}=await sb.from('animals').update(animal).eq('tag',tag).eq('ranch_id',currentRanch.id);
       if(!error)updated++;else errors++;
@@ -11975,6 +12039,7 @@ async function runCattleMaxImport() {
         name: r[col('name')]?.trim() || null,
         reg_number: r[col('reg_num')]?.trim() || null,
         sex,
+        animal_type: deriveAnimalType(tag) || 'Commercial',
         breed: null, // resolved from breed_id separately if needed
         color: r[col('color_markings')]?.trim() || null,
         horn_status: r[col('horn_status')]?.trim() || null,
