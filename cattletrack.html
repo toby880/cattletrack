@@ -4718,6 +4718,9 @@ async function renderBreedingEvaluation(content, tag) {
       ${['Cow','Heifer'].includes(giResult?.animal?.sex) ? `<button class="btn btn-primary" style="width:100%;margin-top:4px" onclick="openMateMatch('${tag}')">🧬 Find a Mate for This Cow</button>` : ''}
     </div>`;
 
+  const sex = giResult?.animal?.sex;
+  const isBull = sex === 'Bull';
+
   const checkBox = (field, label, sublabel='') => `
     <label style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer">
       <input type="checkbox" id="be-${field}" ${e[field]?'checked':''} style="width:18px;height:18px;accent-color:var(--orange);flex-shrink:0">
@@ -4726,6 +4729,32 @@ async function renderBreedingEvaluation(content, tag) {
         ${sublabel?`<div style="font-size:11px;color:var(--gray)">${sublabel}</div>`:''}
       </div>
     </label>`;
+
+  const femaleRoleFields = `
+    ${checkBox('foundation_female','Foundation Female','Keep in herd long term — builds the family')}
+    ${checkBox('cow_maker','Cow Maker','Produces daughters you want to retain as replacements')}
+    ${checkBox('flush_donor','Flush Candidate','Has donor potential — evaluate for ET program')}
+    ${checkBox('elite_donor','Elite Donor','Top-tier flush candidate — highest genetic value')}
+    ${checkBox('commercial_donor','Commercial ET Donor','Good ET recipient cow')}
+    ${checkBox('family_builder','Family Builder','Establishing a strong maternal line')}
+    ${checkBox('embryo_program','Embryo Program','Active participant in ET program')}`;
+
+  const bullRoleFields = `
+    ${checkBox('herd_sire','Herd Sire','Proven natural service sire')}
+    ${checkBox('ai_sire','AI Sire','AI sire used extensively')}
+    ${checkBox('cow_maker','Cow Maker','Produces daughters you want to retain as replacements')}
+    ${checkBox('bull_maker','Bull Maker','Produces herd sire prospects')}
+    ${checkBox('maternal_sire','Maternal Sire','Use this bull to build the cow herd')}
+    ${checkBox('terminal_sire','Terminal Sire','Used primarily for growth/carcass')}
+    ${checkBox('calving_ease_sire','Calving Ease Sire','Heifer bull / first-calf heifer AI sire')}
+    <div style="margin-top:12px">
+      <label style="font-size:12px;color:var(--gray);font-weight:600">Status</label>
+      <select id="be-proven_status" style="width:100%;margin-top:4px;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px">
+        <option value="">Not set</option>
+        <option value="unproven" ${e.proven_status==='unproven'?'selected':''}>Unproven</option>
+        <option value="proven" ${e.proven_status==='proven'?'selected':''}>Proven</option>
+      </select>
+    </div>`;
 
   const ratingField = (field, label, sublabel='') => `
     <div style="padding:10px 0;border-bottom:1px solid var(--border)">
@@ -4783,14 +4812,7 @@ async function renderBreedingEvaluation(content, tag) {
       <!-- ROLE -->
       <div style="margin-bottom:14px">
         <div style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Role</div>
-        ${checkBox('foundation_female','Foundation Female','Keep in herd long term — builds the family')}
-        ${checkBox('cow_maker','Cow Maker','Daughters consistently worth retaining')}
-        ${checkBox('bull_maker','Bull Maker','Sons worth developing as herd sires')}
-        ${checkBox('flush_donor','Flush Candidate','Has donor potential — evaluate for ET program')}
-        ${checkBox('elite_donor','Elite Donor','Top-tier flush candidate — highest genetic value')}
-        ${checkBox('commercial_donor','Commercial ET Donor','Good ET recipient cow')}
-        ${checkBox('family_builder','Family Builder','Establishing a strong maternal line')}
-        ${checkBox('embryo_program','Embryo Program','Active participant in ET program')}
+        ${isBull ? bullRoleFields : femaleRoleFields}
       </div>
 
       <!-- TRAITS -->
@@ -4955,6 +4977,12 @@ async function saveBreedingEvaluation(tag) {
     commercial_donor: getCheck('be-commercial_donor'),
     family_builder: getCheck('be-family_builder'),
     embryo_program: getCheck('be-embryo_program'),
+    herd_sire: getCheck('be-herd_sire'),
+    ai_sire: getCheck('be-ai_sire'),
+    maternal_sire: getCheck('be-maternal_sire'),
+    terminal_sire: getCheck('be-terminal_sire'),
+    calving_ease_sire: getCheck('be-calving_ease_sire'),
+    proven_status: document.getElementById('be-proven_status')?.value || null,
     easy_fleshing: getCheck('be-easy_fleshing'),
     cow_type_score: getVal('be-cow_type_score'),
     maternal_score: getVal('be-maternal_score'),
