@@ -1488,6 +1488,17 @@ tr:hover td{background:var(--bg)}
   </div>
 </div>
 
+<!-- MATE MATCH MODAL (Phase 5: Breeding Intelligence) -->
+<div class="modal-overlay" id="mate-match-modal">
+  <div class="modal" style="max-height:92vh;overflow-y:auto">
+    <div class="modal-handle"></div>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:4px">
+      <button onclick="closeMateMatch()" style="background:none;border:none;font-size:20px;color:var(--gray);cursor:pointer;line-height:1;padding:4px">✕</button>
+    </div>
+    <div id="mate-match-content"><div class="loading"><div class="spinner"></div>Loading...</div></div>
+  </div>
+</div>
+
 <!-- SMART GROUPS MODAL -->
 <div class="modal-overlay" id="smart-groups-modal">
   <div class="modal" style="max-height:92vh;overflow-y:auto">
@@ -3468,6 +3479,245 @@ async function applyAnimalTypeFix(changes) {
   alert(`✅ Classification updated!\n${updated} animal(s) fixed${errors?` · ${errors} error(s)`:''}`);
 }
 
+// ── BREEDING INTELLIGENCE — MATE MATCHING (Phase 5) ────────────────────────
+// Workflow: pick the cow -> see her strengths/weaknesses -> pick a breeding
+// objective -> get sires ranked by how well they complement that objective,
+// with an automatic pedigree-overlap check on every candidate.
+//
+// Scope note: sire EPDs are compared *relative to the other candidate sires
+// on file* (not against a hardcoded external breed benchmark), since that's
+// the decision Toby is actually making — which of the sires/semen he has
+// access to best fits this cow and this goal.
+
+const MATE_OBJECTIVES = {
+  moderation:  {label:'Maintain Moderation',      icon:'⚖️', traits:[{key:'mw',dir:'lower'},{key:'milk',dir:'moderate'}]},
+  carcass:     {label:'Improve Carcass',           icon:'🥩', traits:[{key:'marbling',dir:'higher'},{key:'rea',dir:'higher'}]},
+  matureSize:  {label:'Reduce Mature Size',        icon:'📉', traits:[{key:'mw',dir:'lower'}]},
+  calvingEase: {label:'Increase Calving Ease',     icon:'🍼', traits:[{key:'ced',dir:'higher'}]},
+  feet:        {label:'Protect Feet / Structure',  icon:'🦴', traits:[{key:'claw',dir:'higher'},{key:'angle',dir:'higher'}]},
+  maternal:    {label:'Improve Maternal',          icon:'🐄', traits:[{key:'milk',dir:'moderate'},{key:'stay',dir:'higher'}]},
+  fertility:   {label:'Improve Fertility',         icon:'🌱', traits:[{key:'hpg',dir:'higher'},{key:'stay',dir:'higher'}]},
+};
+
+// Maps a weak GI component to the objective that best addresses it, so the
+// objective checklist can pre-check something sensible for this cow.
+const GI_TO_OBJECTIVE = {structural:'feet', maternal:'maternal', fertility:'fertility', production:'carcass'};
+
+function summarizeGIStrengths(giResult) {
+  const entries = Object.entries(giResult.scores||{}).map(([key,v])=>({key, score:v.score}));
+  const strengths  = entries.filter(e=>e.score>=70).sort((a,b)=>b.score-a.score);
+  const weaknesses = entries.filter(e=>e.score<60).sort((a,b)=>a.score-b.score);
+  return {strengths, weaknesses};
+}
+
+async function getCandidateSireTags(excludeTag) {
+  const animals = cache.get('animals') || [];
+  const bulls = animals.filter(a=>a.sex==='Bull').map(a=>a.tag);
+  let semenSires = (cache.get('semen_inventory')||[]).map(s=>s.sire).filter(Boolean);
+  if(!semenSires.length) {
+    const {data} = await sb.from('semen_inventory').select('sire').eq('ranch_id', currentRanch.id);
+    semenSires = (data||[]).map(s=>s.sire).filter(Boolean);
+  }
+  const excl = String(excludeTag||'').trim().toUpperCase();
+  const all = new Set([...bulls, ...semenSires].map(t=>String(t||'').trim()).filter(t=>t && t.toUpperCase()!==excl));
+  return [...all];
+}
+
+async function loadSireDataBatch(tags) {
+  const empty = {epdsByTag:new Map(), pedByTag:new Map(), animalByTag:new Map()};
+  if(!tags.length) return empty;
+  const [epdsRes, pedRes] = await Promise.all([
+    sb.from('epds').select('*').eq('ranch_id', currentRanch.id).in('animal_tag', tags),
+    sb.from('pedigrees').select('*').eq('ranch_id', currentRanch.id).in('animal_tag', tags),
+  ]);
+  const epdsByTag = new Map(); (epdsRes.data||[]).forEach(r=>epdsByTag.set(r.animal_tag, r));
+  const pedByTag = new Map(); (pedRes.data||[]).forEach(r=>pedByTag.set(r.animal_tag, r));
+  const animalByTag = new Map(); (cache.get('animals')||[]).forEach(a=>animalByTag.set(a.tag, a));
+  return {epdsByTag, pedByTag, animalByTag};
+}
+
+// Scores each candidate sire 0-100 against the selected objectives, ranking
+// "higher"/"lower" traits relative to the other candidates on file, and
+// "moderate" traits (like Milk) against the same 20-28 ideal band used
+// elsewhere in CattleTrack's maternal scoring.
+function scoreSiresForObjectives(candidateTags, selectedObjectiveKeys, epdsByTag) {
+  const traitDefs = [];
+  selectedObjectiveKeys.forEach(ok => {
+    const obj = MATE_OBJECTIVES[ok];
+    if(obj) obj.traits.forEach(t => { if(!traitDefs.find(x=>x.key===t.key)) traitDefs.push(t); });
+  });
+  if(!traitDefs.length) return candidateTags.map(tag=>({tag, matchScore:null, dataCompleteness:'0/0', traitScores:[]}));
+
+  const poolValues = {};
+  traitDefs.forEach(t => { poolValues[t.key] = candidateTags.map(tag => epdsByTag.get(tag)?.[t.key]).filter(v=>v!=null); });
+
+  return candidateTags.map(tag => {
+    const epds = epdsByTag.get(tag) || {};
+    const traitScores = traitDefs.map(t => {
+      const val = epds[t.key];
+      if(val == null) return {key:t.key, score:null};
+      let score;
+      if(t.dir === 'moderate') {
+        if(t.key==='milk') score = (val>=20&&val<=28) ? 100 : (val>=16&&val<=32) ? 70 : 40;
+        else score = 60;
+      } else {
+        const vals = poolValues[t.key];
+        if(vals.length < 2) score = 60;
+        else {
+          const min = Math.min(...vals), max = Math.max(...vals);
+          let pct = max===min ? 0.5 : (val-min)/(max-min);
+          if(t.dir==='lower') pct = 1-pct;
+          score = Math.round(pct*100);
+        }
+      }
+      return {key:t.key, score};
+    });
+    const scored = traitScores.filter(t=>t.score!=null);
+    const matchScore = scored.length ? Math.round(scored.reduce((a,b)=>a+b.score,0)/scored.length) : null;
+    return {tag, matchScore, dataCompleteness:`${scored.length}/${traitDefs.length}`, traitScores};
+  });
+}
+
+// Pulls every known ancestor name from the 2-generation pedigree table plus
+// the animal's own sire/dam fields as a fallback.
+function pedigreeAncestorSet(ped, animal) {
+  const set = new Set();
+  const add = v => { if(v) set.add(String(v).trim().toUpperCase()); };
+  add(ped?.sire); add(animal?.sire);
+  add(ped?.dam); add(animal?.dam);
+  add(ped?.paternal_grandsire); add(ped?.paternal_granddam);
+  add(ped?.maternal_grandsire); add(ped?.maternal_granddam);
+  return set;
+}
+
+// Heuristic, not a true inbreeding coefficient — flags overlap in whatever
+// pedigree is actually on file (up to ~2 generations back). 'unknown' means
+// there isn't enough pedigree data on either side to say anything.
+function checkInbreedingRisk(cowTag, cowPed, cowAnimal, sireTag, sirePed, sireAnimal) {
+  const cowAncestors = pedigreeAncestorSet(cowPed, cowAnimal);
+  const sireAncestors = pedigreeAncestorSet(sirePed, sireAnimal);
+  const sireTagUp = String(sireTag||'').trim().toUpperCase();
+  if(cowAncestors.has(sireTagUp)) return 'high';
+  const overlap = [...cowAncestors].filter(n => sireAncestors.has(n));
+  if(overlap.length) return 'elevated';
+  if(cowAncestors.size || sireAncestors.size) return 'safe';
+  return 'unknown';
+}
+
+async function openMateMatch(tag) {
+  document.getElementById('mate-match-modal').classList.add('open');
+  const content = document.getElementById('mate-match-content');
+  content.innerHTML = '<div class="loading"><div class="spinner"></div>Loading cow profile...</div>';
+
+  const [giResult, pedRes, animalRes] = await Promise.all([
+    calculateGeneticIntelligence(tag),
+    sb.from('pedigrees').select('*').eq('ranch_id', currentRanch.id).eq('animal_tag', tag).single(),
+    sb.from('animals').select('*').eq('ranch_id', currentRanch.id).eq('tag', tag).single(),
+  ]);
+
+  window._mateMatchCow = {tag, giResult, pedigree: pedRes.data, animal: animalRes.data};
+  renderMateMatchIntro();
+}
+
+function closeMateMatch() {
+  document.getElementById('mate-match-modal').classList.remove('open');
+}
+
+function renderMateMatchIntro() {
+  const {tag, giResult} = window._mateMatchCow;
+  const {strengths, weaknesses} = summarizeGIStrengths(giResult);
+  const defaultObjectives = new Set(weaknesses.slice(0,2).map(w=>GI_TO_OBJECTIVE[w.key]).filter(Boolean));
+  const labelFor = k => ({fertility:'Fertility',production:'Production',maternal:'Maternal',structural:'Structural',genetic:'Genetic Potential'}[k]||k);
+
+  const content = document.getElementById('mate-match-content');
+  content.innerHTML = `
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px">Breeding Intelligence — Find a Mate</div>
+      <div style="font-size:18px;font-weight:800;margin-top:2px">${tag}</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+      <div style="background:var(--bg2);border-radius:10px;padding:10px">
+        <div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;margin-bottom:6px">Strengths</div>
+        ${strengths.length ? strengths.map(s=>`<div style="font-size:12px;margin-bottom:3px">✓ ${labelFor(s.key)} (${s.score})</div>`).join('') : '<div style="font-size:12px;color:var(--gray)">None yet — limited data</div>'}
+      </div>
+      <div style="background:var(--bg2);border-radius:10px;padding:10px">
+        <div style="font-size:11px;font-weight:700;color:var(--red);text-transform:uppercase;margin-bottom:6px">Weaknesses</div>
+        ${weaknesses.length ? weaknesses.map(s=>`<div style="font-size:12px;margin-bottom:3px">⚠ ${labelFor(s.key)} (${s.score})</div>`).join('') : '<div style="font-size:12px;color:var(--gray)">None flagged</div>'}
+      </div>
+    </div>
+
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Breeding Objective — what should this mating improve?</div>
+      ${Object.entries(MATE_OBJECTIVES).map(([key,o])=>`
+        <label style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer">
+          <input type="checkbox" id="mo-${key}" ${defaultObjectives.has(key)?'checked':''} style="width:18px;height:18px;accent-color:var(--orange);flex-shrink:0">
+          <span style="font-size:14px">${o.icon} ${o.label}</span>
+        </label>`).join('')}
+    </div>
+
+    <button class="btn btn-primary" style="width:100%" onclick="runMateMatch()">Find Matches →</button>
+  `;
+}
+
+async function runMateMatch() {
+  const {tag, giResult, pedigree, animal} = window._mateMatchCow;
+  const selected = Object.keys(MATE_OBJECTIVES).filter(k=>document.getElementById('mo-'+k)?.checked);
+  if(!selected.length) { alert('Pick at least one breeding objective.'); return; }
+
+  const content = document.getElementById('mate-match-content');
+  content.innerHTML = '<div class="loading"><div class="spinner"></div>Scoring candidate sires...</div>';
+
+  const candidateTags = await getCandidateSireTags(tag);
+  if(!candidateTags.length) {
+    content.innerHTML = '<div class="empty"><div class="empty-icon">🐂</div><p>No candidate sires found — add bulls or semen inventory first.</p></div>';
+    return;
+  }
+
+  const {epdsByTag, pedByTag, animalByTag} = await loadSireDataBatch(candidateTags);
+  const scored = scoreSiresForObjectives(candidateTags, selected, epdsByTag);
+  const results = scored.map(s => ({
+    ...s,
+    risk: checkInbreedingRisk(tag, pedigree, animal, s.tag, pedByTag.get(s.tag), animalByTag.get(s.tag)),
+  })).sort((a,b) => (b.matchScore??-1) - (a.matchScore??-1));
+
+  window._mateMatchResults = {objectives: selected, results};
+  renderMateMatchResults();
+}
+
+function renderMateMatchResults() {
+  const {tag} = window._mateMatchCow;
+  const {objectives, results} = window._mateMatchResults;
+  const content = document.getElementById('mate-match-content');
+  const riskBadge = {high:'🔴 High relatedness', elevated:'🟡 Elevated relationship', safe:'🟢 No known overlap', unknown:'⚪ Pedigree not on file'};
+  const scoreColor = s => s==null?'var(--gray)':s>=75?'var(--green)':s>=55?'var(--blue)':s>=35?'var(--orange)':'var(--red)';
+
+  content.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase">Mate Match Results</div>
+        <div style="font-size:16px;font-weight:800">${tag}</div>
+      </div>
+      <button onclick="renderMateMatchIntro()" style="background:var(--bg2);border:none;border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;font-family:inherit">← Change Objective</button>
+    </div>
+    <div style="font-size:12px;color:var(--gray);margin-bottom:12px">Objective: ${objectives.map(k=>MATE_OBJECTIVES[k].label).join(', ')} · Ranked among ${results.length} candidate sire(s) on file</div>
+    ${results.length ? results.map(r => `
+      <div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="font-size:15px;font-weight:700">${r.tag}</div>
+            <div style="font-size:11px;color:var(--gray);margin-top:2px">${riskBadge[r.risk]}</div>
+          </div>
+          <div style="text-align:center;flex-shrink:0;margin-left:10px">
+            <div style="font-size:20px;font-weight:800;color:${scoreColor(r.matchScore)}">${r.matchScore!=null?r.matchScore:'—'}</div>
+            <div style="font-size:10px;color:var(--gray)">Match · ${r.dataCompleteness} traits</div>
+          </div>
+        </div>
+      </div>`).join('') : '<div class="empty"><div class="empty-icon">🐂</div><p>No candidates could be scored.</p></div>'}
+    <div style="font-size:11px;color:var(--gray-lt);margin-top:6px">Match score compares sires against each other on the traits tied to your selected objective(s) — not against an outside breed average. Relatedness is based on pedigree data on file (up to 2 generations back), not a calculated inbreeding coefficient.</div>
+  `;
+}
+
 async function loadAnimals() {
   const {data} = await dbSelect('animals');
   cache.set('animals', data);
@@ -4412,6 +4662,7 @@ async function renderBreedingEvaluation(content, tag) {
       ${scoreRow('maternal','Maternal','🐄')}
       ${scoreRow('structural','Structural','🦴')}
       ${scoreRow('genetic','Genetic Potential','🧬')}
+      ${['Cow','Heifer'].includes(giResult?.animal?.sex) ? `<button class="btn btn-primary" style="width:100%;margin-top:4px" onclick="openMateMatch('${tag}')">🧬 Find a Mate for This Cow</button>` : ''}
     </div>`;
 
   const checkBox = (field, label, sublabel='') => `
