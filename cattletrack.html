@@ -1033,6 +1033,7 @@ tr:hover td{background:var(--bg)}
         <div class="card-title">🛠️ Data Tools</div>
         <div style="font-size:13px;color:var(--gray);margin-bottom:12px">Registered/Commercial classification is derived from ear tag: anything with H2R, or a letter in front of the number, is Registered. Use this if animals are showing the wrong type — for example after importing from another system.</div>
         <button class="btn btn-secondary" style="width:100%" onclick="previewAnimalTypeFix()">Check Registered/Commercial Classification</button>
+        <button class="btn btn-secondary" style="width:100%;margin-top:8px" onclick="previewDobBackfill()">Backfill Missing Birth Dates from Weight Records</button>
       </div>
 
       <!-- BREEDING PHILOSOPHY -->
@@ -3479,6 +3480,49 @@ async function applyAnimalTypeFix(changes) {
   alert(`✅ Classification updated!\n${updated} animal(s) fixed${errors?` · ${errors} error(s)`:''}`);
 }
 
+async function previewDobBackfill() {
+  const [{data: animals, error: aErr}, {data: births, error: bErr}] = await Promise.all([
+    sb.from('animals').select('id,tag,dob').eq('ranch_id', currentRanch.id),
+    sb.from('weights').select('animal_tag,weight_date').eq('ranch_id', currentRanch.id).eq('weight_type','birth'),
+  ]);
+  if(aErr || bErr) { alert('Could not load records: ' + (aErr?.message||bErr?.message)); return; }
+
+  const earliestBirthByTag = new Map();
+  (births||[]).forEach(b => {
+    if(!b.animal_tag || !b.weight_date) return;
+    const existing = earliestBirthByTag.get(b.animal_tag);
+    if(!existing || b.weight_date < existing) earliestBirthByTag.set(b.animal_tag, b.weight_date);
+  });
+
+  const changes = [];
+  (animals||[]).forEach(a => {
+    if(a.dob) return; // already has one — never overwrite
+    const found = earliestBirthByTag.get(a.tag);
+    if(found) changes.push({id:a.id, tag:a.tag, dob:found});
+  });
+
+  if(!changes.length) { alert('✅ No changes needed — every animal with a birth weight record already has a birth date on file.'); return; }
+
+  const sample = changes.slice(0,8).map(c=>`${c.tag}: → ${c.dob}`).join('\n');
+  const more = changes.length > 8 ? `\n...and ${changes.length-8} more` : '';
+  const proceed = confirm(
+    `${changes.length} animal(s) are missing a birth date but have a birth weight record on file:\n\n` +
+    `${sample}${more}\n\nSet their birth date from that record?`
+  );
+  if(proceed) await applyDobBackfill(changes);
+}
+
+async function applyDobBackfill(changes) {
+  let updated=0, errors=0;
+  for(const c of changes) {
+    const {error} = await sb.from('animals').update({dob:c.dob}).eq('id', c.id).eq('ranch_id', currentRanch.id);
+    if(!error) updated++; else errors++;
+  }
+  await loadAnimals();
+  invalidateHerdGIContext();
+  alert(`✅ Birth dates backfilled!\n${updated} animal(s) fixed${errors?` · ${errors} error(s)`:''}\n\nThis may also improve fertility scoring accuracy for these animals, since age-based scoring depends on a known birth date.`);
+}
+
 // ── BREEDING INTELLIGENCE — MATE MATCHING (Phase 5) ────────────────────────
 // Workflow: pick the cow -> see her strengths/weaknesses -> pick a breeding
 // objective -> get sires ranked by how well they complement that objective,
@@ -5017,9 +5061,17 @@ async function saveWeight() {
   const animal = document.getElementById('w-animal').value.trim();
   const date = document.getElementById('w-date').value;
   const weight = parseFloat(document.getElementById('w-weight').value);
+  const weightType = document.getElementById('w-type').value;
   if(!animal||!date||!weight){alert('Animal tag, date and weight are required.');return;}
-  const {error} = await dbInsert('weights',{animal_tag:animal,weight_date:date,weight_lbs:weight,weight_type:document.getElementById('w-type').value,notes:document.getElementById('w-notes').value.trim()});
+  const {error} = await dbInsert('weights',{animal_tag:animal,weight_date:date,weight_lbs:weight,weight_type:weightType,notes:document.getElementById('w-notes').value.trim()});
   if(error){alert('Error: '+error.message);return;}
+
+  // A birth weight is a reliable date of birth — backfill it if the animal doesn't have one on file yet
+  if(weightType === 'birth') {
+    const {data: match} = await sb.from('animals').select('id,dob').eq('ranch_id', currentRanch.id).eq('tag', animal).single();
+    if(match && !match.dob) await sb.from('animals').update({dob: date}).eq('id', match.id);
+  }
+
   ['w-animal','w-weight','w-notes'].forEach(id=>document.getElementById(id).value='');
   alert(`✅ Weight saved: ${animal} — ${weight} lb`);
 }
@@ -9534,7 +9586,7 @@ async function runAssociationImport() {
   const preview = document.getElementById('import-preview-content');
   preview.innerHTML = '<div class="loading"><div class="spinner"></div>Importing...</div>';
 
-  const {data: existingAnimals} = await sb.from('animals').select('id,tag,reg_number,dam,sire').eq('ranch_id', currentRanch.id);
+  const {data: existingAnimals} = await sb.from('animals').select('id,tag,reg_number,dam,sire,dob').eq('ranch_id', currentRanch.id);
   const byReg = {};
   const byTag = {};
   (existingAnimals||[]).forEach(a => {
@@ -9556,6 +9608,7 @@ async function runAssociationImport() {
         const updates = {};
         if(!calfAnimal.dam && damTagResolved) updates.dam = damTagResolved;
         if(!calfAnimal.reg_number && calf.reg) updates.reg_number = calf.reg;
+        if(!calfAnimal.dob && calf.dob) updates.dob = calf.dob;
         if(Object.keys(updates).length > 0) {
           await sb.from('animals').update(updates).eq('id', calfAnimal.id);
           updated++;
@@ -12798,7 +12851,7 @@ async function runRAAImport(file) {
     statusEl.innerHTML = `📋 Found ${dams.length} dams, ${totalCalves} calves. Importing...`;
 
     // Fetch existing animals to match by reg number or tag
-    const {data: existingAnimals} = await sb.from('animals').select('id,tag,reg_number,dam,sire').eq('ranch_id', currentRanch.id);
+    const {data: existingAnimals} = await sb.from('animals').select('id,tag,reg_number,dam,sire,dob').eq('ranch_id', currentRanch.id);
     const byReg = {};
     const byTag = {};
     (existingAnimals||[]).forEach(a => {
@@ -12824,6 +12877,7 @@ async function runRAAImport(file) {
           const updates = {};
           if(!calfAnimal.dam && damTagResolved) updates.dam = damTagResolved;
           if(!calfAnimal.reg_number && calf.reg) updates.reg_number = calf.reg;
+        if(!calfAnimal.dob && calf.dob) updates.dob = calf.dob;
           if(Object.keys(updates).length > 0) {
             await sb.from('animals').update(updates).eq('id', calfAnimal.id);
             updated++;
