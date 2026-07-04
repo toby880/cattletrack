@@ -2469,23 +2469,36 @@ async function showInsightsTab(tab) {
 
 // ── SIRE ANALYSIS ──────────────────────────────────────────────────────────
 async function renderSireAnalysis(content) {
-  const [calvingRes, weightsRes, aiRes, pregRes] = await Promise.all([
+  const [calvingRes, weightsRes, aiRes, pregRes, animalsRes] = await Promise.all([
     sb.from('calving_records').select('*').eq('ranch_id', currentRanch.id),
     sb.from('weights').select('*').eq('ranch_id', currentRanch.id).eq('weight_type','weaning'),
     sb.from('ai_records').select('*').eq('ranch_id', currentRanch.id),
     sb.from('preg_checks').select('*').eq('ranch_id', currentRanch.id),
+    sb.from('animals').select('tag,sire,dob,sex').eq('ranch_id', currentRanch.id),
   ]);
 
-  const calving = calvingRes.data || [];
   const weights = weightsRes.data || [];
   const aiRecords = aiRes.data || [];
   const pregChecks = pregRes.data || [];
+
+  const normTag = s => (s||'').trim().replace(/^H2R-?/i,'').toUpperCase();
+
+  // Imports (RAAA, Association) create an animal record with a sire field
+  // set, but never write a calving_records row — only manual calving entry
+  // does that. Merge those in so sire stats aren't silently undercounted
+  // for every calf that came in through an import instead.
+  const existingCalfTags = new Set((calvingRes.data||[]).map(c=>normTag(c.calf_tag)));
+  const synthesized = (animalsRes.data||[])
+    .filter(a => a.sire && !existingCalfTags.has(normTag(a.tag)))
+    .map(a => ({calf_tag:a.tag, sire_tag:a.sire, sex:a.sex, birth_weight:null, calving_ease:null}));
+
+  const calving = [...(calvingRes.data||[]), ...synthesized];
 
   // Build sire stats from calving records
   const sireStats = {};
 
   calving.forEach(r => {
-    const sire = (r.sire_tag || 'Unknown').toUpperCase().trim();
+    const sire = normTag(r.sire_tag) || 'UNKNOWN';
     if(!sireStats[sire]) sireStats[sire] = {
       name: sire, calves: 0, bulls: 0, heifers: 0,
       birthWeights: [], easeScores: [], weaningWeights: [],
@@ -2504,7 +2517,7 @@ async function renderSireAnalysis(content) {
 
   // Add AI conception data
   aiRecords.forEach(r => {
-    const sire = (r.sire || 'Unknown').toUpperCase().trim();
+    const sire = normTag(r.sire) || 'UNKNOWN';
     if(!sireStats[sire]) sireStats[sire] = {
       name: sire, calves: 0, bulls: 0, heifers: 0,
       birthWeights: [], easeScores: [], weaningWeights: [],
@@ -2516,8 +2529,8 @@ async function renderSireAnalysis(content) {
   // Match preg checks to AI records
   pregChecks.filter(p=>p.result==='pregnant'&&p.breed_type==='ai').forEach(p => {
     const ai = aiRecords.find(r => r.cow_tag === p.animal_tag);
-    if(ai && ai.sire && sireStats[ai.sire]) {
-      sireStats[ai.sire].aiConceptions++;
+    if(ai && ai.sire && sireStats[normTag(ai.sire)]) {
+      sireStats[normTag(ai.sire)].aiConceptions++;
     }
   });
 
@@ -4016,15 +4029,17 @@ async function showProfileTab(tab) {
     // Check both calving_records (manually entered) and animals table (imported).
     // Matching is prefix-aware (H2R- vs no prefix) since dam/tag values aren't
     // always stored in the same format across manual entry vs different imports.
+    // Also sex-aware: a bull's offspring are found via sire_tag/sire, not dam_tag/dam.
     const norm = t => (t||'').trim().replace('H2R-','');
     const tagBase = norm(tag);
+    const isSireSide = currentAnimal.sex === 'Bull';
     const [{data: calvesAll}, {data: animalsAll}] = await Promise.all([
       sb.from('calving_records').select('*').eq('ranch_id',currentRanch.id),
       sb.from('animals').select('*').eq('ranch_id',currentRanch.id)
     ]);
 
-    const calves = (calvesAll||[]).filter(c => norm(c.dam_tag) === tagBase);
-    const animalOffspring = (animalsAll||[]).filter(a => norm(a.dam) === tagBase)
+    const calves = (calvesAll||[]).filter(c => norm(isSireSide ? c.sire_tag : c.dam_tag) === tagBase);
+    const animalOffspring = (animalsAll||[]).filter(a => norm(isSireSide ? a.sire : a.dam) === tagBase)
       .sort((a,b)=>(b.dob||'').localeCompare(a.dob||''));
 
     const calfTags = new Set(calves.map(c=>norm(c.calf_tag)));
@@ -4282,9 +4297,25 @@ async function loadHerdGIContext(forceRefresh) {
   const allWW = (weightsRes.data||[]).filter(w=>w.weight_type==='weaning').map(w=>parseFloat(w.weight_lbs)).filter(w=>w>0);
   const herdAvgWW = allWW.length ? allWW.reduce((a,b)=>a+b,0)/allWW.length : null;
 
+  // Imports (RAAA, Association) create an animal record with dam/sire fields
+  // set, but never write a calving_records row — only manual calving entry
+  // does that. Without this merge, any imported calf is invisible to GI
+  // scoring and Sire Analysis even though it's sitting right there in the
+  // animals table. Synthesize a lightweight calving record for any animal
+  // with a known dam or sire that doesn't already have a real one on file.
+  const existingCalfTags = new Set((calvingRes.data||[]).map(c=>norm(c.calf_tag)));
+  const synthesizedCalving = (animalsRes.data||[])
+    .filter(a => (a.dam || a.sire) && !existingCalfTags.has(norm(a.tag)))
+    .map(a => ({
+      calf_tag: a.tag, dam_tag: a.dam || null, sire_tag: a.sire || null,
+      birth_date: a.dob || null, sex: a.sex || null,
+      birth_weight: null, calving_ease: null, _source: 'animal_record',
+    }));
+  const calvingAll = [...(calvingRes.data||[]), ...synthesizedCalving];
+
   _herdGIContextCache = {
     animalsByTag,
-    calvingAll: calvingRes.data || [],
+    calvingAll,
     weightsByTag: groupBy(weightsRes.data, r=>norm(r.animal_tag)),
     pregByTag: groupBy(pregRes.data, r=>norm(r.animal_tag)),
     measByTag: groupBy(measRes.data, r=>norm(r.animal_tag)), // already ordered desc by measure_date
@@ -4328,10 +4359,12 @@ function computeGIFromContext(animalTag, ctx) {
   const latest = measurements[0] || {};
   const herdAvgWW = ctx.herdAvgWW;
 
-  // Deduplicate calving records with prefix-aware matching
+  // Deduplicate calving records with prefix-aware, sex-aware matching —
+  // a bull's calves are found via sire_tag, not dam_tag.
+  const isSireSide = animal?.sex === 'Bull';
   const calvingMap = new Map();
   ctx.calvingAll.filter(c => {
-    const dt = (c.dam_tag||'').trim().replace('H2R-','');
+    const dt = ((isSireSide ? c.sire_tag : c.dam_tag)||'').trim().replace('H2R-','');
     return dt === tagBase;
   }).forEach(c => {
     const key = (c.calf_tag||'').replace('H2R-','');
