@@ -2226,28 +2226,19 @@ async function signUp() {
       return;
     }
 
-    // Send signup notification email via Resend
+    // Notify Toby + welcome the customer, via a secure server-side Edge
+    // Function (never call Resend directly from client code — that exposes
+    // the API key to anyone who views page source).
     try {
-      fetch('https://api.resend.com/emails', {
+      await fetch('https://jtyjgfrgwugvcqouldwi.supabase.co/functions/v1/signup-notify', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer re_iNv8LARt_PEC5JxHJpERGDzDwvpDqDHG9'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: 'notifications@cattletrackanalytics.com',
-          to: 'info@cattletrackanalytics.com',
-          subject: '🐄 New CattleTrack signup: ' + ranch,
-          html: `<h2>New Trial Started!</h2>
-            <p><strong>Ranch:</strong> ${ranch}</p>
-            <p><strong>Name:</strong> ${name}</p>
-            <p><strong>Email:</strong> ${email}</p>
-            <p><strong>Plan:</strong> ${plan}</p>
-            <p><strong>Breed:</strong> ${document.getElementById('signup-breed')?.value||'red_angus'}</p>
-            <p>Log into Supabase to activate their subscription when they pay.</p>`
-        })
+          ranch, name, email, plan,
+          breed: document.getElementById('signup-breed')?.value || 'red_angus',
+        }),
       });
-    } catch(e) { console.log('Notification failed:', e); }
+    } catch(e) { console.log('Signup notification failed:', e); }
 
     if(data.session) {
       await loadUserSession(data.user);
@@ -5714,7 +5705,7 @@ async function renderNaturalTab(content) {
           <div class="form-group"><label>Cow</label>
             <select id="ob-cow">
               <option value="">— Select Cow —</option>
-              ${(cache.get('animals')||[]).filter(a=>a.sex==='Female'&&a.status!=='sold'&&a.status!=='dead').sort((a,b)=>a.tag.localeCompare(b.tag)).map(a=>`<option value="${a.tag}">${a.tag}${a.name?' — '+a.name:''}</option>`).join('')}
+              ${(cache.get('animals')||[]).filter(a=>(a.sex==='Cow'||a.sex==='Heifer')&&a.status!=='sold'&&a.status!=='dead').sort((a,b)=>a.tag.localeCompare(b.tag)).map(a=>`<option value="${a.tag}">${a.tag}${a.name?' — '+a.name:''}</option>`).join('')}
             </select>
           </div>
           <div class="form-group"><label>Bull</label>
