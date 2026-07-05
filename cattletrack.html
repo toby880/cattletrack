@@ -3662,6 +3662,10 @@ function checkInbreedingRisk(cowTag, cowPed, cowAnimal, sireTag, sirePed, sireAn
 }
 
 async function openMateMatch(tag) {
+  if(!hasFeature('genetic_intelligence')) {
+    alert('Mate Matching is an Elite-plan feature. Upgrade your plan to unlock this.');
+    return;
+  }
   document.getElementById('mate-match-modal').classList.add('open');
   const content = document.getElementById('mate-match-content');
   content.innerHTML = '<div class="loading"><div class="spinner"></div>Loading cow profile...</div>';
@@ -3775,6 +3779,55 @@ function renderMateMatchResults() {
   `;
 }
 
+// ── PLAN-BASED FEATURE GATING ───────────────────────────────────────────────
+// Maps directly to the tiers shown on the pricing page (cattletrackanalytics.com).
+// Basic: animal records, calving, health, weights, pastures, sales, reports, offline sync.
+// Pro: + AI breeding records, semen inventory, sync groups, natural service,
+//      pregnancy checking, calendar & reminders.
+// Elite: + EPDs & pedigree (all forms), Genetic Intelligence scoring, Mate
+//        Matching, Conventional ET/IVF/Embryo inventory, multi-user access.
+const PLAN_RANK = {basic: 0, pro: 1, elite: 2};
+const FEATURE_MIN_PLAN = {
+  ai_semen:      'pro',    // Semen tab, AI tab
+  sync_groups:   'pro',    // Sync Groups tab
+  natural_service:'pro',   // Natural Service tab
+  preg_check:    'pro',    // Preg Check tab
+  calendar:      'pro',    // Calendar nav/page
+  epds_pedigree: 'elite',  // EPDs tab, Pedigree tab
+  genetic_intelligence: 'elite', // GI Objective View + Mate Matching (both EPD-dependent)
+  et_ivf_embryo: 'elite',  // ET tab, Embryo tab, flush/transfer tools
+  multi_user:    'elite',  // team invites (already gated separately below)
+};
+
+function currentPlanRank() {
+  const plan = (currentRanch?.plan || 'basic').toLowerCase();
+  return PLAN_RANK[plan] ?? 0;
+}
+
+function hasFeature(key) {
+  const required = FEATURE_MIN_PLAN[key];
+  if(!required) return true; // ungated feature
+  return currentPlanRank() >= (PLAN_RANK[required] ?? 0);
+}
+
+function minPlanLabel(key) {
+  const required = FEATURE_MIN_PLAN[key] || 'elite';
+  return required.charAt(0).toUpperCase() + required.slice(1);
+}
+
+// Friendly, consistent "this needs a higher plan" placeholder used anywhere
+// a gated tab or section would otherwise render.
+function upgradeGateHtml(key, featureLabel) {
+  const plan = minPlanLabel(key);
+  return `
+    <div class="empty" style="padding:40px 20px">
+      <div class="empty-icon">🔒</div>
+      <p style="font-weight:600;margin-bottom:4px">${featureLabel} is a ${plan} feature</p>
+      <p style="color:var(--gray);font-size:13px;margin-bottom:16px">Upgrade your plan to unlock this.</p>
+      <a href="https://cattletrackanalytics.com/pricing" target="_blank" class="btn btn-primary" style="display:inline-block;text-decoration:none">View Plans</a>
+    </div>`;
+}
+
 async function loadAnimals() {
   const {data} = await dbSelect('animals');
   cache.set('animals', data);
@@ -3866,6 +3919,7 @@ function giScoreColor(s) {
 // than per-animal queries.
 async function attachGIBadges(animals) {
   if(!animals || !animals.length) return;
+  if(!hasFeature('genetic_intelligence')) return; // GI scoring is an Elite-plan feature
   let ctx;
   try {
     ctx = await loadHerdGIContext();
@@ -3969,6 +4023,7 @@ async function showProfileTab(tab) {
   }
 
   if(tab==='epds') {
+    if(!hasFeature('epds_pedigree')) { content.innerHTML = upgradeGateHtml('epds_pedigree','EPDs'); return; }
     const {data: epds} = await sb.from('epds').select('*').eq('ranch_id', currentRanch.id).eq('animal_tag', tag).single();
     const isAngus = currentRanch?.breed === 'black_angus' || currentAnimal?.breed === 'Black Angus';
     const groups = isAngus ? {
@@ -4154,6 +4209,7 @@ async function showProfileTab(tab) {
   }
 
   if(tab==='pedigree') {
+    if(!hasFeature('epds_pedigree')) { content.innerHTML = upgradeGateHtml('epds_pedigree','Pedigree'); return; }
     const {data: ped} = await sb.from('pedigrees').select('*').eq('ranch_id',currentRanch.id).eq('animal_tag',tag).single();
     content.innerHTML = `
       <div class="card" style="margin-bottom:10px">
@@ -4239,6 +4295,7 @@ async function showProfileTab(tab) {
   }
 
   if(tab==='embryo') {
+    if(!hasFeature('et_ivf_embryo')) { content.innerHTML = upgradeGateHtml('et_ivf_embryo','Embryo/ET Program'); return; }
     const {data: flushes} = await sb.from('et_flushes').select('*').eq('ranch_id',currentRanch.id).eq('donor_tag',tag);
     const {data: transfers} = await sb.from('et_transfers').select('*').eq('ranch_id',currentRanch.id).eq('recipient_tag',tag);
     let html = '';
@@ -4743,7 +4800,10 @@ async function renderBreedingEvaluation(content, tag) {
       </div>`;
   };
 
-  const objectiveViewHtml = `
+  const objectiveViewHtml = !hasFeature('genetic_intelligence') ? `
+    <div class="card" style="margin-bottom:10px">
+      ${upgradeGateHtml('genetic_intelligence','Genetic Intelligence scoring')}
+    </div>` : `
     <div class="card" style="margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
         <div>
@@ -5439,6 +5499,18 @@ function showBreedingTab(tab) {
   document.querySelectorAll('#page-breeding .tab-bar .tab').forEach((b,i) => {
     b.classList.toggle('active', ['semen','ai','sync','natural','et','pregcheck','history'][i]===tab);
   });
+
+  const gateMap = {
+    semen: ['ai_semen','Semen Inventory'], ai: ['ai_semen','AI Breeding Records'],
+    sync: ['sync_groups','Sync Group Management'], natural: ['natural_service','Natural Service Tracking'],
+    et: ['et_ivf_embryo','ET/IVF Program'], ivf: ['et_ivf_embryo','ET/IVF Program'],
+    pregcheck: ['preg_check','Pregnancy Checking'],
+  };
+  if(gateMap[tab] && !hasFeature(gateMap[tab][0])) {
+    content.innerHTML = upgradeGateHtml(gateMap[tab][0], gateMap[tab][1]);
+    return;
+  }
+
   if(tab==='semen') renderSemenTab(content);
   else if(tab==='ai') renderAITab(content);
   else if(tab==='sync') renderSyncTab(content);
@@ -6674,6 +6746,7 @@ async function loadCalendar() {
 async function showCalendarTab(tab) {
   document.querySelectorAll('#page-calendar .tab').forEach((b,i)=>b.classList.toggle('active',['upcoming','tasks','add'][i]===tab));
   const content = document.getElementById('calendar-content');
+  if(!hasFeature('calendar')) { content.innerHTML = upgradeGateHtml('calendar','Calendar & Reminders'); return; }
   if(tab==='upcoming') {
     content.innerHTML='<div class="loading"><div class="spinner"></div>Loading...</div>';
     const {data:tasks}=await dbSelect('tasks');
