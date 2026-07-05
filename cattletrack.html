@@ -4386,52 +4386,61 @@ function computeGIFromContext(animalTag, ctx) {
 
   // ── 1. FERTILITY SCORE (0-100) ─────────────────────────────────────────
   const fertilityWhy = [];
-  let fertilityScore = 50; // baseline
+  let fertilityScore = 50; // baseline / neutral
 
-  // Calves per productive year
-  if(age && age > 2) {
-    const productiveYears = Math.max(1, age - 2);
-    const expectedCalves = Math.floor(productiveYears);
-    const actualCalves = totalCalves;
-    const calvingRate = Math.min(1, actualCalves / expectedCalves);
-    const calvingPts = Math.round(calvingRate * 40);
-    fertilityScore = calvingPts;
-    fertilityWhy.push({label:'Calving rate', pts:calvingPts, max:40, detail:`${actualCalves} calves / ${expectedCalves} expected years`});
-  }
-
-  // Preg check history
-  const opens = pregChecks.filter(p=>p.result==='open').length;
-  const pregTotal = pregChecks.length;
-  if(pregTotal > 0) {
-    const concRate = (pregTotal - opens) / pregTotal;
-    const pregPts = Math.round(concRate * 25);
-    fertilityScore += pregPts;
-    fertilityWhy.push({label:'Pregnancy rate', pts:pregPts, max:25, detail:`${pregTotal-opens}/${pregTotal} bred`});
+  if(isSireSide) {
+    // A herd bull's calf count reflects how many cows didn't take on AI/ET
+    // that year, not his own fertility — scoring him on "calves per year"
+    // like a cow would misrepresent him. Until BSE results or cows-exposed
+    // counts are tracked, don't invent a number here; mark it not applicable
+    // and exclude it from the weighted GI score entirely (see below).
+    fertilityWhy.push({label:'Fertility (bulls)', pts:0, max:0, detail:'Not scored for bulls — calf count reflects breeding program (AI/ET) success, not sire fertility. Track Breeding Soundness Exam results to score this in the future.'});
   } else {
-    fertilityScore += 15; // neutral if no data
-    fertilityWhy.push({label:'Pregnancy rate', pts:15, max:25, detail:'No preg check records'});
+    // Calves per productive year
+    if(age && age > 2) {
+      const productiveYears = Math.max(1, age - 2);
+      const expectedCalves = Math.floor(productiveYears);
+      const actualCalves = totalCalves;
+      const calvingRate = Math.min(1, actualCalves / expectedCalves);
+      const calvingPts = Math.round(calvingRate * 40);
+      fertilityScore = calvingPts;
+      fertilityWhy.push({label:'Calving rate', pts:calvingPts, max:40, detail:`${actualCalves} calves / ${expectedCalves} expected years`});
+    }
+
+    // Preg check history
+    const opens = pregChecks.filter(p=>p.result==='open').length;
+    const pregTotal = pregChecks.length;
+    if(pregTotal > 0) {
+      const concRate = (pregTotal - opens) / pregTotal;
+      const pregPts = Math.round(concRate * 25);
+      fertilityScore += pregPts;
+      fertilityWhy.push({label:'Pregnancy rate', pts:pregPts, max:25, detail:`${pregTotal-opens}/${pregTotal} bred`});
+    } else {
+      fertilityScore += 15; // neutral if no data
+      fertilityWhy.push({label:'Pregnancy rate', pts:15, max:25, detail:'No preg check records'});
+    }
+
+    // Calving season consistency
+    const seasons = calvingHistory.map(c=>getSeason(c.birth_date)).filter(Boolean);
+    const springCount = seasons.filter(s=>s==='spring').length;
+    const fallCount = seasons.filter(s=>s==='fall').length;
+    const otherCount = seasons.filter(s=>s==='other').length;
+    let seasonPts = 20;
+    if(otherCount > 0) { seasonPts -= otherCount * 5; }
+    if(springCount > 0 && fallCount > 0) { seasonPts -= 10; }
+    seasonPts = Math.max(0, seasonPts);
+    fertilityScore += seasonPts;
+    fertilityWhy.push({label:'Calving consistency', pts:seasonPts, max:20, detail: otherCount>0?`${otherCount} off-season calves`:springCount>0&&fallCount>0?'Mixed seasons':'Consistent'});
+
+    // Longevity bonus
+    if(age && age >= 8 && totalCalves >= age-2) {
+      const longevityPts = Math.min(15, Math.floor((age-7)*2));
+      fertilityScore += longevityPts;
+      fertilityWhy.push({label:'Longevity bonus', pts:longevityPts, max:15, detail:`${age.toFixed(0)} yrs, still productive`});
+    }
+
+    fertilityScore = Math.max(0, Math.min(100, Math.round(fertilityScore)));
   }
-
-  // Calving season consistency
-  const seasons = calvingHistory.map(c=>getSeason(c.birth_date)).filter(Boolean);
-  const springCount = seasons.filter(s=>s==='spring').length;
-  const fallCount = seasons.filter(s=>s==='fall').length;
-  const otherCount = seasons.filter(s=>s==='other').length;
-  let seasonPts = 20;
-  if(otherCount > 0) { seasonPts -= otherCount * 5; }
-  if(springCount > 0 && fallCount > 0) { seasonPts -= 10; }
-  seasonPts = Math.max(0, seasonPts);
-  fertilityScore += seasonPts;
-  fertilityWhy.push({label:'Calving consistency', pts:seasonPts, max:20, detail: otherCount>0?`${otherCount} off-season calves`:springCount>0&&fallCount>0?'Mixed seasons':'Consistent'});
-
-  // Longevity bonus
-  if(age && age >= 8 && totalCalves >= age-2) {
-    const longevityPts = Math.min(15, Math.floor((age-7)*2));
-    fertilityScore += longevityPts;
-    fertilityWhy.push({label:'Longevity bonus', pts:longevityPts, max:15, detail:`${age.toFixed(0)} yrs, still productive`});
-  }
-
-  fertilityScore = Math.max(0, Math.min(100, Math.round(fertilityScore)));
 
   // ── 2. PRODUCTION SCORE (0-100) ────────────────────────────────────────
   const productionWhy = [];
@@ -4624,13 +4633,16 @@ function computeGIFromContext(animalTag, ctx) {
   geneticScore = Math.max(0, Math.min(100, Math.round(geneticScore)));
 
   // ── GENETIC INTELLIGENCE SCORE ─────────────────────────────────────────
-  const wTotal = weights.fertility + weights.production + weights.maternal + weights.structural + weights.genetic;
+  // For bulls, Fertility isn't scored (see above) — exclude its weight
+  // entirely rather than let an unscored baseline dilute the overall score.
+  const effectiveWeights = isSireSide ? {...weights, fertility: 0} : weights;
+  const wTotal = effectiveWeights.fertility + effectiveWeights.production + effectiveWeights.maternal + effectiveWeights.structural + effectiveWeights.genetic;
   const giScore = Math.round(
-    (fertilityScore  * weights.fertility  / wTotal) +
-    (productionScore * weights.production / wTotal) +
-    (maternalScore   * weights.maternal   / wTotal) +
-    (structuralScore * weights.structural / wTotal) +
-    (geneticScore    * weights.genetic    / wTotal)
+    (fertilityScore  * effectiveWeights.fertility  / wTotal) +
+    (productionScore * effectiveWeights.production / wTotal) +
+    (maternalScore   * effectiveWeights.maternal   / wTotal) +
+    (structuralScore * effectiveWeights.structural / wTotal) +
+    (geneticScore    * effectiveWeights.genetic    / wTotal)
   );
 
   // ── CONFIDENCE ─────────────────────────────────────────────────────────
