@@ -784,8 +784,12 @@ tr:hover td{background:var(--bg)}
         <button class="tab active" onclick="showChuteTab('session')">Session</button>
         <button class="tab" onclick="showChuteTab('vaccines')">Vaccines</button>
         <button class="tab" onclick="showChuteTab('treatment')">Treatment</button>
+        <button class="tab" onclick="showChuteTab('pregcheck')">Preg Check</button>
         <button class="tab" onclick="showChuteTab('history')">History</button>
       </div>
+
+      <!-- PREG CHECK TAB (chute-side entry, same data as Breeding > Preg Check) -->
+      <div id="chute-pregcheck" style="display:none"></div>
 
       <!-- SESSION TAB -->
       <div id="chute-session">
@@ -6437,6 +6441,67 @@ async function saveIVFCloud() {
 }
 
 // ── PREG CHECK ─────────────────────────────────────────────────────────────
+// ── CHUTE-SIDE PREG CHECK (same data as Breeding > Preg Check, entered
+// during a chute session instead of navigating away to a separate page) ───
+async function loadChutePregCheckTab() {
+  const content = document.getElementById('chute-pregcheck');
+  if(!hasFeature('preg_check')) { content.innerHTML = upgradeGateHtml('preg_check','Pregnancy Checking'); return; }
+
+  const {data} = await sb.from('preg_checks').select('*').eq('ranch_id',currentRanch.id).order('check_date',{ascending:false});
+  const today = new Date().toISOString().split('T')[0];
+  const rc = {pregnant:'badge-green', open:'badge-red', recheck:'badge-orange'};
+
+  content.innerHTML = `
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">Record Pregnancy Check</div>
+      <div class="form-group"><label>Animal</label><select id="cpc-animal">
+        <option value="">— Select Animal —</option>
+        ${(cache.get('animals')||[]).filter(a=>a.sex==='Cow'||a.sex==='Heifer').sort((a,b)=>a.tag.localeCompare(b.tag)).map(a=>`<option value="${a.tag}">${a.tag}${a.name?' — '+a.name:''}</option>`).join('')}
+      </select></div>
+      <div class="form-row">
+        <div class="form-group"><label>Check Date</label><input type="date" id="cpc-date" value="${today}"></div>
+        <div class="form-group"><label>Result</label><select id="cpc-result" onchange="document.getElementById('cpc-disp-group').style.display=this.value==='open'?'block':'none'"><option value="pregnant">Pregnant ✓</option><option value="open">Open ✗</option><option value="recheck">Recheck</option></select></div>
+        <div class="form-group" id="cpc-disp-group" style="display:none"><label>RAAA Dam Disposition</label><select id="cpc-disp-code"><option value="34" selected>34 — Exposed, Failed to Conceive</option><option value="N">N — No Change</option><option value="35">35 — Not Exposed / Moved Season</option><option value="30">30 — Aborted</option></select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Breeding Type</label><select id="cpc-type"><option value="ai">AI</option><option value="natural">Natural Service</option><option value="et">ET (Conv.)</option><option value="ivf">IVF</option><option value="unknown">Unknown</option></select></div>
+        <div class="form-group"><label>Days Bred</label><input type="number" id="cpc-days" placeholder="e.g. 35" inputmode="numeric"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Expected Calving</label><input type="date" id="cpc-calving"></div>
+        <div class="form-group"><label>Checked By</label><input type="text" id="cpc-by" placeholder="Vet or tech"></div>
+      </div>
+      <div class="form-group"><label>Notes</label><input type="text" id="cpc-notes" placeholder="Any findings..."></div>
+      <button class="btn btn-primary" onclick="saveChutePregCheck()">Save Preg Check</button>
+    </div>
+    <div class="card"><div class="card-title">Recent Preg Checks</div>
+      ${(data||[]).length?(data||[]).slice(0,15).map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)"><div><strong>${r.animal_tag}</strong> <span style="font-size:11px;color:var(--gray)">${r.check_date}</span><div style="font-size:12px;color:var(--gray)">${r.breed_type||'—'}${r.expected_calving?' · Calves '+r.expected_calving:''}</div></div><span class="badge ${rc[r.result]||'badge-gray'}">${r.result}</span></div>`).join(''):'<div class="empty"><div class="empty-icon">🔍</div><p>No preg checks recorded yet.</p></div>'}
+    </div>`;
+}
+
+async function saveChutePregCheck() {
+  const animal = document.getElementById('cpc-animal')?.value?.trim();
+  const date = document.getElementById('cpc-date')?.value;
+  if(!animal||!date){alert('Animal tag and date required.');return;}
+  const result = document.getElementById('cpc-result')?.value;
+  const dispCode = result==='open' ? (document.getElementById('cpc-disp-code')?.value||'34') : null;
+  const {error} = await dbInsert('preg_checks',{
+    animal_tag:animal,check_date:date,result,
+    breed_type:document.getElementById('cpc-type')?.value,
+    days_bred:parseInt(document.getElementById('cpc-days')?.value)||null,
+    expected_calving:document.getElementById('cpc-calving')?.value||null,
+    checked_by:document.getElementById('cpc-by')?.value?.trim()||null,
+    notes:document.getElementById('cpc-notes')?.value?.trim()||null,
+  });
+  if(!error && dispCode) {
+    await sb.from('animals').update({raaa_disp_code: dispCode}).eq('tag', animal).eq('ranch_id', currentRanch.id);
+  }
+  if(error){alert('Error: '+error.message);return;}
+  const icon = result==='pregnant'?'✅':result==='open'?'❌':'🔄';
+  alert(`${icon} Preg check saved: ${animal} — ${result}`);
+  loadChutePregCheckTab();
+}
+
 async function renderPregCheckTab(content) {
   const {data}=await sb.from('preg_checks').select('*').eq('ranch_id',currentRanch.id).order('check_date',{ascending:false});
   const today=new Date().toISOString().split('T')[0];
@@ -11679,14 +11744,15 @@ let chuteSkippedTags = new Set();
 let herdTreatments = [];
 
 function showChuteTab(tab) {
-  ['session','vaccines','treatment','history'].forEach(t => {
+  ['session','vaccines','treatment','pregcheck','history'].forEach(t => {
     const el = document.getElementById('chute-'+t);
     if(el) el.style.display = t===tab ? 'block' : 'none';
   });
   document.querySelectorAll('#page-measurements .tab-bar .tab').forEach((b,i) =>
-    b.classList.toggle('active', ['session','vaccines','treatment','history'][i]===tab));
+    b.classList.toggle('active', ['session','vaccines','treatment','pregcheck','history'][i]===tab));
   if(tab==='vaccines') loadVaccineTab();
   if(tab==='treatment') loadTreatmentTab();
+  if(tab==='pregcheck') loadChutePregCheckTab();
   if(tab==='history') renderChuteHistory();
 }
 
