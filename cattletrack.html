@@ -4175,10 +4175,6 @@ async function showProfileTab(tab) {
         <div class="card-title">Add Measurement</div>
         <div class="form-row">
           <div class="form-group"><label>Date</label><input type="date" id="meas-date" value="${today}"></div>
-          <div class="form-group"><label>Bag Score (1-9)</label><input type="number" id="meas-bag" min="1" max="9" placeholder="—" inputmode="numeric"></div>
-        </div>
-        <div class="form-row">
-          <div class="form-group"><label>Teat Score (1-9)</label><input type="number" id="meas-teat" min="1" max="9" placeholder="—" inputmode="numeric"></div>
           <div class="form-group"><label>Hair Shed Score (1-5)</label><input type="number" id="meas-hair" min="1" max="5" placeholder="—" inputmode="numeric"></div>
         </div>
         <div class="form-row">
@@ -7818,8 +7814,6 @@ async function saveNewAnimal() {
 
 async function saveMeasurement(tag) {
   const date = document.getElementById('meas-date')?.value;
-  const bag = document.getElementById('meas-bag')?.value;
-  const teat = document.getElementById('meas-teat')?.value;
   const hair = document.getElementById('meas-hair')?.value;
   const bcs = document.getElementById('meas-bcs')?.value;
   const frame = document.getElementById('meas-frame')?.value;
@@ -7832,13 +7826,11 @@ async function saveMeasurement(tag) {
   const structural = document.getElementById('meas-structural')?.value;
   const notes = document.getElementById('meas-notes')?.value?.trim();
   if(!date){alert('Date is required.');return;}
-  const hasData = bag||teat||hair||bcs||frame||bodyCap||muscle||footAngle||heel||claw||disposition||structural;
+  const hasData = hair||bcs||frame||bodyCap||muscle||footAngle||heel||claw||disposition||structural;
   if(!hasData){alert('Enter at least one measurement.');return;}
   const {error}=await dbInsert('measurements',{
     animal_tag:tag, ranch_id:currentRanch.id,
     measure_date:date,
-    bag_score:bag?parseInt(bag):null,
-    teat_score:teat?parseInt(teat):null,
     hair_shed_score:hair?parseInt(hair):null,
     bcs:bcs?parseFloat(bcs):null,
     frame_score:frame?parseFloat(frame):null,
