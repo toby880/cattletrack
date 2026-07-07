@@ -4261,10 +4261,48 @@ async function showProfileTab(tab) {
       ...nsRecords.map(r=>({date:r.turnout_date,type:'Natural Service',detail:`Bull: ${r.bull_tag||'—'} · ${r.pasture||'—'}${r.pull_date?' · Pulled '+r.pull_date:''}`,color:'badge-brown'})),
     ].sort((a,b)=>new Date(b.date)-new Date(a.date));
 
+    // ── Breeding status summary header (Current Status / Next Calving / Last Bred) ──
+    const daysLabel = (dateStr, direction) => {
+      if(!dateStr) return null;
+      const diffDays = Math.round((new Date(dateStr) - new Date(new Date().toISOString().split('T')[0])) / 86400000);
+      if(direction==='future') return diffDays >= 0 ? `in ${diffDays} day${diffDays===1?'':'s'}` : `${Math.abs(diffDays)} day${Math.abs(diffDays)===1?'':'s'} overdue`;
+      return diffDays <= 0 ? `${Math.abs(diffDays)} day${Math.abs(diffDays)===1?'':'s'} ago` : `in ${diffDays} days`; // past-oriented, but guard future dates gracefully
+    };
+
+    const breedingEvents = all.filter(r=>r.type!=='Preg Check');
+    const lastBreedingEvent = breedingEvents[0] || null;
+    const latestPregCheck = (pcRes.data||[]).slice().sort((a,b)=>new Date(b.check_date)-new Date(a.check_date))[0] || null;
+
+    const statusMap = {pregnant:{label:'Pregnant',color:'var(--green)'}, open:{label:'Open',color:'var(--red)'}, recheck:{label:'Recheck Needed',color:'var(--orange)'}};
+    let statusInfo = {label:'No Data', color:'var(--gray)'};
+    if(latestPregCheck && statusMap[latestPregCheck.result]) statusInfo = statusMap[latestPregCheck.result];
+    else if(lastBreedingEvent) statusInfo = {label:'Bred — Unconfirmed', color:'var(--blue)'};
+
+    const summaryHeaderHtml = `
+      <div class="card" style="margin-bottom:10px">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;text-align:center">
+          <div>
+            <div style="font-size:16px;font-weight:800;color:${statusInfo.color}">${statusInfo.label}</div>
+            <div style="font-size:10px;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px">Current Status</div>
+          </div>
+          <div>
+            <div style="font-size:16px;font-weight:800">${latestPregCheck?.expected_calving || '—'}</div>
+            <div style="font-size:10px;color:var(--gray-lt)">${latestPregCheck?.result==='pregnant' && latestPregCheck?.expected_calving ? daysLabel(latestPregCheck.expected_calving,'future') : ''}</div>
+            <div style="font-size:10px;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px">Next Calving</div>
+          </div>
+          <div>
+            <div style="font-size:16px;font-weight:800">${lastBreedingEvent?.date || '—'}</div>
+            <div style="font-size:10px;color:var(--gray-lt)">${lastBreedingEvent?.date ? daysLabel(lastBreedingEvent.date,'past') : ''}</div>
+            <div style="font-size:10px;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px">Last Bred</div>
+          </div>
+        </div>
+      </div>`;
+
     const today = new Date().toISOString().split('T')[0];
     const bulls = (cache.get('animals')||[]).filter(a=>a.sex==='Bull'&&a.status!=='sold'&&a.status!=='dead').sort((a,b)=>a.tag.localeCompare(b.tag));
 
     content.innerHTML = `
+      ${summaryHeaderHtml}
       <div class="card" style="margin-bottom:10px">
         <div class="card-title">Log Observed Breeding</div>
         <div class="form-row">
