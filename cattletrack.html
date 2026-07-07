@@ -3878,6 +3878,7 @@ function renderAnimals(data) {
 function deriveAnimalType(tag) {
   const t = (tag||'').trim();
   if(!t) return null;
+  if(/^Comm/i.test(t)) return 'Commercial'; // explicit commercial-prefix convention (e.g. "Comm-477") overrides the letter-prefix rule below
   if(/H2R/i.test(t)) return 'Registered';
   const idPart = t.replace(/^H2R-?/i,'').trim();
   if(/^[A-Za-z]/.test(idPart)) return 'Registered';
