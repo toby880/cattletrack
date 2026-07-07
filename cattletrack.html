@@ -547,6 +547,10 @@ tr:hover td{background:var(--bg)}
 
     <!-- PASTURES -->
     <div class="page" id="page-pastures">
+      <div class="section-header">
+        <div class="section-title">Pastures & Fields</div>
+        <button class="btn btn-primary btn-sm" onclick="openNewPasture()">+ Add Pasture</button>
+      </div>
       <div class="tab-bar">
         <button class="tab active" onclick="showPastureTab('pastures')">Pastures</button>
         <button class="tab" onclick="showPastureTab('paddocks')">Paddocks</button>
@@ -557,7 +561,6 @@ tr:hover td{background:var(--bg)}
       <div id="pasture-content"><div class="loading"><div class="spinner"></div>Loading...</div></div>
     </div>
 
-    <!-- SALES -->
     <div class="page" id="page-sales">
       <div class="tab-bar">
         <button class="tab active" onclick="showSalesTab('record')">Record Sale</button>
@@ -647,22 +650,6 @@ tr:hover td{background:var(--bg)}
         <div class="loading"><div class="spinner"></div>Loading...</div>
       </div>
       <div id="stocker-detail-view" style="display:none"></div>
-    </div>
-
-    <!-- PASTURES -->
-    <div class="page" id="page-pastures">
-      <div class="section-header">
-        <div class="section-title">Pastures & Fields</div>
-        <button class="btn btn-primary btn-sm" onclick="openNewPasture()">+ Add Pasture</button>
-      </div>
-      <div class="tab-bar">
-        <button class="tab active" onclick="showPastureTab('pastures')">Pastures</button>
-        <button class="tab" onclick="showPastureTab('paddocks')">Paddocks</button>
-        <button class="tab" onclick="showPastureTab('treatments')">Treatments</button>
-        <button class="tab" onclick="showPastureTab('plantings')">Plantings</button>
-        <button class="tab" onclick="showPastureTab('hay')">Hay</button>
-      </div>
-      <div id="pasture-content"><div class="loading"><div class="spinner"></div>Loading...</div></div>
     </div>
 
     <div class="page" id="page-inventory">
@@ -8862,7 +8849,10 @@ async function renderPastureList(content) {
             <span style="font-size:11px;color:var(--gray);margin-left:6px">${f.acres?f.acres+' ac · ':''}${f.type||'pasture'}</span>
             ${f.forage_mix?`<div style="font-size:11px;color:var(--green)">🌱 ${f.forage_mix}</div>`:''}
           </div>
-          ${inPasture.length?`<span style="font-size:12px;font-weight:700;color:var(--orange)">${inPasture.length} head</span>`:''}
+          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+            ${inPasture.length?`<span style="font-size:12px;font-weight:700;color:var(--orange)">${inPasture.length} head</span>`:''}
+            <button onclick="editPasture('${f.id}')" style="background:none;border:none;color:var(--gray);font-size:14px;cursor:pointer;padding:2px 4px" title="Edit pasture">✏️</button>
+          </div>
         </div>
         ${fieldPaddocks.length ? fieldPaddocks.map(renderPaddockRow).join('') :
           `<div style="font-size:11px;color:var(--gray-lt);padding:4px 0">No paddocks — <button onclick="showPastureTab('paddocks')" style="background:none;border:none;color:var(--orange);font-size:11px;cursor:pointer;font-family:inherit">add paddocks</button></div>`}
@@ -8980,6 +8970,75 @@ async function saveNewPasture() {
   });
   if(error){alert('Error: '+error.message);return;}
   document.getElementById('new-pasture-modal')?.remove();
+  showPastureTab('pastures');
+}
+
+async function editPasture(fieldId) {
+  const {data: f, error} = await sb.from('pasture_fields').select('*').eq('id', fieldId).single();
+  if(error || !f) { alert('Could not load pasture: ' + (error?.message||'not found')); return; }
+
+  const {data: places} = await sb.from('places').select('*').eq('ranch_id',currentRanch.id).order('name');
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay open';
+  modal.id = 'edit-pasture-modal';
+  modal.innerHTML = `
+    <div class="modal">
+      <div class="modal-handle"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div class="modal-title" style="margin-bottom:0">Edit Pasture / Field</div>
+        <button onclick="document.getElementById('edit-pasture-modal').remove()" style="background:var(--bg2);border:none;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer;font-family:inherit">Cancel</button>
+      </div>
+      <div class="form-group"><label>Place</label>
+        <select id="epf-place">
+          <option value="">— Select Place —</option>
+          ${(places||[]).map(p=>`<option value="${p.id}" ${p.id===f.place_id?'selected':''}>${p.name}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label>Name</label><input type="text" id="epf-name" value="${f.name||''}" placeholder="e.g. North Wheat, Home Pasture"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Type</label>
+          <select id="epf-type">
+            <option value="pasture" ${f.type==='pasture'?'selected':''}>Pasture</option>
+            <option value="wheat" ${f.type==='wheat'?'selected':''}>Wheat</option>
+            <option value="hay" ${f.type==='hay'?'selected':''}>Hay Meadow</option>
+            <option value="crop" ${f.type==='crop'?'selected':''}>Crop Field</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Acres</label><input type="number" id="epf-acres" value="${f.acres||''}" placeholder="0" inputmode="decimal"></div>
+      </div>
+      <div class="form-group"><label>Soil Type (optional)</label><input type="text" id="epf-soil" value="${f.soil_type||''}" placeholder="e.g. Sandy loam, Clay"></div>
+      <div class="form-group"><label>Forage Mix</label><input type="text" id="epf-forage" value="${f.forage_mix||''}" placeholder="e.g. Coastal Bermuda / Crabgrass Summer Mix"></div>
+      <div class="form-group"><label>Notes</label><textarea id="epf-notes" placeholder="Any notes...">${f.notes||''}</textarea></div>
+      <button class="btn btn-primary" style="width:100%" onclick="saveEditedPasture('${fieldId}','${(f.name||'').replace(/'/g,"\\'")}')">Save Changes</button>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+async function saveEditedPasture(fieldId, oldName) {
+  const newName = document.getElementById('epf-name')?.value?.trim();
+  if(!newName){alert('Name is required.');return;}
+
+  const {error} = await sb.from('pasture_fields').update({
+    name: newName,
+    place_id: document.getElementById('epf-place')?.value || null,
+    type: document.getElementById('epf-type')?.value||'pasture',
+    acres: parseFloat(document.getElementById('epf-acres')?.value)||null,
+    soil_type: document.getElementById('epf-soil')?.value?.trim()||null,
+    forage_mix: document.getElementById('epf-forage')?.value?.trim()||null,
+    notes: document.getElementById('epf-notes')?.value?.trim()||null,
+  }).eq('id', fieldId).eq('ranch_id', currentRanch.id);
+  if(error){alert('Error: '+error.message);return;}
+
+  // Renaming a pasture would otherwise silently disconnect every animal
+  // currently assigned to it, since animals link to a pasture by matching
+  // location text to the pasture's name, not by id.
+  if(oldName && newName !== oldName) {
+    await sb.from('animals').update({location: newName}).eq('ranch_id', currentRanch.id).eq('location', oldName);
+    await loadAnimals();
+  }
+
+  document.getElementById('edit-pasture-modal')?.remove();
   showPastureTab('pastures');
 }
 
