@@ -1223,6 +1223,15 @@ src="https://www.facebook.com/tr?id=1682564146375282&ev=PageView&noscript=1"
       <div class="card">
         <div class="card-title">Account</div>
         <div id="set-plan-info" style="font-size:13px;color:var(--gray);margin-bottom:12px"></div>
+        <div id="set-plan-selector" style="display:none;margin-bottom:12px">
+          <label style="font-size:12px;color:var(--gray);font-weight:600">Choose a plan</label>
+          <select id="set-plan-choice" style="width:100%;margin-top:4px;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px">
+            <option value="basic">Basic — $19/month</option>
+            <option value="pro">Pro — $39/month</option>
+            <option value="elite">Elite — $59/month</option>
+          </select>
+        </div>
+        <button id="set-billing-btn" class="btn btn-primary" style="width:100%;margin-bottom:10px" onclick="handleBillingClick()">Subscribe Now</button>
         <button class="btn btn-danger" onclick="signOut()">Sign Out</button>
       </div>
 
@@ -2344,6 +2353,27 @@ async function loadUserSession(user) {
     currentRanch = profile.ranches;
     cache.set('currentRanch', currentRanch); // cache for offline use
 
+    // Returning from Stripe Checkout — the webhook may take a second or two
+    // to update the DB, so re-fetch once to pick up the new subscription
+    // status rather than showing stale trial info right after paying.
+    const urlParams = new URLSearchParams(window.location.search);
+    if(urlParams.get('checkout') === 'success') {
+      window.history.replaceState({}, '', window.location.pathname);
+      setTimeout(async () => {
+        const {data: refreshed} = await sb.from('ranches').select('*').eq('id', currentRanch.id).single();
+        if(refreshed) {
+          currentRanch = refreshed;
+          cache.set('currentRanch', currentRanch);
+          if(document.getElementById('page-settings')) loadSettings();
+          const banner = document.getElementById('trial-banner');
+          if(banner && currentRanch.subscription_active) banner.remove();
+        }
+        alert('🎉 Subscription active! Thanks for subscribing to CattleTrack.');
+      }, 2000);
+    } else if(urlParams.get('checkout') === 'cancelled') {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+
     // Set trial end date if this is a new account (no trial_ends_at yet)
     if(!currentRanch.trial_ends_at && !currentRanch.subscription_active) {
       const trialEnd = new Date();
@@ -2401,10 +2431,10 @@ function showTrialExpired() {
       <div style="font-size:15px;color:rgba(255,255,255,0.6);max-width:320px;line-height:1.6;margin-bottom:32px">
         Your 30-day free trial of CattleTrack Analytics has expired. Contact us to activate your subscription and keep access to your data.
       </div>
-      <a href="mailto:info@cattletrackanalytics.com?subject=CattleTrack Subscription — ${currentRanch?.name||''}&body=Hi, I'd like to activate my CattleTrack Analytics subscription for ${currentRanch?.name||'my ranch'}." 
-         style="background:var(--orange);color:white;padding:16px 32px;border-radius:10px;font-size:16px;font-weight:700;text-decoration:none;display:inline-block;margin-bottom:16px">
-        Contact Us to Subscribe
-      </a>
+      <button onclick="subscribeToPlan()" 
+         style="background:var(--orange);color:white;padding:16px 32px;border-radius:10px;font-size:16px;font-weight:700;border:none;cursor:pointer;font-family:inherit;margin-bottom:16px">
+        Subscribe Now
+      </button>
       <button onclick="sb.auth.signOut().then(()=>{document.getElementById('trial-expired-screen').remove();document.getElementById('auth-screen').style.display='flex';})" 
         style="background:none;border:none;color:rgba(255,255,255,0.4);font-size:13px;cursor:pointer;font-family:inherit;margin-top:8px">
         Sign out
@@ -2439,7 +2469,7 @@ function showApp() {
         app.insertBefore(banner, header);
       }
       const urgency = daysLeft <= 7 ? '⚠️' : '🕐';
-      banner.innerHTML = `${urgency} Free trial: <strong>${daysLeft} day${daysLeft!==1?'s':''} remaining</strong> · <a href="mailto:info@cattletrackanalytics.com?subject=CattleTrack Subscription — ${currentRanch.name}" style="color:white;text-decoration:underline">Subscribe to keep access</a>`;
+      banner.innerHTML = `${urgency} Free trial: <strong>${daysLeft} day${daysLeft!==1?'s':''} remaining</strong> · <a href="javascript:void(0)" onclick="subscribeToPlan()" style="color:white;text-decoration:underline">Subscribe to keep access</a>`;
     }
   }
 
@@ -11449,7 +11479,79 @@ function loadSettings() {
   document.getElementById('set-plan-info').innerHTML = isActive
     ? `<span style="color:var(--green)">✅ Active — ${currentRanch.plan||'basic'} plan</span>`
     : `<span style="color:var(--orange)">⏳ Free trial — ${daysLeft} days remaining</span>`;
+
+  const billingBtn = document.getElementById('set-billing-btn');
+  const planSelector = document.getElementById('set-plan-selector');
+  if(isActive) {
+    planSelector.style.display = 'none';
+    billingBtn.textContent = 'Manage Billing';
+  } else {
+    planSelector.style.display = 'block';
+    document.getElementById('set-plan-choice').value = currentRanch.plan || 'basic';
+    billingBtn.textContent = 'Subscribe Now';
+  }
   loadTeamMembers();
+}
+
+// ── BILLING / STRIPE ─────────────────────────────────────────────────────
+const SUPABASE_FUNCTIONS_URL = 'https://jtyjgfrgwugvcqouldwi.supabase.co/functions/v1';
+
+function handleBillingClick() {
+  if(currentRanch.subscription_active) {
+    openBillingPortal();
+  } else {
+    const plan = document.getElementById('set-plan-choice')?.value || currentRanch.plan || 'basic';
+    subscribeToPlan(plan);
+  }
+}
+
+async function subscribeToPlan(planArg) {
+  const plan = planArg || currentRanch.plan || 'basic';
+  const btn = document.getElementById('set-billing-btn');
+  if(btn) { btn.disabled = true; btn.textContent = 'Redirecting to checkout...'; }
+  try {
+    const res = await fetch(`${SUPABASE_FUNCTIONS_URL}/create-checkout-session`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ranch_id: currentRanch.id, plan, email: currentUser?.email}),
+    });
+    const data = await res.json();
+    if(data.url) {
+      window.location.href = data.url;
+    } else {
+      alert('Could not start checkout: ' + (data.error || 'Unknown error'));
+      if(btn) { btn.disabled = false; btn.textContent = 'Subscribe Now'; }
+    }
+  } catch(e) {
+    alert('Could not start checkout: ' + e.message);
+    if(btn) { btn.disabled = false; btn.textContent = 'Subscribe Now'; }
+  }
+}
+
+async function openBillingPortal() {
+  const btn = document.getElementById('set-billing-btn');
+  if(!currentRanch.stripe_customer_id) {
+    alert('No billing account on file yet — this shows up automatically after your first subscription payment.');
+    return;
+  }
+  if(btn) { btn.disabled = true; btn.textContent = 'Opening billing portal...'; }
+  try {
+    const res = await fetch(`${SUPABASE_FUNCTIONS_URL}/create-portal-session`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({stripe_customer_id: currentRanch.stripe_customer_id}),
+    });
+    const data = await res.json();
+    if(data.url) {
+      window.location.href = data.url;
+    } else {
+      alert('Could not open billing portal: ' + (data.error || 'Unknown error'));
+      if(btn) { btn.disabled = false; btn.textContent = 'Manage Billing'; }
+    }
+  } catch(e) {
+    alert('Could not open billing portal: ' + e.message);
+    if(btn) { btn.disabled = false; btn.textContent = 'Manage Billing'; }
+  }
 }
 
 async function loadTeamMembers() {
