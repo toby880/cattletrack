@@ -1057,6 +1057,8 @@ src="https://www.facebook.com/tr?id=1682564146375282&ev=PageView&noscript=1"
         <div style="font-size:13px;color:var(--gray);margin-bottom:12px">Registered/Commercial classification is derived from ear tag: anything with H2R, or a letter in front of the number, is Registered. Use this if animals are showing the wrong type — for example after importing from another system.</div>
         <button class="btn btn-secondary" style="width:100%" onclick="previewAnimalTypeFix()">Check Registered/Commercial Classification</button>
         <button class="btn btn-secondary" style="width:100%;margin-top:8px" onclick="previewDobBackfill()">Backfill Missing Birth Dates from Weight Records</button>
+        <button id="export-data-btn" class="btn btn-primary" style="width:100%;margin-top:8px" onclick="exportAllData()">⬇ Export All My Data (Excel)</button>
+        <div style="font-size:11px;color:var(--gray);margin-top:6px">Your complete herd data, every record, as an Excel file with one sheet per record type. Yours to keep — no lock-in.</div>
       </div>
 
       <!-- BREEDING PHILOSOPHY -->
@@ -1797,6 +1799,9 @@ src="https://www.facebook.com/tr?id=1682564146375282&ev=PageView&noscript=1"
         </button>
         <button onclick="gaSetAction('category')" class="ga-action-btn" style="text-align:left;padding:12px 14px;border:2px solid var(--border);border-radius:8px;background:var(--white);cursor:pointer;font-family:inherit;font-size:14px">
           🏷️ <strong>Set Category</strong><div style="font-size:12px;color:var(--gray);margin-top:2px">Assign a category to all selected animals at once</div>
+        </button>
+        <button onclick="gaSetAction('sale')" class="ga-action-btn" style="text-align:left;padding:12px 14px;border:2px solid var(--border);border-radius:8px;background:var(--white);cursor:pointer;font-family:inherit;font-size:14px">
+          💵 <strong>Record Sale</strong><div style="font-size:12px;color:var(--gray);margin-top:2px">Record a sale for all selected animals — a whole load at once</div>
         </button>
       </div>
     </div>
@@ -3475,6 +3480,60 @@ async function loadDashboard() {
 }
 
 // ── ANIMALS ────────────────────────────────────────────────────────────────
+async function exportAllData() {
+  const btn = document.getElementById('export-data-btn');
+  if(btn) { btn.disabled = true; btn.textContent = 'Preparing export...'; }
+
+  try {
+    const tables = [
+      {name: 'Animals', table: 'animals'},
+      {name: 'Weights', table: 'weights'},
+      {name: 'Calving Records', table: 'calving_records'},
+      {name: 'Health Events', table: 'health_events'},
+      {name: 'AI Records', table: 'ai_records'},
+      {name: 'Natural Service', table: 'natural_service'},
+      {name: 'Preg Checks', table: 'preg_checks'},
+      {name: 'Sales', table: 'sales'},
+      {name: 'Chute Measurements', table: 'measurements'},
+      {name: 'EPDs', table: 'epds'},
+      {name: 'Pedigrees', table: 'pedigrees'},
+      {name: 'Breeding Evaluations', table: 'breeding_evaluations'},
+      {name: 'ET Flushes', table: 'et_flushes'},
+      {name: 'ET Transfers', table: 'et_transfers'},
+      {name: 'Embryo Straws', table: 'embryo_straws'},
+      {name: 'Semen Inventory', table: 'semen_inventory'},
+      {name: 'Pastures', table: 'pasture_fields'},
+    ];
+
+    const wb = XLSX.utils.book_new();
+    let sheetsAdded = 0;
+
+    for(const t of tables) {
+      const {data, error} = await sb.from(t.table).select('*').eq('ranch_id', currentRanch.id);
+      if(error) continue; // table may not exist or apply to every ranch — skip quietly
+      if(!data || !data.length) continue; // no empty sheets
+      // Excel sheet names max 31 chars, no special characters
+      const sheetName = t.name.slice(0, 31);
+      const ws = XLSX.utils.json_to_sheet(data);
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      sheetsAdded++;
+    }
+
+    if(!sheetsAdded) {
+      alert('No data found to export yet.');
+      return;
+    }
+
+    const dateStr = new Date().toISOString().split('T')[0];
+    const ranchName = (currentRanch.name||'CattleTrack').replace(/[^a-z0-9]/gi,'_');
+    XLSX.writeFile(wb, `${ranchName}_Export_${dateStr}.xlsx`);
+  } catch(e) {
+    alert('Export failed: ' + e.message);
+  } finally {
+    if(btn) { btn.disabled = false; btn.textContent = '⬇ Export All My Data (Excel)'; }
+  }
+}
+
 async function previewAnimalTypeFix() {
   const {data: animals, error} = await sb.from('animals').select('id,tag,animal_type').eq('ranch_id', currentRanch.id);
   if(error) { alert('Could not load animals: ' + error.message); return; }
@@ -7543,7 +7602,7 @@ function gaSetAction(action) {
 
   document.getElementById('ga-summary').innerHTML = `<strong>${count} animals selected:</strong> ${tags}`;
 
-  const titles = {health:'💉 Health / Vaccination', natural:'🐂 Natural Service', weight:'⚖️ Weight Record', pregcheck:'🔍 Pregnancy Check', move:'🌾 Move to Pasture', category:'🏷️ Set Category'};
+  const titles = {health:'💉 Health / Vaccination', natural:'🐂 Natural Service', weight:'⚖️ Weight Record', pregcheck:'🔍 Pregnancy Check', move:'🌾 Move to Pasture', category:'🏷️ Set Category', sale:'💵 Record Sale'};
   document.getElementById('ga-form-title').textContent = titles[action];
 
   // Populate pasture dropdown after rendering
@@ -7662,6 +7721,19 @@ function gaSetAction(action) {
           <option value="dead">Dead</option>
         </select>
       </div>`,
+
+    sale: `
+      <div class="form-row">
+        <div class="form-group"><label>Sale Date</label><input type="date" id="gaf-sale-date" value="${today}"></div>
+        <div class="form-group"><label>Sale Type</label>
+          <select id="gaf-sale-type"><option value="private">Private Treaty</option><option value="sale-barn">Sale Barn</option><option value="production">Production Sale</option><option value="cull">Cull</option></select>
+        </div>
+      </div>
+      <div class="form-group"><label>Buyer Name</label><input type="text" id="gaf-sale-buyer" placeholder="Buyer or sale barn name"></div>
+      <div class="form-group"><label>Buyer Contact (optional)</label><input type="text" id="gaf-sale-contact" placeholder="Phone or email"></div>
+      <div class="form-group"><label>Price per CWT ($) — if uniform across the load</label><input type="number" id="gaf-sale-cwt" placeholder="0.00" inputmode="decimal"></div>
+      <div class="form-group"><label>Notes</label><input type="text" id="gaf-sale-notes" placeholder="Load details, settlement notes..."></div>
+      <div style="font-size:12px;color:var(--gray);margin-top:6px">Individual weights and final settlement prices can be added per-animal afterward from each animal's Sales record, once you have the actual settlement sheet.</div>`,
   };
 
   document.getElementById('ga-form').innerHTML = forms[action] || '';
@@ -7780,6 +7852,21 @@ async function applyGroupAction() {
           await sb.from('animals').update(updates).eq('id', animal.id);
         }
       }
+      else if(gaCurrentAction === 'sale') {
+        const cwt = parseFloat(document.getElementById('gaf-sale-cwt')?.value) || null;
+        await dbInsert('sales', {
+          animal_tag: animal.tag,
+          sale_date: document.getElementById('gaf-sale-date')?.value || today,
+          sale_type: document.getElementById('gaf-sale-type')?.value || 'private',
+          buyer: document.getElementById('gaf-sale-buyer')?.value?.trim() || null,
+          buyer_contact: document.getElementById('gaf-sale-contact')?.value?.trim() || null,
+          price_per_cwt: cwt,
+          notes: `Group sale — ${count} head. ` + (document.getElementById('gaf-sale-notes')?.value?.trim()||''),
+        });
+        // Mark the animal sold — weight and final settlement price can be
+        // filled in per-animal later once the actual settlement sheet is in.
+        await sb.from('animals').update({status: 'sold'}).eq('id', animal.id);
+      }
       saved++;
     } catch(e) { errors++; }
   }
@@ -7788,7 +7875,7 @@ async function applyGroupAction() {
   btn.textContent = 'Apply to All Selected Animals';
   closeGroupAction();
 
-  const actionLabels = {health:'health records', natural:'natural service turn-out', weight:'weight records', pregcheck:'preg checks', move:'animals moved', category:'animals updated'};
+  const actionLabels = {health:'health records', natural:'natural service turn-out', weight:'weight records', pregcheck:'preg checks', move:'animals moved', category:'animals updated', sale:'animals marked sold'};
   alert(`✅ Done! ${saved} ${actionLabels[gaCurrentAction] || 'records'} saved.${errors?`\n⚠ ${errors} error(s) — check and retry those individually.`:''}`);
 
   // Refresh the animals list
