@@ -11623,7 +11623,31 @@ async function sendInvite() {
   // Generate invite link
   const inviteLink = `${window.location.origin}${window.location.pathname}?invite=${token}`;
 
-  alert(`✅ Invite created!\n\nSend this link to ${email}:\n\n${inviteLink}\n\nThe link expires in 7 days.`);
+  // Actually email the invite, rather than just showing the link in a popup
+  // for the ranch owner to copy and forward manually.
+  let emailSent = false;
+  try {
+    const res = await fetch('https://jtyjgfrgwugvcqouldwi.supabase.co/functions/v1/send-invite-email', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        email,
+        inviterName: currentUser?.email || 'A CattleTrack user',
+        ranchName: currentRanch.name,
+        inviteLink,
+      }),
+    });
+    const data = await res.json();
+    emailSent = !!data.sent;
+  } catch(e) {
+    console.log('Invite email failed to send:', e);
+  }
+
+  if(emailSent) {
+    alert(`✅ Invite sent to ${email}!\n\nThey'll receive an email with a link to join. It expires in 7 days.`);
+  } else {
+    alert(`⚠️ Invite created, but the email couldn't be sent automatically.\n\nSend this link to ${email} yourself:\n\n${inviteLink}\n\nThe link expires in 7 days.`);
+  }
   document.getElementById('invite-email').value='';
   loadTeamMembers();
 }
