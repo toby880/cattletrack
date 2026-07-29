@@ -11629,7 +11629,11 @@ async function sendInvite() {
   try {
     const res = await fetch('https://jtyjgfrgwugvcqouldwi.supabase.co/functions/v1/send-invite-email', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'apikey': SUPABASE_KEY,
+      },
       body: JSON.stringify({
         email,
         inviterName: currentUser?.email || 'A CattleTrack user',
@@ -11638,6 +11642,7 @@ async function sendInvite() {
       }),
     });
     const data = await res.json();
+    if(!res.ok) console.log('send-invite-email returned', res.status, data);
     emailSent = !!data.sent;
   } catch(e) {
     console.log('Invite email failed to send:', e);
