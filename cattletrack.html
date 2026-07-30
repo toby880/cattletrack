@@ -11675,8 +11675,10 @@ async function checkForInvite() {
   const token = params.get('invite');
   if(!token) return false;
 
-  const {data:invite} = await sb.from('invites').select('*').eq('token',token).single();
+  const {data:inviteRows} = await sb.rpc('get_invite_by_token', {p_token: token});
+  const invite = inviteRows && inviteRows[0];
   if(!invite){alert('This invite link is invalid or has expired.');return false;}
+  if(invite.accepted){alert('This invite has already been used. Ask the ranch owner to send a new one.');return false;}
   if(new Date(invite.expires_at)<new Date()){alert('This invite has expired. Ask the ranch owner to send a new one.');return false;}
 
   // Store token for after signup/login
