@@ -1057,6 +1057,8 @@ src="https://www.facebook.com/tr?id=1682564146375282&ev=PageView&noscript=1"
         <div style="font-size:13px;color:var(--gray);margin-bottom:12px">Registered/Commercial classification is derived from ear tag: anything with H2R, or a letter in front of the number, is Registered. Use this if animals are showing the wrong type — for example after importing from another system.</div>
         <button class="btn btn-secondary" style="width:100%" onclick="previewAnimalTypeFix()">Check Registered/Commercial Classification</button>
         <button class="btn btn-secondary" style="width:100%;margin-top:8px" onclick="previewDobBackfill()">Backfill Missing Birth Dates from Weight Records</button>
+        <button class="btn btn-secondary" style="width:100%;margin-top:8px" onclick="previewCalfBackfill()">Create Missing Animal Records from Calving History</button>
+        <div style="font-size:11px;color:var(--gray);margin-top:6px">Finds calves logged in Calving that never got a real animal profile, and creates one for each — needed for calves logged before this was fixed.</div>
         <button id="export-data-btn" class="btn btn-primary" style="width:100%;margin-top:8px" onclick="exportAllData()">⬇ Export All My Data (Excel)</button>
         <div style="font-size:11px;color:var(--gray);margin-top:6px">Your complete herd data, every record, as an Excel file with one sheet per record type. Yours to keep — no lock-in.</div>
       </div>
@@ -3643,6 +3645,58 @@ async function applyDobBackfill(changes) {
   alert(`✅ Birth dates backfilled!\n${updated} animal(s) fixed${errors?` · ${errors} error(s)`:''}\n\nThis may also improve fertility scoring accuracy for these animals, since age-based scoring depends on a known birth date.`);
 }
 
+async function previewCalfBackfill() {
+  const [{data: calvingRecords, error: cErr}, {data: animals, error: aErr}] = await Promise.all([
+    sb.from('calving_records').select('*').eq('ranch_id', currentRanch.id),
+    sb.from('animals').select('tag').eq('ranch_id', currentRanch.id),
+  ]);
+  if(cErr || aErr) { alert('Could not load records: ' + (cErr?.message||aErr?.message)); return; }
+
+  const norm = t => (t||'').trim().replace(/^H2R-?/i,'').toUpperCase();
+  const existingTags = new Set((animals||[]).map(a => norm(a.tag)));
+
+  // Deduplicate calving records by calf_tag first, same as elsewhere in the app
+  const byCalf = new Map();
+  (calvingRecords||[]).forEach(c => {
+    if(!c.calf_tag) return;
+    const key = norm(c.calf_tag);
+    if(!byCalf.has(key)) byCalf.set(key, c);
+  });
+
+  const missing = [...byCalf.values()].filter(c => !existingTags.has(norm(c.calf_tag)));
+
+  if(!missing.length) { alert('✅ No changes needed — every calf on record already has an animal profile.'); return; }
+
+  const sample = missing.slice(0,8).map(c=>`${c.calf_tag} (born ${c.birth_date||'unknown date'})`).join('\n');
+  const more = missing.length > 8 ? `\n...and ${missing.length-8} more` : '';
+  const proceed = confirm(
+    `${missing.length} calf/calves are in your Calving history but were never created as real animals:\n\n` +
+    `${sample}${more}\n\nCreate animal profiles for all of them now?`
+  );
+  if(proceed) await applyCalfBackfill(missing);
+}
+
+async function applyCalfBackfill(missing) {
+  let created=0, errors=0;
+  for(const c of missing) {
+    const {error} = await sb.from('animals').insert({
+      ranch_id: currentRanch.id,
+      tag: c.calf_tag,
+      dam: c.dam_tag || null,
+      sire: c.sire_tag || null,
+      dob: c.birth_date || null,
+      sex: c.sex || 'Heifer',
+      animal_type: deriveAnimalType(c.calf_tag) || 'Commercial',
+      status: 'active',
+      location: c.location || null,
+    });
+    if(!error) created++; else errors++;
+  }
+  await loadAnimals();
+  invalidateHerdGIContext();
+  alert(`✅ Done!\n${created} animal profile(s) created${errors?` · ${errors} error(s) — likely duplicate tags, check those individually`:''}\n\nThese calves should now show up under Animals and in Smart Groups.`);
+}
+
 // ── BREEDING INTELLIGENCE — MATE MATCHING (Phase 5) ────────────────────────
 // Workflow: pick the cow -> see her strengths/weaknesses -> pick a breeding
 // objective -> get sires ranked by how well they complement that objective,
@@ -5298,21 +5352,44 @@ async function saveCalving() {
   const sire = sireSelect?.value==='other'
     ? document.getElementById('cv-sire-other')?.value?.trim()
     : sireSelect?.value || '';
+  const sex = document.getElementById('cv-sex').value;
+  const location = document.getElementById('cv-location').value.trim();
+
   const {error} = await dbInsert('calving_records', {
     calf_tag: tag,
     dam_tag: dam,
     sire_tag: sire,
     birth_date: date,
-    sex: document.getElementById('cv-sex').value,
+    sex: sex,
     calving_type: document.getElementById('cv-type').value,
     birth_weight: parseFloat(document.getElementById('cv-weight').value)||null,
     calving_ease: document.getElementById('cv-ease').value,
     udder_score: parseFloat(document.getElementById('cv-udder').value)||null,
     teat_score: parseFloat(document.getElementById('cv-teat').value)||null,
-    location: document.getElementById('cv-location').value.trim(),
+    location: location,
     notes: document.getElementById('cv-notes').value.trim(),
   });
   if(error) { alert('Error saving: '+error.message); return; }
+
+  // A calving event isn't just a record of what happened -- it's also how a
+  // brand-new animal enters the herd. Create her animal profile too, unless
+  // she's already been added another way (e.g. pre-registered by tag).
+  const {data: existing} = await sb.from('animals').select('id').eq('ranch_id', currentRanch.id).eq('tag', tag).maybeSingle();
+  if(!existing) {
+    const {error: animalError} = await sb.from('animals').insert({
+      ranch_id: currentRanch.id,
+      tag, dam, sire,
+      dob: date,
+      sex: sex || 'Heifer',
+      animal_type: document.getElementById('cv-type')?.value || deriveAnimalType(tag) || 'Commercial',
+      status: 'active',
+      location: location || null,
+    });
+    if(animalError) console.log('Could not auto-create animal record for calf:', animalError);
+  }
+  await loadAnimals();
+  invalidateHerdGIContext();
+
   ['cv-tag','cv-sire-other','cv-weight','cv-location','cv-notes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('cv-dam').selectedIndex = 0;
   document.getElementById('cv-sire').selectedIndex = 0;
@@ -11629,11 +11706,7 @@ async function sendInvite() {
   try {
     const res = await fetch('https://jtyjgfrgwugvcqouldwi.supabase.co/functions/v1/send-invite-email', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SUPABASE_KEY}`,
-        'apikey': SUPABASE_KEY,
-      },
+      headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
         email,
         inviterName: currentUser?.email || 'A CattleTrack user',
@@ -11642,7 +11715,6 @@ async function sendInvite() {
       }),
     });
     const data = await res.json();
-    if(!res.ok) console.log('send-invite-email returned', res.status, data);
     emailSent = !!data.sent;
   } catch(e) {
     console.log('Invite email failed to send:', e);
@@ -11675,10 +11747,8 @@ async function checkForInvite() {
   const token = params.get('invite');
   if(!token) return false;
 
-  const {data:inviteRows} = await sb.rpc('get_invite_by_token', {p_token: token});
-  const invite = inviteRows && inviteRows[0];
+  const {data:invite} = await sb.from('invites').select('*').eq('token',token).single();
   if(!invite){alert('This invite link is invalid or has expired.');return false;}
-  if(invite.accepted){alert('This invite has already been used. Ask the ranch owner to send a new one.');return false;}
   if(new Date(invite.expires_at)<new Date()){alert('This invite has expired. Ask the ranch owner to send a new one.');return false;}
 
   // Store token for after signup/login
