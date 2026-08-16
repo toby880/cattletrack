@@ -845,6 +845,23 @@ src="https://www.facebook.com/tr?id=1682564146375282&ev=PageView&noscript=1"
           </div>
           <div class="form-row">
             <div class="form-group">
+              <label>Age / Class</label>
+              <select id="meas-filter-age">
+                <option value="">All Ages</option>
+                <option value="calves">Calves (under 12 mo)</option>
+                <option value="yearlings">Yearlings (12–24 mo)</option>
+                <option value="adults">Adults (24 mo+)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Or Load a Smart Group</label>
+              <select id="meas-filter-smartgroup" onchange="document.getElementById('meas-filter-pasture').disabled=this.value!='';document.getElementById('meas-filter-sex').disabled=this.value!='';document.getElementById('meas-filter-age').disabled=this.value!='';">
+                <option value="">— Use filters instead —</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
               <label>Session Date</label>
               <input type="date" id="meas-session-date">
             </div>
@@ -869,7 +886,8 @@ src="https://www.facebook.com/tr?id=1682564146375282&ev=PageView&noscript=1"
             <div id="herd-treatments-list"></div>
           </div>
 
-          <div style="display:flex;align-items:center;justify-content:flex-end;margin-top:12px">
+          <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:12px">
+            <button class="btn btn-secondary" onclick="saveChuteFilterAsGroup()">💾 Save as Smart Group</button>
             <button class="btn btn-primary" onclick="loadMeasurementGroup()">Load Animals →</button>
           </div>
         </div>
@@ -11885,6 +11903,13 @@ async function loadMeasurements() {
       pastureSelect.appendChild(opt);
     });
   }
+  // Populate Smart Group dropdown
+  const sgSelect = document.getElementById('meas-filter-smartgroup');
+  if(sgSelect) {
+    const {data: groups} = await sb.from('saved_groups').select('id,name').eq('ranch_id', currentRanch.id).order('name');
+    sgSelect.innerHTML = '<option value="">— Use filters instead —</option>' +
+      (groups||[]).map(g=>`<option value="${g.id}">${g.name}</option>`).join('');
+  }
   const dateEl = document.getElementById('meas-session-date');
   if(dateEl && !dateEl.value) dateEl.value = new Date().toISOString().split('T')[0];
   document.getElementById('meas-animal-list').innerHTML =
@@ -11892,16 +11917,36 @@ async function loadMeasurements() {
 }
 
 async function loadMeasurementGroup() {
-  const pasture = document.getElementById('meas-filter-pasture')?.value || '';
-  const sex = document.getElementById('meas-filter-sex')?.value || '';
   const date = document.getElementById('meas-session-date')?.value;
   if(!date) { alert('Please select a session date.'); return; }
 
-  const { data } = await dbSelect('animals');
-  if(data) cache.set('animals', data);
-  let animals = (cache.get('animals') || []).filter(a => a.status !== 'sold' && a.status !== 'dead');
-  if(pasture) animals = animals.filter(a => (a.location || '') === pasture);
-  if(sex) animals = animals.filter(a => a.sex === sex);
+  const sgId = document.getElementById('meas-filter-smartgroup')?.value;
+  let animals;
+
+  if(sgId) {
+    // Loading a pre-existing Smart Group bypasses the manual filters below
+    const {data: group} = await sb.from('saved_groups').select('*').eq('id', sgId).single();
+    animals = group ? await applySmartGroupRules(group.rules || []) : [];
+    animals = animals.filter(a => a.status !== 'sold' && a.status !== 'dead');
+  } else {
+    const pasture = document.getElementById('meas-filter-pasture')?.value || '';
+    const sex = document.getElementById('meas-filter-sex')?.value || '';
+    const ageClass = document.getElementById('meas-filter-age')?.value || '';
+
+    const { data } = await dbSelect('animals');
+    if(data) cache.set('animals', data);
+    animals = (cache.get('animals') || []).filter(a => a.status !== 'sold' && a.status !== 'dead');
+    if(pasture) animals = animals.filter(a => (a.location || '') === pasture);
+    if(sex) animals = animals.filter(a => a.sex === sex);
+    if(ageClass) {
+      const today = new Date();
+      const ageMonths = a => a.dob ? (today - new Date(a.dob)) / (1000*60*60*24*30) : null;
+      if(ageClass === 'calves') animals = animals.filter(a => { const m = ageMonths(a); return m !== null && m < 12; });
+      if(ageClass === 'yearlings') animals = animals.filter(a => { const m = ageMonths(a); return m !== null && m >= 12 && m < 24; });
+      if(ageClass === 'adults') animals = animals.filter(a => { const m = ageMonths(a); return m !== null && m >= 24; });
+    }
+  }
+
   animals = animals.sort((a, b) => a.tag.localeCompare(b.tag));
 
   if(!animals.length) {
@@ -11918,6 +11963,38 @@ async function loadMeasurementGroup() {
   measAnimals = animals;
   measCurrentIndex = 0;
   renderMeasurementList();
+}
+
+// Saves the current Pasture/Sex/Age filter combo as a reusable Smart Group,
+// so a one-off filter (like "calves in North pasture") can be loaded again
+// later without re-picking the same filters every time.
+async function saveChuteFilterAsGroup() {
+  const pasture = document.getElementById('meas-filter-pasture')?.value || '';
+  const sex = document.getElementById('meas-filter-sex')?.value || '';
+  const ageClass = document.getElementById('meas-filter-age')?.value || '';
+
+  const rules = [];
+  if(pasture) rules.push({field:'location', value:pasture});
+  if(sex) rules.push({field:'sex', value:sex});
+  if(ageClass === 'calves') rules.push({field:'age_max', value:'12'});
+  if(ageClass === 'yearlings') { rules.push({field:'age_min', value:'12'}); rules.push({field:'age_max', value:'24'}); }
+  if(ageClass === 'adults') rules.push({field:'age_min', value:'24'});
+
+  if(!rules.length) { alert('Set at least one filter (Pasture, Sex, or Age) before saving as a group.'); return; }
+
+  const name = prompt('Name this Smart Group (e.g. "2026 Calves — North"):');
+  if(!name || !name.trim()) return;
+
+  const {error} = await sb.from('saved_groups').insert({
+    ranch_id: currentRanch.id,
+    name: name.trim(),
+    description: 'Created from Chute Work filters',
+    rules,
+  });
+  if(error) { alert('Error saving group: ' + error.message); return; }
+
+  alert(`✅ Saved as "${name.trim()}" — it'll show up in "Load a Smart Group" next time, and in Smart Groups on the Animals page.`);
+  loadMeasurements(); // refresh the smart group dropdown to include the new one
 }
 
 function renderMeasurementList() {
